@@ -25,9 +25,11 @@
         .container::-webkit-scrollbar { display: none; }
         
         .controls { flex-shrink: 0; padding: 10px; background-color: #000; border-top: 2px solid var(--border-color); }
-        .setup-screen { text-align: center; padding-top: 30vh; }
-        .setup-screen h1 { color: var(--text-color); }
-        .setup-screen input { width: 80%; padding: 15px; font-size: 1.2em; margin-bottom: 20px; }
+        .setup-screen { text-align: center; padding-top: 18vh; max-width: 900px; margin: 0 auto; }
+        .setup-screen h1 { color: var(--text-color); margin-bottom: 10px; }
+        .flash { margin: 0 auto 16px; padding: 12px 16px; border-radius: 8px; border: 1px solid #ff4d4d; background: #2a0000; color: #ffcccc; font-weight: 600; }
+        .setup-screen input { width: 100%; max-width: 720px; padding: 15px; font-size: 1.2em; margin: 10px auto 20px; display: block; }
+        .setup-screen small { display: block; color: #bbb; margin-top: -8px; margin-bottom: 16px; }
         .setup-screen button { padding: 15px 30px; font-size: 1.2em; background-color: var(--secondary-color); color: white; border: none; border-radius: 5px; cursor: pointer;}
         
         .scoreboard { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 20px; }
@@ -63,9 +65,20 @@
         {% if game.phase == 'setup' %}
         <div class="setup-screen">
             <h1>Darts Golf Scorer</h1>
+
+            {# Flash messages for validation errors #}
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, msg in messages %}
+                        <div class="flash">{{ msg }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
             <form action="{{ url_for('start_game') }}" method="post">
                 <input type="text" name="players" placeholder="Enter player names, separated by commas" required>
-                <br><button type="submit">Start Game</button>
+                <small>Example: Alice, Bob, Charlie — names must be unique (case-insensitive).</small>
+                <button type="submit">Start Game</button>
             </form>
         </div>
 

@@ -1,8 +1,9 @@
-# app.py
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, flash
 from collections import defaultdict
 
 app = Flask(__name__)
+# Set a secret key for flashing messages (change to something secure for production)
+app.secret_key = "change-this-to-a-secure-random-string"
 
 # This dictionary will hold the entire state of our game
 game_state = {
@@ -61,16 +62,27 @@ def index():
 
 @app.route('/start', methods=['POST'])
 def start_game():
-    player_names = request.form.get('players')
-    if not player_names:
+    player_names = request.form.get('players', '')
+    # Split, trim, and filter empties
+    players = [name.strip() for name in player_names.split(',') if name and name.strip()]
+    if not players:
+        flash("Please enter at least one player name.", "error")
         return redirect(url_for('index'))
-    players = [name.strip() for name in player_names.split(',') if name.strip()]
-    if players:
-        reset_game()
-        game_state['players'] = players
-        game_state['scores'] = {player: 0 for player in players}
-        game_state['round_history'] = [{} for _ in range(20)]
-        game_state['phase'] = 'playing'
+
+    # CHECK 1: Ensure no duplicates (case-insensitive)
+    lowered = [p.lower() for p in players]
+    if len(set(lowered)) != len(lowered):
+        # Build a simple message listing the duplicates
+        dups = sorted({name for name in players if lowered.count(name.lower()) > 1})
+        flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "error")
+        return redirect(url_for('index'))
+
+    # If all good, reset and start
+    reset_game()
+    game_state['players'] = players
+    game_state['scores'] = {player: 0 for player in players}
+    game_state['round_history'] = [{} for _ in range(20)]
+    game_state['phase'] = 'playing'
     return redirect(url_for('index'))
 
 @app.route('/score', methods=['POST'])
@@ -132,13 +144,14 @@ def resolve_playoff_round():
             game_state['all_playoff_history'][player] = []
         game_state['all_playoff_history'][player].append(score)
 
+    # If any tie remains (i.e., duplicate values), keep playoff going
     if len(set(scores.values())) < len(scores):
         game_state['playoff_round'] += 1
         game_state['current_player_index'] = 0
         game_state['playoff_round_scores'] = {}
         return
         
-    # CORRECTED RULE: Lowest playoff score is better. Sort players by score ascending.
+    # Lowest playoff score is better. Sort players by score ascending.
     sorted_players = sorted(scores.keys(), key=lambda p: scores[p])
     
     base_score = game_state['playoff_base_score']
