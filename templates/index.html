@@ -24,7 +24,9 @@
         body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 
         .container {
-            flex: 1; overflow-y: auto; padding: 15px;
+            flex: 1; overflow-y: auto; 
+            /* 2px edges as requested */
+            padding: 15px 2px;
             -ms-overflow-style: none; scrollbar-width: none;
         }
         .container::-webkit-scrollbar { display: none; }
@@ -48,9 +50,8 @@
         .current-player-header { color: var(--primary-color); font-weight: bold; }
         .info-bar { text-align: center; margin-bottom: 15px; font-size: 1.3em; font-weight: bold;}
         .info-bar .turn-info { color: var(--primary-color); }
-        .button-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 10px; }
+        .button-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 10px; }
         .utility-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .button-grid form, .utility-grid form { margin: 0; }
         .button-grid button, .utility-grid button { width: 100%; padding: 20px 0; font-size: 1.8em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; touch-action: manipulation; }
         .score-btn.plus { background-color: var(--secondary-color); color: white; }
         .score-btn.minus { background-color: var(--primary-color); color: white; }
@@ -83,11 +84,11 @@
         </div>
 
         {% elif game.phase == 'playing' %}
-        <div class="info-bar">
+        <div class="info-bar" id="info-bar">
             <span>Round: {{ "%02d"|format(game.current_round) }} / 20</span> - 
             <span class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</span>
         </div>
-        <table class="scoreboard">
+        <table class="scoreboard" id="scoreboard">
             <thead>
                 <tr>
                     <th>&nbsp;</th>
@@ -121,11 +122,11 @@
         </table>
 
         {% elif game.phase == 'playoff' %}
-        <div class="info-bar">
+        <div class="info-bar" id="info-bar">
             <span>Playoff for {{ game.playoff_base_score }} points</span> - 
             <span class="turn-info">{{ game.playoff_group[game.current_player_index] }}'s Turn</span>
         </div>
-        <table class="scoreboard">
+        <table class="scoreboard" id="scoreboard">
              <thead>
                 <tr>
                     <th>&nbsp;</th>
@@ -160,7 +161,7 @@
 
         {% elif game.phase == 'final_ranking' %}
         <div class="status-box"><h1>Final Standings</h1></div>
-        <table class="scoreboard">
+        <table class="scoreboard" id="scoreboard">
             <thead>
                 <tr>
                     <th>&nbsp;</th>
@@ -228,14 +229,17 @@
     <div class="controls">
         {% if game.phase == 'playing' or game.phase == 'playoff' %}
         <div class="button-grid">
-            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="-2" class="score-btn minus">-2</button></form>
-            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="-1" class="score-btn minus">-1</button></form>
-            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="0" class="score-btn zero">0</button></form>
-            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="1" class="score-btn plus">+1</button></form>
-            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="2" class="score-btn plus">+2</button></form>
+            <!-- Added -3 button; all buttons call JS (no page reload) -->
+            <button type="button" class="score-btn minus" onclick="sendScore(-3)">-3</button>
+            <button type="button" class="score-btn minus" onclick="sendScore(-2)">-2</button>
+            <button type="button" class="score-btn minus" onclick="sendScore(-1)">-1</button>
+            <button type="button" class="score-btn zero"  onclick="sendScore(0)">0</button>
+            <button type="button" class="score-btn plus"  onclick="sendScore(1)">+1</button>
+            <button type="button" class="score-btn plus"  onclick="sendScore(2)">+2</button>
         </div>
         <div class="utility-grid">
-            <form action="{{ url_for('undo_last_move') }}" method="post"><button type="submit" class="undo-btn" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button></form>
+            <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
+            <!-- Keep restart as full reload (server resets cleanly) -->
             <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Are you sure you want to restart the game?');">
                 <button type="submit" class="restart-btn">Restart Game</button>
             </form>
@@ -248,5 +252,112 @@
         </div>
         {% endif %}
     </div>
+
+    <script>
+    // ---- Small helpers ----
+    function fmtSigned(n) { return (n > 0 ? '+' : '') + n; }
+    function qs(sel) { return document.querySelector(sel); }
+
+    async function sendScore(val) {
+        const res = await fetch('{{ url_for("api_score") }}', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({score: val})
+        });
+        const data = await res.json();
+        if (!data.ok) return;
+        const g = data.game;
+
+        // If we hit final_ranking, just reload once to render the complex table server-side.
+        if (g.phase === 'final_ranking') {
+            location.reload();
+            return;
+        }
+        renderGame(g);
+    }
+
+    async function undo() {
+        const res = await fetch('{{ url_for("api_undo") }}', { method: 'POST' });
+        const data = await res.json();
+        if (!data.ok) return;
+        renderGame(data.game);
+    }
+
+    function renderGame(g) {
+        if (g.phase === 'playing') {
+            renderPlaying(g);
+            qs('#undoBtn')?.removeAttribute('disabled');
+        } else if (g.phase === 'playoff') {
+            renderPlayoff(g);
+            qs('#undoBtn')?.setAttribute('disabled','disabled');
+        }
+    }
+
+    function renderPlaying(g) {
+        // Info bar
+        const info = `<span>Round: ${String(g.current_round).padStart(2,'0')} / 20</span> - 
+                      <span class="turn-info">${g.players[g.current_player_index]}'s Turn</span>`;
+        qs('#info-bar').innerHTML = info;
+
+        // Header row
+        const headers = g.players.map((p, i) => {
+            const cls = (i === g.current_player_index) ? 'current-player-header' : '';
+            return `<th class="${cls}">${p}</th>`;
+        }).join('');
+        const thead = `<thead><tr><th>&nbsp;</th>${headers}</tr></thead>`;
+
+        // Totals row
+        const totals = g.players.map(p => {
+            const s = g.scores[p] || 0;
+            return `<td>${s > 0 ? '+' : ''}${s}</td>`;
+        }).join('');
+        let tbody = `<tbody><tr class="total-row"><th>Total</th>${totals}</tr>`;
+
+        // Past rounds (reverse order like template)
+        for (let i = g.current_round - 2; i >= 0; i--) {
+            const cells = g.players.map(p => {
+                const v = g.round_history[i]?.[p];
+                return `<td>${(v !== undefined) ? ((v > 0 ? '+' : '') + v) : ''}</td>`;
+            }).join('');
+            tbody += `<tr><th>${String(i + 1).padStart(2,'0')}</th>${cells}</tr>`;
+        }
+        tbody += `</tbody>`;
+
+        qs('#scoreboard').innerHTML = thead + tbody;
+    }
+
+    function renderPlayoff(g) {
+        // Info bar
+        const info = `<span>Playoff for ${g.playoff_base_score} points</span> - 
+                      <span class="turn-info">${g.playoff_group[g.current_player_index]}'s Turn</span>`;
+        qs('#info-bar').innerHTML = info;
+
+        // Header row
+        const headers = g.playoff_group.map((p, i) => {
+            const cls = (i === g.current_player_index) ? 'current-player-header' : '';
+            return `<th class="${cls}">${p}</th>`;
+        }).join('');
+        const thead = `<thead><tr><th>&nbsp;</th>${headers}</tr></thead>`;
+
+        // Totals row (base score shown for all)
+        const totals = g.playoff_group.map(() => {
+            const s = g.playoff_base_score || 0;
+            return `<td>${s > 0 ? '+' : ''}${s}</td>`;
+        }).join('');
+        let tbody = `<tbody><tr class="total-row"><th>Total</th>${totals}</tr>`;
+
+        // Past TB rounds
+        g.playoff_history.forEach((round_scores, idx) => {
+            const cells = g.playoff_group.map(p => {
+                const v = round_scores[p];
+                return `<td>${(v !== undefined) ? ((v > 0 ? '+' : '') + v) : ''}</td>`;
+            }).join('');
+            tbody += `<tr><th>TB ${String(idx + 1).padStart(2,'0')}</th>${cells}</tr>`;
+        });
+        tbody += `</tbody>`;
+
+        qs('#scoreboard').innerHTML = thead + tbody;
+    }
+    </script>
 </body>
 </html>
