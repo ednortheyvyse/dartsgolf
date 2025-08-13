@@ -1,15 +1,39 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash
+from pathlib import Path
+from flask import (
+    Flask, render_template, render_template_string,
+    request, redirect, url_for, flash
+)
 from collections import defaultdict
 
-# --- Robust, explicit folders (Option B) ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# --- Robust, explicit folders (Option B) + diagnostics ---
+BASE_DIR = Path(__file__).resolve().parent
+TEMPLATES_DIR = BASE_DIR / "templates"
+STATIC_DIR = BASE_DIR / "static"
+
 app = Flask(
     __name__,
-    template_folder=os.path.join(BASE_DIR, "templates"),
-    static_folder=os.path.join(BASE_DIR, "static"),
+    template_folder=str(TEMPLATES_DIR),
+    static_folder=str(STATIC_DIR),
 )
-# -------------------------------------------
+
+# Helpful diagnostics on startup (shows in Render logs)
+print(f"[BOOT] CWD            = {Path.cwd()}")
+print(f"[BOOT] BASE_DIR       = {BASE_DIR}")
+print(f"[BOOT] TEMPLATES_DIR  = {TEMPLATES_DIR} (exists={TEMPLATES_DIR.exists()})")
+print(f"[BOOT] STATIC_DIR     = {STATIC_DIR} (exists={STATIC_DIR.exists()})")
+try:
+    print(f"[BOOT] BASE_DIR list  = {sorted(p.name for p in BASE_DIR.iterdir())}")
+except Exception as e:
+    print(f"[BOOT] Could not list BASE_DIR: {e}")
+try:
+    if TEMPLATES_DIR.exists():
+        print(f"[BOOT] templates/ list = {sorted(p.name for p in TEMPLATES_DIR.iterdir())}")
+    else:
+        print("[BOOT] templates/ does not exist")
+except Exception as e:
+    print(f"[BOOT] Could not list templates/: {e}")
+# ---------------------------------------------------------
 
 # Set a secret key for flashing messages (change to something secure for production)
 app.secret_key = "change-this-to-a-secure-random-string"
@@ -37,37 +61,81 @@ def reset_game():
         'all_playoff_history': {}, 'max_playoff_rounds': 0
     }
 
+@app.route('/_ls')
+def _ls():
+    """Debug: list base & templates dirs in JSON-ish text."""
+    from json import dumps
+    def listdir(p: Path):
+        try:
+            return sorted(x.name for x in p.iterdir())
+        except Exception:
+            return []
+    return dumps({
+        "cwd": str(Path.cwd()),
+        "BASE_DIR": str(BASE_DIR),
+        "BASE_DIR_exists": BASE_DIR.exists(),
+        "BASE_DIR_list": listdir(BASE_DIR),
+        "TEMPLATES_DIR": str(TEMPLATES_DIR),
+        "TEMPLATES_DIR_exists": TEMPLATES_DIR.exists(),
+        "TEMPLATES_DIR_list": listdir(TEMPLATES_DIR) if TEMPLATES_DIR.exists() else [],
+        "STATIC_DIR": str(STATIC_DIR),
+        "STATIC_DIR_exists": STATIC_DIR.exists(),
+        "STATIC_DIR_list": listdir(STATIC_DIR) if STATIC_DIR.exists() else [],
+    }, indent=2), 200, {"Content-Type": "application/json"}
+
+@app.route('/_env')
+def _env():
+    """Debug: show key env vars Render sets."""
+    keys = ["PORT", "RENDER", "PYTHON_VERSION", "PYTHONHOME", "PYTHONPATH"]
+    return "<pre>" + "\n".join(f"{k}={os.environ.get(k)}" for k in keys) + "</pre>"
+
 @app.route('/')
 def index():
     """Renders the main game page."""
     if game_state['phase'] == 'final_ranking' and not game_state['final_standings']:
         # This logic runs once to calculate the final ranks and display scores
         player_scores = sorted([(score, player) for player, score in game_state['scores'].items()])
-        
         standings = []
         last_score = -999
         current_rank = 0
         for score, player in player_scores:
             if score != last_score:
                 current_rank = len(standings) + 1
-            
             base_score = int(score)
             tie_breaker_score = game_state['final_playoff_scores'].get(player, 0)
             display_score = base_score + tie_breaker_score
-            
-            standings.append({
-                'rank': current_rank, 'name': player, 'score': display_score
-            })
+            standings.append({'rank': current_rank, 'name': player, 'score': display_score})
             last_score = score
         game_state['final_standings'] = standings
-
-        # Calculate the max number of playoff rounds any player had
         max_rounds = 0
         if game_state['all_playoff_history']:
             max_rounds = max(len(h) for h in game_state['all_playoff_history'].values())
         game_state['max_playoff_rounds'] = max_rounds
 
-    return render_template('index.html', game=game_state)
+    # Try to render the template; if missing, show an inline fallback so we can keep the service up.
+    try:
+        return render_template('index.html', game=game_state)
+    except Exception as e:
+        return render_template_string(
+            """<!doctype html>
+            <html><head><meta charset="utf-8"><title>Missing template</title></head>
+            <body style="font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; line-height:1.5">
+              <h1>Template not found</h1>
+              <p>Flask tried to load <code>templates/index.html</code> but couldn't find it.</p>
+              <p><strong>Fix:</strong> Ensure your repo contains <code>templates/index.html</code> at the same level as <code>app.py</code>, with exact lowercase casing, and that it's committed (not ignored).</p>
+              <h2>Details</h2>
+              <pre style="background:#111;color:#eee;padding:12px;border-radius:8px;overflow:auto;">{{ details }}</pre>
+              <p>Also see <a href="/_ls">/_ls</a> for live directory listing.</p>
+            </body></html>""",
+            details={
+                "cwd": str(Path.cwd()),
+                "BASE_DIR": str(BASE_DIR),
+                "TEMPLATES_DIR": str(TEMPLATES_DIR),
+                "templates_exists": TEMPLATES_DIR.exists(),
+                "templates_contents": sorted([p.name for p in TEMPLATES_DIR.iterdir()]) if TEMPLATES_DIR.exists() else [],
+                "error": repr(e),
+            }
+        ), 500
 
 @app.route('/start', methods=['POST'])
 def start_game():
@@ -81,7 +149,6 @@ def start_game():
     # CHECK 1: Ensure no duplicates (case-insensitive)
     lowered = [p.lower() for p in players]
     if len(set(lowered)) != len(lowered):
-        # Build a simple message listing the duplicates
         dups = sorted({name for name in players if lowered.count(name.lower()) > 1})
         flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "error")
         return redirect(url_for('index'))
@@ -146,7 +213,6 @@ def start_next_playoff():
 
 def resolve_playoff_round():
     scores = game_state['playoff_round_scores']
-    
     game_state['playoff_history'].append(scores.copy())
     for player, score in scores.items():
         if player not in game_state['all_playoff_history']:
@@ -159,10 +225,10 @@ def resolve_playoff_round():
         game_state['current_player_index'] = 0
         game_state['playoff_round_scores'] = {}
         return
-        
+
     # Lowest playoff score is better. Sort players by score ascending.
     sorted_players = sorted(scores.keys(), key=lambda p: scores[p])
-    
+
     base_score = game_state['playoff_base_score']
     for i, player in enumerate(sorted_players):
         game_state['scores'][player] = base_score + (i + 1) * 0.01
