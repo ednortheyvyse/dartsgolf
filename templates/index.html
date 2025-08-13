@@ -54,8 +54,17 @@
     .scoreboard .total-row td{background:#333;color:var(--text-color);}
 
     .current-player-header{color:var(--primary-color);font-weight:bold;}
-    .info-bar{text-align:center;margin-bottom:15px;font-size:1.3em;font-weight:bold;}
-    .info-bar .turn-info{color:var(--primary-color);}
+.info-bar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:15px;
+  font-size:1.3em;
+  font-weight:bold;
+}
+.info-bar .left{ text-align:left; }
+.info-bar .right{ text-align:right; color: var(--primary-color); }
+
 
     /* Per-score coloring for cells (overrides totals row style) */
     .scoreboard td.score-pos,
@@ -101,10 +110,11 @@
 
     {# ---------------- PLAYING ---------------- #}
     {% elif game.phase == 'playing' %}
-      <div class="info-bar" id="info-bar">
-        <span>Round: {{ "%02d"|format(game.current_round) }} / 20</span> -
-        <span class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</span>
-      </div>
+<div class="info-bar" id="info-bar">
+  <span class="left">Tie-Breaker</span>
+  <span class="right">{{ game.playoff_group[game.current_player_index] }}'s Turn</span>
+</div>
+
       <table class="scoreboard" id="scoreboard">
         <thead>
           <tr><th>&nbsp;</th>
