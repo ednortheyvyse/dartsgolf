@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Darts Golf Scorer</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a; /* Dartboard Black */
+            --text-color: #f0f0f0;
+            --border-color: #444;
+            --primary-color: #d92727; /* Dartboard Red */
+            --secondary-color: #008746; /* Dartboard Green */
+            --accent-color: #e5d8b1; /* Sisal Beige */
+            --accent-text-color: #000;
+        }
+        html, body {
+            margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column;
+        }
+        .container {
+            flex: 1; overflow-y: auto; padding: 15px;
+            -ms-overflow-style: none; scrollbar-width: none;
+        }
+        .container::-webkit-scrollbar { display: none; }
+        
+        .controls { flex-shrink: 0; padding: 10px; background-color: #000; border-top: 2px solid var(--border-color); }
+        .setup-screen { text-align: center; padding-top: 30vh; }
+        .setup-screen h1 { color: var(--text-color); }
+        .setup-screen input { width: 80%; padding: 15px; font-size: 1.2em; margin-bottom: 20px; }
+        .setup-screen button { padding: 15px 30px; font-size: 1.2em; background-color: var(--secondary-color); color: white; border: none; border-radius: 5px; cursor: pointer;}
+        
+        .scoreboard { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 20px; }
+        .scoreboard th, .scoreboard td { border: 1px solid var(--border-color); text-align: center; word-wrap: break-word; }
+        .scoreboard thead th { font-size: 1.2em; padding: 8px 5px; line-height: 1.4; vertical-align: middle; background-color: #333;}
+        .scoreboard tbody th, .scoreboard tbody td {
+            font-size: 1.5em; /* Standardized font size */
+            padding: 12px 5px; /* Standardized padding */
+            vertical-align: middle;
+        }
+        .scoreboard tbody th { background-color: #2b2b2b; font-size: 1.1em; }
+        .scoreboard tbody td { background-color: var(--accent-color); color: var(--accent-text-color); font-weight: bold;}
+        .scoreboard .total-row td { background-color: #333; color: var(--text-color); }
+        
+        .current-player-header { color: var(--primary-color); font-weight: bold; }
+        .info-bar { text-align: center; margin-bottom: 15px; font-size: 1.3em; font-weight: bold;}
+        .info-bar .turn-info { color: var(--primary-color); }
+        .button-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 10px; }
+        .utility-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .button-grid form, .utility-grid form { margin: 0; }
+        .button-grid button, .utility-grid button { width: 100%; padding: 20px 0; font-size: 1.8em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; touch-action: manipulation; }
+        .score-btn.plus { background-color: var(--secondary-color); color: white; }
+        .score-btn.minus { background-color: var(--primary-color); color: white; }
+        .score-btn.zero { background-color: #616161; color: white; }
+        .undo-btn { background-color: #ff9800; color: black; }
+        .restart-btn { background-color: #f44336; color: white; }
+        .status-box { text-align: center; padding: 20px 15px; margin: 20px auto; border: 2px solid var(--primary-color); border-radius: 10px; background: #222; }
+        .status-box h1 { font-size: 2em; margin-top: 0; color: var(--primary-color); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if game.phase == 'setup' %}
+        <div class="setup-screen">
+            <h1>Darts Golf Scorer</h1>
+            <form action="{{ url_for('start_game') }}" method="post">
+                <input type="text" name="players" placeholder="Enter player names, separated by commas" required>
+                <br><button type="submit">Start Game</button>
+            </form>
+        </div>
+
+        {% elif game.phase == 'playing' %}
+        <div class="info-bar">
+            <span>Round: {{ "%02d"|format(game.current_round) }} / 20</span> - 
+            <span class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</span>
+        </div>
+        <table class="scoreboard">
+            <thead>
+                <tr>
+                    <th>&nbsp;</th>
+                    {% for player in game.players %}
+                        <th class="{{ 'current-player-header' if player == game.players[game.current_player_index] else '' }}">{{ player }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="total-row">
+                    <th>Total</th>
+                    {% for player in game.players %}
+                        <td>
+                            {% set total_score = game.scores.get(player, 0) %}
+                            {% if total_score > 0 %}+{% endif %}{{ total_score }}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% for i in range(game.current_round - 1) | reverse %}
+                <tr>
+                    <th>{{ "%02d"|format(i + 1) }}</th>
+                    {% for player in game.players %}
+                        <td>
+                            {% set score = game.round_history[i].get(player) %}
+                            {% if score is not none %}{% if score > 0 %}+{% endif %}{{ score }}{% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% elif game.phase == 'playoff' %}
+        <div class="info-bar">
+            <span>Playoff for {{ game.playoff_base_score }} points</span> - 
+            <span class="turn-info">{{ game.playoff_group[game.current_player_index] }}'s Turn</span>
+        </div>
+        <table class="scoreboard">
+             <thead>
+                <tr>
+                    <th>&nbsp;</th>
+                    {% for player in game.playoff_group %}
+                        <th class="{{ 'current-player-header' if player == game.playoff_group[game.current_player_index] else '' }}">{{ player }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="total-row">
+                    <th>Total</th>
+                    {% for player in game.playoff_group %}
+                        <td>
+                            {% set total_score = game.playoff_base_score %}
+                            {% if total_score > 0 %}+{% endif %}{{ total_score }}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% for round_scores in game.playoff_history %}
+                <tr>
+                    <th>TB {{ "%02d"|format(loop.index) }}</th>
+                    {% for player in game.playoff_group %}
+                        <td>
+                            {% set score = round_scores.get(player) %}
+                            {% if score is not none %}{% if score > 0 %}+{% endif %}{{ score }}{% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% elif game.phase == 'final_ranking' %}
+        <div class="status-box"><h1>Final Standings</h1></div>
+        <table class="scoreboard">
+            <thead>
+                <tr>
+                    <th>&nbsp;</th>
+                    {% for standing in game.final_standings %}
+                        <th>
+                            {% set rank = standing.rank %}
+                            {% set suffix = 'th' %}
+                            {% if rank % 10 == 1 and rank % 100 != 11 %}{% set suffix = 'st' %}{% endif %}
+                            {% if rank % 10 == 2 and rank % 100 != 12 %}{% set suffix = 'nd' %}{% endif %}
+                            {% if rank % 10 == 3 and rank % 100 != 13 %}{% set suffix = 'rd' %}{% endif %}
+                            {{ rank }}{{ suffix }}
+                        </th>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Player</th>
+                    {% for standing in game.final_standings %}
+                        <th>{{ standing.name }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="total-row">
+                    <th>Final</th>
+                    {% for standing in game.final_standings %}
+                        <td>
+                            {% set total_score = standing.score %}
+                            {% if total_score > 0 %}+{% endif %}{{ total_score }}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% for i in range(game.max_playoff_rounds, 0, -1) %}
+                <tr>
+                    <th>TB {{ "%02d"|format(i) }}</th>
+                    {% for standing in game.final_standings %}
+                        <td>
+                            {% set player_history = game.all_playoff_history.get(standing.name, []) %}
+                            {% if i <= player_history|length %}
+                                {% set score = player_history[i-1] %}
+                                {% if score > 0 %}+{% endif %}{{ score }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                
+                {% for i in range(19, -1, -1) %}
+                <tr>
+                    <th>{{ "%02d"|format(i + 1) }}</th>
+                    {% for standing in game.final_standings %}
+                        <td>
+                            {% set score = game.round_history[i].get(standing.name) %}
+                            {% if score is not none %}{% if score > 0 %}+{% endif %}{{ score }}{% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    <div class="controls">
+        {% if game.phase == 'playing' or game.phase == 'playoff' %}
+        <div class="button-grid">
+            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="-2" class="score-btn minus">-2</button></form>
+            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="-1" class="score-btn minus">-1</button></form>
+            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="0" class="score-btn zero">0</button></form>
+            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="1" class="score-btn plus">+1</button></form>
+            <form action="{{ url_for('record_score') }}" method="post"><button type="submit" name="score" value="2" class="score-btn plus">+2</button></form>
+        </div>
+        <div class="utility-grid">
+            <form action="{{ url_for('undo_last_move') }}" method="post"><button type="submit" class="undo-btn" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button></form>
+            <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Are you sure you want to restart the game?');">
+                <button type="submit" class="restart-btn">Restart Game</button>
+            </form>
+        </div>
+        {% elif game.phase == 'final_ranking' %}
+        <div class="utility-grid">
+            <form style="grid-column: 1 / -1;" action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Are you sure you want to start a new game?');">
+                <button type="submit" class="restart-btn">Start New Game</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
