@@ -1,7 +1,16 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, flash
 from collections import defaultdict
 
-app = Flask(__name__)
+# --- Robust, explicit folders (Option B) ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "templates"),
+    static_folder=os.path.join(BASE_DIR, "static"),
+)
+# -------------------------------------------
+
 # Set a secret key for flashing messages (change to something secure for production)
 app.secret_key = "change-this-to-a-secure-random-string"
 
@@ -180,4 +189,5 @@ def restart():
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
+    # Local dev server (Gunicorn will run this app in production)
     app.run(debug=True, host='0.0.0.0', port=5000)
