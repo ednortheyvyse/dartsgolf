@@ -134,13 +134,16 @@
               <td>{% set s = game.playoff_base_score %}{% if s>0 %}+{% endif %}{{ s }}</td>
             {% endfor %}
           </tr>
-          {% for round_scores in game.playoff_history %}
-            <tr><th>TB {{ "%02d"|format(loop.index) }}</th>
-              {% for p in game.playoff_group %}
-                <td>{% set v = round_scores.get(p) %}{% if v is not none %}{% if v>0 %}+{% endif %}{{ v }}{% endif %}</td>
-              {% endfor %}
-            </tr>
-          {% endfor %}
+{% set total_tb = game.playoff_history|length %}
+{% for round_scores in game.playoff_history | reverse %}
+  {% set tb_num = total_tb - loop.index0 %}
+  <tr><th>TB {{ "%02d"|format(tb_num) }}</th>
+    {% for p in game.playoff_group %}
+      <td>{% set v = round_scores.get(p) %}{% if v is not none %}{% if v>0 %}+{% endif %}{{ v }}{% endif %}</td>
+    {% endfor %}
+  </tr>
+{% endfor %}
+
         </tbody>
       </table>
 
@@ -288,13 +291,16 @@
       const thead = `<thead><tr><th>&nbsp;</th>${headers}</tr></thead>`;
       const totals = g.playoff_group.map(()=>`<td>${g.playoff_base_score>0?'+':''}${g.playoff_base_score||0}</td>`).join('');
       let tbody = `<tbody><tr class="total-row"><th>Total</th>${totals}</tr>`;
-      g.playoff_history.forEach((round_scores,idx)=>{
-        const cells = g.playoff_group.map(p=>{
-          const v = round_scores[p];
-          return `<td>${v!==undefined?((v>0?'+':'')+v):''}</td>`;
-        }).join('');
-        tbody += `<tr><th>TB ${String(idx+1).padStart(2,'0')}</th>${cells}</tr>`;
-      });
+for (let idx = g.playoff_history.length - 1; idx >= 0; idx--) {
+  const round_scores = g.playoff_history[idx];
+  const tbNum = idx + 1; // label stays chronological while we display newest first
+  const cells = g.playoff_group.map(p => {
+    const v = round_scores[p];
+    return `<td>${v !== undefined ? ((v > 0 ? '+' : '') + v) : ''}</td>`;
+  }).join('');
+  tbody += `<tr><th>TB ${String(tbNum).padStart(2,'0')}</th>${cells}</tr>`;
+}
+
       tbody += `</tbody>`;
       qs('#scoreboard').innerHTML = thead+tbody;
     }
