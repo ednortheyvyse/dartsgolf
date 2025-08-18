@@ -62,6 +62,12 @@
   font-size:1.3em;
   font-weight:bold;
 }
+.final-standings-img {
+  max-width: 320px;  /* adjust size as you like */
+  height: auto;
+  display: block;
+  margin: 0 auto 20px; /* center with space below */
+}
 .info-bar .left{ text-align:left; }
 .info-bar .right{ text-align:right; color: var(--primary-color); }
 
@@ -189,7 +195,12 @@
 
     {# -------------- FINAL RANKING -------------- #}
     {% elif game.phase == 'final_ranking' %}
-      <div class="status-box"><h1>Final Standings</h1></div>
+<div class="status-box">
+  <img src="{{ url_for('static', filename='images/finalstanding1.png') }}" 
+       alt="Final Standings" 
+       class="final-standings-img">
+</div>
+
       <table class="scoreboard" id="scoreboard">
         <thead>
           <tr><th>&nbsp;</th>
