@@ -31,7 +31,15 @@
     .undo-btn{background:#ff9800;color:#000;}
     .restart-btn{background:#f44336;color:#fff;}
 
-    .setup-screen{text-align:center;padding-top:14vh;max-width:900px;margin:0 auto;padding-left:8px;padding-right:8px;}
+    .setup-screen {
+  text-align:center;
+  padding-top:4vh;   /* smaller top spacing */
+  max-width:900px;
+  margin:0 auto;
+  padding-left:8px;
+  padding-right:8px;
+}
+
     .setup-screen h1{margin-bottom:10px;}
     .flash{margin:0 auto 16px;padding:12px 16px;border-radius:8px;border:1px solid #ff4d4d;background:#2a0000;color:#ffcccc;font-weight:600;}
     .setup-screen input[name="players"]{width:100%;min-height:50px;font-size:clamp(16px,4vw,22px);line-height:1.2;padding:12px 15px;box-sizing:border-box;margin:10px auto;border-radius:8px;border:1px solid var(--border-color);background:#101010;color:var(--text-color);}
@@ -68,6 +76,16 @@
   display: block;
   margin: 0 auto 20px; /* center with space below */
 }
+.homepage-dartboard {
+  max-width: 320px;  /* adjust to your liking */
+  width: 100%;
+  height: auto;
+  margin: 15px auto 25px;
+  display: block;
+  border-radius: 12px;  /* optional, smooth edges */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5); /* optional, nice shadow */
+}
+
 .info-bar .left{ text-align:left; }
 .info-bar .right{ text-align:right; color: var(--primary-color); }
 
@@ -88,7 +106,9 @@
     {# ---------------- SETUP ---------------- #}
     {% if game.phase == 'setup' %}
       <div class="setup-screen">
-        <h1>Darts Golf Scorer</h1>
+  <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}" 
+       alt="Darts Golf Scorer Dartboard" 
+       class="homepage-dartboard">
 
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
