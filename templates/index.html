@@ -17,14 +17,12 @@
     .container{flex:1;overflow-y:auto;padding:15px 2px;-ms-overflow-style:none;scrollbar-width:none;}
     .container::-webkit-scrollbar{display:none;}
 
-    /* Bottom controls bar pinned to bottom of SCREEN */
     .controls{flex-shrink:0;padding:10px;background:#000;border-top:2px solid var(--border-color);}
     .button-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:10px;}
     .button-grid.single{grid-template-columns:1fr;}
     .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
     .button-grid button,.utility-grid button{width:100%;padding:20px 0;font-size:1.8em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;touch-action:manipulation;}
 
-    /* Buttons: - = green, + = red, 0 = grey */
     .score-btn.minus { background: var(--secondary-color); color:#fff; }
     .score-btn.plus  { background: var(--primary-color);  color:#fff; }
     .score-btn.zero  { background: #616161; color:#fff; }
@@ -41,7 +39,6 @@
       padding-right:8px;
     }
 
-    .setup-screen h1{margin-bottom:10px;}
     .flash{margin:0 auto 16px;padding:12px 16px;border-radius:8px;border:1px solid #ff4d4d;background:#2a0000;color:#ffcccc;font-weight:600;}
     .setup-screen input[name="players"]{width:100%;min-height:50px;font-size:clamp(16px,4vw,22px);line-height:1.2;padding:12px 15px;box-sizing:border-box;margin:10px auto;border-radius:8px;border:1px solid var(--border-color);background:#101010;color:var(--text-color);}
     .setup-screen small{display:block;color:#bbb;margin-top:2px;margin-bottom:12px;}
@@ -58,11 +55,9 @@
     .scoreboard thead th{font-size:1.2em;padding:8px 5px;line-height:1.4;vertical-align:middle;background:#333;}
     .scoreboard tbody th,.scoreboard tbody td{font-size:1.5em;padding:12px 5px;vertical-align:middle;}
     .scoreboard tbody th{background:#2b2b2b;font-size:1.1em;}
-    /* default background (overridden by per-score classes) */
     .scoreboard tbody td{background:var(--accent-color);color:var(--accent-text-color);font-weight:bold;}
     .scoreboard .total-row td{background:#333;color:var(--text-color);}
 
-    /* Per-score coloring for cells (used for round result) */
     .scoreboard td.score-pos,
     .scoreboard .total-row td.score-pos { background: var(--primary-color); color:#fff; }
     .scoreboard td.score-neg,
@@ -72,90 +67,37 @@
 
     .current-player-header{color:var(--primary-color);font-weight:bold;}
 
-    /* Centered header with large ROUND + number, tiny / 20, and medium turn */
     .info-bar{
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap:6px;
-      margin-bottom:15px;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:6px; margin-bottom:15px;
     }
-    .round-count{
-      display:flex;
-      align-items:flex-end;
-      justify-content:center;
-      gap:8px;
-      line-height:1;
-      margin-top:4px;
-      flex-wrap:nowrap;
-    }
-    .round-label{
-      font-size: clamp(28px, 7vw, 56px);
-      font-weight: 900;
-      letter-spacing: 0.06em;
-    }
-    .round-number{
-      font-size: clamp(44px, 12vw, 96px);
-      font-weight: 900;
-      line-height: .9;
-    }
-    .round-total{
-      font-size: clamp(10px, 2.8vw, 16px);
-      font-weight: 700;
-      opacity: .85;
-      margin-left: 2px;
-      align-self: flex-start;
-      transform: translateY(-6px);
-    }
-    .turn-info{
-      font-size: clamp(18px, 4.2vw, 28px);
-      font-weight: 700;
-      color: var(--primary-color);
-      text-align:center;
-    }
+    .round-count{ display:flex; align-items:flex-end; justify-content:center; gap:8px; line-height:1; margin-top:4px; flex-wrap:nowrap; }
+    .round-label{ font-size: clamp(28px, 7vw, 56px); font-weight: 900; letter-spacing: 0.06em; }
+    .round-number{ font-size: clamp(44px, 12vw, 96px); font-weight: 900; line-height: .9; }
+    .round-total{ font-size: clamp(10px, 2.8vw, 16px); font-weight: 700; opacity: .85; margin-left: 2px; align-self: flex-start; transform: translateY(-6px); }
+    .turn-info{ font-size: clamp(18px, 4.2vw, 28px); font-weight: 700; color: var(--primary-color); text-align:center; }
 
-    /* Highlight the live/current round row */
     .scoreboard tr.current-row th { background:#3a3a3a; }
-
-    /* Two-line cell; delta big, running total as pill (smaller) */
     .cell-wrap { display:flex; flex-direction:column; line-height:1.1; gap:4px; align-items:center; justify-content:center; }
     .cell-wrap .delta { font-weight:800; font-size:1em; }
     .cell-wrap .cum   { font-weight:700; font-size:.8em; }
-
-    /* Running total pill */
     .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-weight:800; }
     .pill.pos  { background: var(--primary-color);  color:#fff; }
     .pill.neg  { background: var(--secondary-color);color:#fff; }
     .pill.zero { background: #616161;               color:#fff; }
     .pill.ghost { visibility:hidden; }
 
-    /* Responsive images on setup + final pages */
     .homepage-dartboard,
     .final-standings-img{
-      display:block;
-      width:auto;
-      height:auto;
-      max-width: min(92vw, 520px);
-      max-height: 48vh;
-      margin:0 auto 20px;
-      object-fit: contain;
+      display:block; width:auto; height:auto;
+      max-width: min(92vw, 520px); max-height: 48vh;
+      margin:0 auto 20px; object-fit: contain;
     }
 
-    /* Floating score bubble */
     .score-bubble{
-      position:fixed;
-      z-index:9999;
-      padding:6px 10px;
-      border-radius:999px;
-      font-weight:800;
-      font-size:0.95em;
-      white-space:nowrap;
-      pointer-events:none;
-      box-shadow:0 6px 16px rgba(0,0,0,0.35);
-      transform:translate(-50%, 0) scale(0.95);
-      opacity:0;
-      animation:floatUp 900ms ease-out forwards;
+      position:fixed; z-index:9999; padding:6px 10px; border-radius:999px; font-weight:800; font-size:0.95em;
+      white-space:nowrap; pointer-events:none; box-shadow:0 6px 16px rgba(0,0,0,0.35);
+      transform:translate(-50%, 0) scale(0.95); opacity:0; animation:floatUp 900ms ease-out forwards;
       will-change: transform, opacity;
     }
     .score-bubble.pos  { background: var(--primary-color);  color:#fff; }
@@ -168,7 +110,6 @@
       100% { transform:translate(-50%, -64px) scale(1.05); opacity:0; }
     }
 
-    /* Export area wrapper (final screen) */
     #final-capture{ overflow: visible; }
   </style>
 </head>
@@ -176,10 +117,7 @@
   <div class="container">
     {% if game.phase == 'setup' %}
       <div class="setup-screen">
-        <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}"
-             alt="Darts Golf Scorer Dartboard"
-             class="homepage-dartboard">
-
+        <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}" alt="Darts Golf Scorer Dartboard" class="homepage-dartboard">
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, msg in messages %}
@@ -187,15 +125,11 @@
             {% endfor %}
           {% endif %}
         {% endwith %}
-
         <form action="{{ url_for('start_game') }}" method="post">
           <input id="playersInput" type="text" name="players" placeholder="Enter player names, separated by commas" required>
           <small>Tip: tap chips to add/remove names. Names must be unique (case-insensitive).</small>
-          <div class="setup-actions">
-            <button type="submit">Start Game</button>
-          </div>
+          <div class="setup-actions"><button type="submit">Start Game</button></div>
         </form>
-
         {% if game.recent_names %}
           <div class="recent-wrap">
             <div class="recent-title">Recent players</div>
@@ -286,9 +220,7 @@
 
     {% elif game.phase == 'playoff' %}
       <div class="info-bar" id="info-bar">
-        <div class="round-count">
-          <span class="round-label">TIE-BREAKER</span>
-        </div>
+        <div class="round-count"><span class="round-label">TIE-BREAKER</span></div>
         <div class="turn-info">{{ game.playoff_group[game.current_player_index] }}'s Turn</div>
       </div>
       <table class="scoreboard" id="scoreboard">
@@ -329,9 +261,7 @@
     {% elif game.phase == 'final_ranking' %}
       <div id="final-capture">
         <div class="status-box">
-          <img src="{{ url_for('static', filename='images/finalstanding1.png') }}"
-               alt="Final Standings"
-               class="final-standings-img">
+          <img src="{{ url_for('static', filename='images/finalstanding1.png') }}" alt="Final Standings" class="final-standings-img">
         </div>
 
         <table class="scoreboard" id="scoreboard">
@@ -408,9 +338,9 @@
       <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
       <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
       <button type="button" class="score-btn minus" onclick="hit(-1, this)">-1</button>
-      <button type="button" class="score-btn zero  " onclick="hit(0,  this)">0</button>
-      <button type="button" class="score-btn plus  " onclick="hit(1,  this)">+1</button>
-      <button type="button" class="score-btn plus  " onclick="hit(2,  this)">+2</button>
+      <button type="button" class="score-btn zero"  onclick="hit(0,  this)">0</button>
+      <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
+      <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
     </div>
     <div class="utility-grid">
       <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
@@ -479,16 +409,8 @@
       else if(g.phase==='playoff'){ renderPlayoff(g); var u2=qs('#undoBtn'); if(u2) u2.setAttribute('disabled','disabled'); }
     }
 
-    function clsFor(v){
-      if (v > 0) return 'score-pos';
-      if (v < 0) return 'score-neg';
-      return 'score-zero';
-    }
-    function pillFor(v){
-      if (v > 0) return 'pos';
-      if (v < 0) return 'neg';
-      return 'zero';
-    }
+    function clsFor(v){ if (v > 0) return 'score-pos'; if (v < 0) return 'score-neg'; return 'score-zero'; }
+    function pillFor(v){ if (v > 0) return 'pos'; if (v < 0) return 'neg'; return 'zero'; }
     function sign(v){ return v>0?'+':''; }
 
     function renderPlaying(g){
@@ -500,9 +422,7 @@
          '</div>'+
          '<div class="turn-info">'+g.players[g.current_player_index]+"'s Turn</div>";
 
-      var headers = g.players
-        .map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';})
-        .join('');
+      var headers = g.players.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
       var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
       var totals = g.players.map(function(p){
@@ -519,8 +439,7 @@
         if (typeof v === 'undefined') {
           return '<td><div class="cell-wrap"><div class="delta ghostline">0</div><div class="cum"><span class="pill zero ghost">T 0</span></div></div></td>';
         }
-        var running = g.round_history.slice(0, g.current_round)
-          .reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
+        var running = g.round_history.slice(0, g.current_round).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
         return '<td class="'+clsFor(v)+'">'+
                  '<div class="cell-wrap">'+
                    '<div class="delta">'+sign(v)+v+'</div>'+
@@ -535,8 +454,7 @@
         var cells = g.players.map(function(p){
           var v = row[p];
           if (typeof v === 'undefined') return '<td></td>';
-          var running = g.round_history.slice(0, i+1)
-            .reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
+          var running = g.round_history.slice(0, i+1).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
           return '<td class="'+clsFor(v)+'">'+
                    '<div class="cell-wrap">'+
                      '<div class="delta">'+sign(v)+v+'</div>'+
@@ -558,10 +476,7 @@
       var headers = g.playoff_group.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
       var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
-      var totals = g.playoff_group.map(function(){
-        var s = g.playoff_base_score || 0;
-        return '<td class="'+clsFor(s)+'">'+sign(s)+s+'</td>';
-      }).join('');
+      var totals = g.playoff_group.map(function(){ var s = g.playoff_base_score || 0; return '<td class="'+clsFor(s)+'">'+sign(s)+s+'</td>'; }).join('');
 
       var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
@@ -580,81 +495,32 @@
       qs('#scoreboard').innerHTML = thead+tbody;
     }
 
-    /* ---------- Floating bubble ---------- */
-    var LABELS = {
-      "-3": "Triple Birdie",
-      "-2": "Double Birdie",
-      "-1": "Birdie",
-       "0": "Par",
-       "1": "Bogey",
-       "2": "Double Bogey"
-    };
-    function hit(val, el){
-      showBubbleFor(val, el);
-      sendScore(val);
-    }
+    var LABELS = { "-3":"Triple Birdie","-2":"Double Birdie","-1":"Birdie","0":"Par","1":"Bogey","2":"Double Bogey" };
+    function hit(val, el){ showBubbleFor(val, el); sendScore(val); }
     function showBubbleFor(val, el){
-      var key = String(val);
-      var label = (typeof LABELS[key] !== 'undefined') ? LABELS[key] : key;
-      var cls   = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
-
-      var rect = el.getBoundingClientRect();
-      var x = rect.left + (rect.width / 2);
-      var y = rect.top - 6;
-
-      var bubble = document.createElement('div');
-      bubble.className = 'score-bubble ' + cls;
-      bubble.textContent = label;
-      bubble.style.left = x + 'px';
-      bubble.style.top  = y + 'px';
-
-      document.body.appendChild(bubble);
+      var key = String(val), label = (typeof LABELS[key] !== 'undefined') ? LABELS[key] : key;
+      var cls = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
+      var rect = el.getBoundingClientRect(), x = rect.left + (rect.width/2), y = rect.top - 6;
+      var bubble = document.createElement('div'); bubble.className = 'score-bubble '+cls; bubble.textContent = label;
+      bubble.style.left = x + 'px'; bubble.style.top = y + 'px'; document.body.appendChild(bubble);
       var remove = function(){ if (bubble && bubble.parentNode) bubble.parentNode.removeChild(bubble); };
-      bubble.addEventListener('animationend', remove, { once:true });
-      setTimeout(remove, 1500);
+      bubble.addEventListener('animationend', remove, { once:true }); setTimeout(remove, 1500);
     }
   </script>
   {% endif %}
 
   {% if game.phase == 'final_ranking' %}
-  <!-- Lightweight, robust client-side PNG export -->
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha256-wtWn3gS1e+JpMuqk2gD4mds0qShT2FhLJ5p9B7vJ2x0=" crossorigin="anonymous"></script>
   <script>
     function exportFinalPNG(){
-      var target = document.getElementById('final-capture');
-      if(!target){ alert('Nothing to export.'); return; }
-      var bg = getComputedStyle(document.body).backgroundColor || '#1a1a1a';
-
-      // SCALE=1 exports at on-screen size; bump to window.devicePixelRatio for sharper PNG.
-      var SCALE = 1;
-
-      if (typeof html2canvas === 'undefined') {
-        alert('Export library failed to load.');
-        return;
-      }
-
-      html2canvas(target, {
-        backgroundColor: bg,
-        useCORS: true,
-        scale: SCALE,
-        logging: false,
-        removeContainer: true
-      }).then(function(canvas){
-        canvas.toBlob(function(pngBlob){
-          if(!pngBlob){ alert('Export failed.'); return; }
-          var a = document.createElement('a');
-          a.href = URL.createObjectURL(pngBlob);
-          a.download = 'final-standings.png';
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(function(){
-            URL.revokeObjectURL(a.href);
-            if (a.parentNode) a.parentNode.removeChild(a);
-          }, 300);
-        }, 'image/png', 1);
-      }).catch(function(){
-        alert('Could not render PNG in this browser.');
-      });
+      var el = document.getElementById('final-capture');
+      if(!el){ alert('Nothing to export.'); return; }
+      var rect = el.getBoundingClientRect();
+      var dpr = window.devicePixelRatio || 1;
+      var w = Math.round(rect.width * dpr);
+      var h = Math.round(rect.height * dpr);
+      // Navigate to the server exporter (downloads the PNG)
+      var url = '{{ url_for("export_png") }}' + '?width=' + w + '&height=' + h;
+      window.location.href = url;
     }
   </script>
   {% endif %}
