@@ -30,6 +30,7 @@
     .score-btn.zero  { background: #616161; color:#fff; }
     .undo-btn{background:#ff9800;color:#000;}
     .restart-btn{background:#f44336;color:#fff;}
+    .export-btn{background:#2196f3;color:#fff;}
 
     .setup-screen {
       text-align:center;
@@ -57,48 +58,89 @@
     .scoreboard thead th{font-size:1.2em;padding:8px 5px;line-height:1.4;vertical-align:middle;background:#333;}
     .scoreboard tbody th,.scoreboard tbody td{font-size:1.5em;padding:12px 5px;vertical-align:middle;}
     .scoreboard tbody th{background:#2b2b2b;font-size:1.1em;}
-    /* Keep cells neutral; color pills inside */
+    /* default background (overridden by per-score classes) */
     .scoreboard tbody td{background:var(--accent-color);color:var(--accent-text-color);font-weight:bold;}
     .scoreboard .total-row td{background:#333;color:var(--text-color);}
 
+    /* Per-score coloring for cells (used for round result) */
+    .scoreboard td.score-pos,
+    .scoreboard .total-row td.score-pos { background: var(--primary-color); color:#fff; }
+    .scoreboard td.score-neg,
+    .scoreboard .total-row td.score-neg { background: var(--secondary-color); color:#fff; }
+    .scoreboard td.score-zero,
+    .scoreboard .total-row td.score-zero { background: #616161; color:#fff; }
+
     .current-player-header{color:var(--primary-color);font-weight:bold;}
+
+    /* Centered header with large ROUND + number, tiny / 20, and medium turn */
     .info-bar{
       display:flex;
-      justify-content:space-between;
+      flex-direction:column;
       align-items:center;
+      justify-content:center;
+      gap:6px;
       margin-bottom:15px;
-      font-size:1.3em;
-      font-weight:bold;
     }
-    .final-standings-img {
-      max-width: 320px;
-      height: auto;
-      display: block;
-      margin: 0 auto 20px;
+    .round-count{
+      display:flex;
+      align-items:flex-end;
+      justify-content:center;
+      gap:8px;
+      line-height:1;
+      margin-top:4px;
+      flex-wrap:nowrap;
     }
-    .homepage-dartboard {
-      max-width: 320px;
-      width: 100%;
-      height: auto;
-      margin: 15px auto 25px;
-      display: block;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    .round-label{
+      font-size: clamp(28px, 7vw, 56px);
+      font-weight: 900;
+      letter-spacing: 0.06em;
     }
-
-    .info-bar .left{ text-align:left; }
-    .info-bar .right{ text-align:right; color: var(--primary-color); }
+    .round-number{
+      font-size: clamp(44px, 12vw, 96px);
+      font-weight: 900;
+      line-height: .9;
+    }
+    .round-total{
+      font-size: clamp(10px, 2.8vw, 16px);
+      font-weight: 700;
+      opacity: .85;
+      margin-left: 2px;
+      align-self: flex-start;
+      transform: translateY(-6px);
+    }
+    .turn-info{
+      font-size: clamp(18px, 4.2vw, 28px);
+      font-weight: 700;
+      color: var(--primary-color);
+      text-align:center;
+    }
 
     /* Highlight the live/current round row */
     .scoreboard tr.current-row th { background:#3a3a3a; }
 
-    /* Two-line cell: delta + running total as colored "pills" */
-    .cell-wrap { display:flex; flex-direction:column; line-height:1.1; gap:2px; }
-    .pill { display:inline-block; padding:2px 6px; border-radius:8px; font-weight:800; }
-    .pill.pos  { background: var(--primary-color);  color:#fff; } /* + */
-    .pill.neg  { background: var(--secondary-color);color:#fff; } /* - */
-    .pill.zero { background: #616161;               color:#fff; } /* 0 */
-    .cell-wrap .cum .pill { font-weight:600; font-size:.8em; }
+    /* Two-line cell; delta big, running total as pill (smaller) */
+    .cell-wrap { display:flex; flex-direction:column; line-height:1.1; gap:4px; align-items:center; justify-content:center; }
+    .cell-wrap .delta { font-weight:800; font-size:1em; }
+    .cell-wrap .cum   { font-weight:700; font-size:.8em; }
+
+    /* Running total pill */
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-weight:800; }
+    .pill.pos  { background: var(--primary-color);  color:#fff; }
+    .pill.neg  { background: var(--secondary-color);color:#fff; }
+    .pill.zero { background: #616161;               color:#fff; }
+    .pill.ghost { visibility:hidden; }
+
+    /* Responsive images on setup + final pages */
+    .homepage-dartboard,
+    .final-standings-img{
+      display:block;
+      width:auto;
+      height:auto;
+      max-width: min(92vw, 520px);
+      max-height: 48vh;
+      margin:0 auto 20px;
+      object-fit: contain;
+    }
 
     /* Floating score bubble */
     .score-bubble{
@@ -114,6 +156,7 @@
       transform:translate(-50%, 0) scale(0.95);
       opacity:0;
       animation:floatUp 900ms ease-out forwards;
+      will-change: transform, opacity;
     }
     .score-bubble.pos  { background: var(--primary-color);  color:#fff; }
     .score-bubble.neg  { background: var(--secondary-color);color:#fff; }
@@ -124,11 +167,13 @@
       15%  { transform:translate(-50%, 0px)  scale(1.00); opacity:1; }
       100% { transform:translate(-50%, -64px) scale(1.05); opacity:0; }
     }
+
+    /* Export area wrapper (final screen) */
+    #final-capture{ overflow: visible; }
   </style>
 </head>
 <body>
   <div class="container">
-    {# ---------------- SETUP ---------------- #}
     {% if game.phase == 'setup' %}
       <div class="setup-screen">
         <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}"
@@ -159,11 +204,14 @@
         {% endif %}
       </div>
 
-    {# ---------------- PLAYING ---------------- #}
     {% elif game.phase == 'playing' %}
       <div class="info-bar" id="info-bar">
-        <span class="left">Round: {{ "%02d"|format(game.current_round) }} / 20</span>
-        <span class="right">{{ game.players[game.current_player_index] }}'s Turn</span>
+        <div class="round-count">
+          <span class="round-label">ROUND</span>
+          <span class="round-number">{{ "%02d"|format(game.current_round) }}</span>
+          <span class="round-total">/ 20</span>
+        </div>
+        <div class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</div>
       </div>
 
       <table class="scoreboard" id="scoreboard">
@@ -183,7 +231,6 @@
             {% endfor %}
           </tr>
 
-          {# --- LIVE current round row (delta + cumulative), each as its own pill --- #}
           <tr class="current-row"><th>{{ "%02d"|format(game.current_round) }}</th>
             {% for p in game.players %}
               {% set v = game.round_history[game.current_round - 1].get(p) %}
@@ -192,21 +239,25 @@
                 {% for r in range(game.current_round) %}
                   {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
                 {% endfor %}
-                {% set delta_cls = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
-                {% set cum_cls = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
-                <td>
+                {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
+                {% set cum_cls  = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
+                <td class="{{ cell_cls }}">
                   <div class="cell-wrap">
-                    <div class="delta"><span class="pill {{ delta_cls }}">{{ v>0 and '+' or '' }}{{ v }}</span></div>
+                    <div class="delta">{{ v>0 and '+' or '' }}{{ v }}</div>
                     <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
                   </div>
                 </td>
               {% else %}
-                <td></td>
+                <td>
+                  <div class="cell-wrap">
+                    <div class="delta ghostline">0</div>
+                    <div class="cum"><span class="pill zero ghost">T 0</span></div>
+                  </div>
+                </td>
               {% endif %}
             {% endfor %}
           </tr>
 
-          {# Past rounds (newest on top), delta + cumulative with individual colors #}
           {% for i in range(game.current_round - 1) | reverse %}
             <tr><th>{{ "%02d"|format(i + 1) }}</th>
               {% for p in game.players %}
@@ -216,11 +267,11 @@
                   {% for r in range(i + 1) %}
                     {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
                   {% endfor %}
-                  {% set delta_cls = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
-                  {% set cum_cls = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
-                  <td>
+                  {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
+                  {% set cum_cls  = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
+                  <td class="{{ cell_cls }}">
                     <div class="cell-wrap">
-                      <div class="delta"><span class="pill {{ delta_cls }}">{{ v>0 and '+' or '' }}{{ v }}</span></div>
+                      <div class="delta">{{ v>0 and '+' or '' }}{{ v }}</div>
                       <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
                     </div>
                   </td>
@@ -233,11 +284,12 @@
         </tbody>
       </table>
 
-    {# ---------------- PLAYOFF ---------------- #}
     {% elif game.phase == 'playoff' %}
       <div class="info-bar" id="info-bar">
-        <span>Tie-Breaker</span> -
-        <span class="turn-info">{{ game.playoff_group[game.current_player_index] }}'s Turn</span>
+        <div class="round-count">
+          <span class="round-label">TIE-BREAKER</span>
+        </div>
+        <div class="turn-info">{{ game.playoff_group[game.current_player_index] }}'s Turn</div>
       </div>
       <table class="scoreboard" id="scoreboard">
         <thead>
@@ -256,7 +308,6 @@
             {% endfor %}
           </tr>
 
-          {# Newest TB on top — now pills per cell #}
           {% set total_tb = game.playoff_history|length %}
           {% for round_scores in game.playoff_history | reverse %}
             {% set tb_num = total_tb - loop.index0 %}
@@ -264,8 +315,8 @@
               {% for p in game.playoff_group %}
                 {% set v = round_scores.get(p) %}
                 {% if v is not none %}
-                  {% set pill = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
-                  <td><span class="pill {{ pill }}">{% if v>0 %}+{% endif %}{{ v }}</span></td>
+                  {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
+                  <td class="{{ cell_cls }}">{{ v>0 and '+' or '' }}{{ v }}</td>
                 {% else %}
                   <td></td>
                 {% endif %}
@@ -275,93 +326,91 @@
         </tbody>
       </table>
 
-    {# -------------- FINAL RANKING -------------- #}
     {% elif game.phase == 'final_ranking' %}
-      <div class="status-box">
-        <img src="{{ url_for('static', filename='images/finalstanding1.png') }}"
-             alt="Final Standings"
-             class="final-standings-img">
+      <div id="final-capture">
+        <div class="status-box">
+          <img src="{{ url_for('static', filename='images/finalstanding1.png') }}"
+               alt="Final Standings"
+               class="final-standings-img">
+        </div>
+
+        <table class="scoreboard" id="scoreboard">
+          <thead>
+            <tr><th>&nbsp;</th>
+              {% for st in game.final_standings %}
+                <th>{% set r=st.rank %}{% set sfx='th' %}
+                    {% if r % 10 == 1 and r % 100 != 11 %}{% set sfx='st' %}{% endif %}
+                    {% if r % 10 == 2 and r % 100 != 12 %}{% set sfx='nd' %}{% endif %}
+                    {% if r % 10 == 3 and r % 100 != 13 %}{% set sfx='rd' %}{% endif %}
+                    {{ r }}{{ sfx }}</th>
+              {% endfor %}
+            </tr>
+            <tr><th>Player</th>
+              {% for st in game.final_standings %}<th>{{ st.name }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="total-row"><th>Final</th>
+              {% for st in game.final_standings %}
+                {% set s = st.score %}
+                {% set cls = 'score-pos' if s>0 else ('score-neg' if s<0 else 'score-zero') %}
+                <td class="{{ cls }}">{% if s>0 %}+{% endif %}{{ s }}</td>
+              {% endfor %}
+            </tr>
+
+            {% for i in range(game.max_playoff_rounds, 0, -1) %}
+              <tr><th>TB {{ "%02d"|format(i) }}</th>
+                {% for st in game.final_standings %}
+                  {% set hist = game.all_playoff_history.get(st.name, []) %}
+                  {% if i <= hist|length %}
+                    {% set v = hist[i-1] %}
+                    {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
+                    <td class="{{ cell_cls }}">{% if v>0 %}+{% endif %}{{ v }}</td>
+                  {% else %}
+                    <td>-</td>
+                  {% endif %}
+                {% endfor %}
+              </tr>
+            {% endfor %}
+
+            {% for i in range(19, -1, -1) %}
+              <tr><th>{{ "%02d"|format(i + 1) }}</th>
+                {% for st in game.final_standings %}
+                  {% set v = game.round_history[i].get(st.name) %}
+                  {% if v is not none %}
+                    {% set ns = namespace(total=0) %}
+                    {% for r in range(i + 1) %}
+                      {% set ns.total = ns.total + (game.round_history[r].get(st.name, 0)) %}
+                    {% endfor %}
+                    {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
+                    {% set cum_cls  = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
+                    <td class="{{ cell_cls }}">
+                      <div class="cell-wrap">
+                        <div class="delta">{{ v>0 and '+' or '' }}{{ v }}</div>
+                        <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
+                      </div>
+                    </td>
+                  {% else %}
+                    <td></td>
+                  {% endif %}
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-
-      <table class="scoreboard" id="scoreboard">
-        <thead>
-          <tr><th>&nbsp;</th>
-            {% for st in game.final_standings %}
-              <th>{% set r=st.rank %}{% set sfx='th' %}
-                  {% if r % 10 == 1 and r % 100 != 11 %}{% set sfx='st' %}{% endif %}
-                  {% if r % 10 == 2 and r % 100 != 12 %}{% set sfx='nd' %}{% endif %}
-                  {% if r % 10 == 3 and r % 100 != 13 %}{% set sfx='rd' %}{% endif %}
-                  {{ r }}{{ sfx }}</th>
-            {% endfor %}
-          </tr>
-          <tr><th>Player</th>
-            {% for st in game.final_standings %}<th>{{ st.name }}</th>{% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="total-row"><th>Final</th>
-            {% for st in game.final_standings %}
-              {% set s = st.score %}
-              {% set cls = 'score-pos' if s>0 else ('score-neg' if s<0 else 'score-zero') %}
-              <td class="{{ cls }}">{% if s>0 %}+{% endif %}{{ s }}</td>
-            {% endfor %}
-          </tr>
-
-          {# Tie-breakers: pills (delta only) #}
-          {% for i in range(game.max_playoff_rounds, 0, -1) %}
-            <tr><th>TB {{ "%02d"|format(i) }}</th>
-              {% for st in game.final_standings %}
-                {% set hist = game.all_playoff_history.get(st.name, []) %}
-                {% if i <= hist|length %}
-                  {% set v = hist[i-1] %}
-                  {% set pill = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
-                  <td><span class="pill {{ pill }}">{% if v>0 %}+{% endif %}{{ v }}</span></td>
-                {% else %}
-                  <td>-</td>
-                {% endif %}
-              {% endfor %}
-            </tr>
-          {% endfor %}
-
-          {# Base rounds: delta + cumulative, each with its own pill color #}
-          {% for i in range(19, -1, -1) %}
-            <tr><th>{{ "%02d"|format(i + 1) }}</th>
-              {% for st in game.final_standings %}
-                {% set v = game.round_history[i].get(st.name) %}
-                {% if v is not none %}
-                  {% set ns = namespace(total=0) %}
-                  {% for r in range(i + 1) %}
-                    {% set ns.total = ns.total + (game.round_history[r].get(st.name, 0)) %}
-                  {% endfor %}
-                  {% set delta_cls = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
-                  {% set cum_cls = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
-                  <td>
-                    <div class="cell-wrap">
-                      <div class="delta"><span class="pill {{ delta_cls }}">{{ v>0 and '+' or '' }}{{ v }}</span></div>
-                      <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
-                    </div>
-                  </td>
-                {% else %}
-                  <td></td>
-                {% endif %}
-              {% endfor %}
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
     {% endif %}
   </div>
 
-  {# ---- Controls pinned at bottom of SCREEN ---- #}
   {% if game.phase in ['playing','playoff'] %}
   <div class="controls">
     <div class="button-grid">
       <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
       <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
       <button type="button" class="score-btn minus" onclick="hit(-1, this)">-1</button>
-      <button type="button" class="score-btn zero"  onclick="hit(0,  this)">0</button>
-      <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
-      <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
+      <button type="button" class="score-btn zero  " onclick="hit(0,  this)">0</button>
+      <button type="button" class="score-btn plus  " onclick="hit(1,  this)">+1</button>
+      <button type="button" class="score-btn plus  " onclick="hit(2,  this)">+2</button>
     </div>
     <div class="utility-grid">
       <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
@@ -373,6 +422,7 @@
   {% elif game.phase == 'final_ranking' %}
   <div class="controls">
     <div class="button-grid single">
+      <button type="button" class="export-btn" style="grid-column:1 / -1;" onclick="exportFinalPNG()">Export PNG</button>
       <form action="{{ url_for('restart') }}" method="post" style="grid-column:1 / -1;" onsubmit="return confirm('Start a new game?');">
         <button type="submit" class="restart-btn">Start New Game</button>
       </form>
@@ -382,25 +432,26 @@
 
   {% if game.phase == 'setup' and game.recent_names %}
   <script>
-    const recentNames = {{ game.recent_names | tojson | safe }};
-    const chipList = document.getElementById('chipList');
-    const playersInput = document.getElementById('playersInput');
+    var recentNames = {{ game.recent_names | tojson | safe }};
+    var chipList = document.getElementById('chipList');
+    var playersInput = document.getElementById('playersInput');
 
-    function parseInputList(){ return playersInput.value.split(',').map(s=>s.trim()).filter(Boolean); }
+    function parseInputList(){ return playersInput.value.split(',').map(function(s){return s.trim();}).filter(Boolean); }
     function writeInputList(arr){ playersInput.value = arr.join(', '); }
     function toggleName(name){
-      const list = parseInputList();
-      const idx = list.findIndex(n => n.toLowerCase() === name.toLowerCase());
+      var list = parseInputList();
+      var idx = -1;
+      for (var i=0;i<list.length;i++){ if (list[i].toLowerCase() === name.toLowerCase()) { idx=i; break; } }
       if (idx >= 0) { list.splice(idx,1); } else { list.push(name); }
       writeInputList(list);
-      const chip = document.querySelector(`.chip[data-name="${CSS.escape(name)}"]`);
+      var chip = document.querySelector('.chip[data-name="'+CSS.escape(name)+'"]');
       if (chip) chip.classList.toggle('selected');
     }
 
     if (chipList) {
-      chipList.innerHTML = recentNames.map(n =>
-        `<div class="chip" data-name="${n}" onclick="toggleName('${n.replace(/'/g,"\\'")}')">${n}</div>`
-      ).join('');
+      chipList.innerHTML = recentNames.map(function(n){
+        return '<div class="chip" data-name="'+n+'" onclick="toggleName(\''+n.replace(/'/g,"\\'")+'\')">'+n+'</div>';
+      }).join('');
     }
   </script>
   {% endif %}
@@ -410,22 +461,22 @@
     function qs(s){return document.querySelector(s);}
 
     async function sendScore(val){
-      const res = await fetch('{{ url_for("api_score") }}', {
+      var res = await fetch('{{ url_for("api_score") }}', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({score:val})
       });
-      const data = await res.json(); if(!data.ok) return;
-      const g = data.game; if(g.phase==='final_ranking'){ location.reload(); return; }
+      var data = await res.json(); if(!data.ok) return;
+      var g = data.game; if(g.phase==='final_ranking'){ location.reload(); return; }
       renderGame(g);
     }
     async function undo(){
-      const res = await fetch('{{ url_for("api_undo") }}',{method:'POST'});
-      const data = await res.json(); if(!data.ok) return;
+      var res = await fetch('{{ url_for("api_undo") }}',{method:'POST'});
+      var data = await res.json(); if(!data.ok) return;
       renderGame(data.game);
     }
     function renderGame(g){
-      if(g.phase==='playing'){ renderPlaying(g); qs('#undoBtn')?.removeAttribute('disabled'); }
-      else if(g.phase==='playoff'){ renderPlayoff(g); qs('#undoBtn')?.setAttribute('disabled','disabled'); }
+      if(g.phase==='playing'){ renderPlaying(g); var u=qs('#undoBtn'); if(u) u.removeAttribute('disabled'); }
+      else if(g.phase==='playoff'){ renderPlayoff(g); var u2=qs('#undoBtn'); if(u2) u2.setAttribute('disabled','disabled'); }
     }
 
     function clsFor(v){
@@ -442,117 +493,168 @@
 
     function renderPlaying(g){
       qs('#info-bar').innerHTML =
-        `<span>Round: ${String(g.current_round).padStart(2,'0')} / 20</span> - ` +
-        `<span class="turn-info">${g.players[g.current_player_index]}'s Turn</span>`;
+        '<div class="round-count">'+
+           '<span class="round-label">ROUND</span>'+
+           '<span class="round-number">'+String(g.current_round).padStart(2,'0')+'</span>'+
+           '<span class="round-total">/ 20</span>'+
+         '</div>'+
+         '<div class="turn-info">'+g.players[g.current_player_index]+"'s Turn</div>";
 
-      const headers = g.players
-        .map((p,i)=>`<th class="${i===g.current_player_index?'current-player-header':''}">${p}</th>`)
+      var headers = g.players
+        .map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';})
         .join('');
-      const thead = `<thead><tr><th>&nbsp;</th>${headers}</tr></thead>`;
+      var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
-      const totals = g.players.map(p=>{
-        const s = g.scores[p] || 0;
-        return `<td class="${clsFor(s)}">${sign(s)}${s}</td>`;
+      var totals = g.players.map(function(p){
+        var s = g.scores[p] || 0;
+        return '<td class="'+clsFor(s)+'">'+sign(s)+s+'</td>';
       }).join('');
 
-      let tbody = `<tbody><tr class="total-row"><th>Total</th>${totals}</tr>`;
+      var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
-      // --- LIVE current round (delta + cumulative with independent colors) ---
-      const curIdx = g.current_round - 1;
-      const currentCells = g.players.map(p=>{
-        const v = g.round_history[curIdx]?.[p];
-        if (v === undefined) return `<td></td>`;
-        const running = g.round_history.slice(0, g.current_round)
-          .reduce((sum, rh)=> sum + (rh[p]||0), 0);
-        return `<td>
-                  <div class="cell-wrap">
-                    <div class="delta"><span class="pill ${pillFor(v)}">${sign(v)}${v}</span></div>
-                    <div class="cum"><span class="pill ${pillFor(running)}">T ${sign(running)}${running}</span></div>
-                  </div>
-                </td>`;
+      var curIdx = g.current_round - 1;
+      var curRow = g.round_history[curIdx] || {};
+      var currentCells = g.players.map(function(p){
+        var v = curRow[p];
+        if (typeof v === 'undefined') {
+          return '<td><div class="cell-wrap"><div class="delta ghostline">0</div><div class="cum"><span class="pill zero ghost">T 0</span></div></div></td>';
+        }
+        var running = g.round_history.slice(0, g.current_round)
+          .reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
+        return '<td class="'+clsFor(v)+'">'+
+                 '<div class="cell-wrap">'+
+                   '<div class="delta">'+sign(v)+v+'</div>'+
+                   '<div class="cum"><span class="pill '+pillFor(running)+'">T '+sign(running)+running+'</span></div>'+
+                 '</div>'+
+               '</td>';
       }).join('');
-      tbody += `<tr class="current-row"><th>${String(g.current_round).padStart(2,'0')}</th>${currentCells}</tr>`;
+      tbody += '<tr class="current-row"><th>'+String(g.current_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
 
-      // --- Past rounds (newest on top), delta + cumulative with independent colors ---
-      for(let i=g.current_round-2;i>=0;i--){
-        const cells = g.players.map(p=>{
-          const v = g.round_history[i]?.[p];
-          if (v === undefined) return `<td></td>`;
-          const running = g.round_history.slice(0, i+1)
-            .reduce((sum, rh)=> sum + (rh[p]||0), 0);
-          return `<td>
-                    <div class="cell-wrap">
-                      <div class="delta"><span class="pill ${pillFor(v)}">${sign(v)}${v}</span></div>
-                      <div class="cum"><span class="pill ${pillFor(running)}">T ${sign(running)}${running}</span></div>
-                    </div>
-                  </td>`;
+      for(var i=g.current_round-2;i>=0;i--){
+        var row = g.round_history[i] || {};
+        var cells = g.players.map(function(p){
+          var v = row[p];
+          if (typeof v === 'undefined') return '<td></td>';
+          var running = g.round_history.slice(0, i+1)
+            .reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
+          return '<td class="'+clsFor(v)+'">'+
+                   '<div class="cell-wrap">'+
+                     '<div class="delta">'+sign(v)+v+'</div>'+
+                     '<div class="cum"><span class="pill '+pillFor(running)+'">T '+sign(running)+running+'</span></div>'+
+                   '</div>'+
+                 '</td>';
         }).join('');
-        tbody += `<tr><th>${String(i+1).padStart(2,'0')}</th>${cells}</tr>`;
+        tbody += '<tr><th>'+String(i+1).padStart(2,'0')+'</th>'+cells+'</tr>';
       }
 
-      tbody += `</tbody>`;
+      tbody += '</tbody>';
       qs('#scoreboard').innerHTML = thead+tbody;
     }
 
     function renderPlayoff(g){
-      qs('#info-bar').innerHTML = `<span>Tie-Breaker</span> - <span class="turn-info">${g.playoff_group[g.current_player_index]}'s Turn</span>`;
-      const headers = g.playoff_group.map((p,i)=>`<th class="${i===g.current_player_index?'current-player-header':''}">${p}</th>`).join('');
-      const thead = `<thead><tr><th>&nbsp;</th>${headers}</tr></thead>`;
+      qs('#info-bar').innerHTML =
+        '<div class="round-count"><span class="round-label">TIE-BREAKER</span></div>'+
+        '<div class="turn-info">'+g.playoff_group[g.current_player_index]+"'s Turn</div>";
+      var headers = g.playoff_group.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
+      var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
-      const totals = g.playoff_group.map(()=>{
-        const s = g.playoff_base_score || 0;
-        return `<td class="${clsFor(s)}">${sign(s)}${s}</td>`;
+      var totals = g.playoff_group.map(function(){
+        var s = g.playoff_base_score || 0;
+        return '<td class="'+clsFor(s)+'">'+sign(s)+s+'</td>';
       }).join('');
 
-      let tbody = `<tbody><tr class="total-row"><th>Total</th>${totals}</tr>`;
+      var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
-      // Newest TB at top — now pills per cell
-      for (let idx = g.playoff_history.length - 1; idx >= 0; idx--) {
-        const round_scores = g.playoff_history[idx];
-        const tbNum = idx + 1;
-        const cells = g.playoff_group.map(p=>{
-          const v = round_scores[p];
-          if (v === undefined) return `<td></td>`;
-          return `<td><span class="pill ${pillFor(v)}">${sign(v)}${v}</span></td>`;
+      for (var idx = g.playoff_history.length - 1; idx >= 0; idx--) {
+        var round_scores = g.playoff_history[idx] || {};
+        var tbNum = idx + 1;
+        var cells = g.playoff_group.map(function(p){
+          var v = round_scores[p];
+          if (typeof v === 'undefined') return '<td></td>';
+          return '<td class="'+clsFor(v)+'">'+sign(v)+v+'</td>';
         }).join('');
-        tbody += `<tr><th>TB ${String(tbNum).padStart(2,'0')}</th>${cells}</tr>`;
+        tbody += '<tr><th>TB '+String(tbNum).padStart(2,'0')+'</th>'+cells+'</tr>';
       }
 
-      tbody += `</tbody>`;
+      tbody += '</tbody>';
       qs('#scoreboard').innerHTML = thead+tbody;
     }
 
     /* ---------- Floating bubble ---------- */
-    const LABELS = {
-      "-3": "Triple Bogey",
-      "-2": "Double Bogey",
-      "-1": "Bogey",
+    var LABELS = {
+      "-3": "Triple Birdie",
+      "-2": "Double Birdie",
+      "-1": "Birdie",
        "0": "Par",
-       "1": "Birdie",
-       "2": "Double Birdie",
+       "1": "Bogey",
+       "2": "Double Bogey"
     };
     function hit(val, el){
       showBubbleFor(val, el);
       sendScore(val);
     }
     function showBubbleFor(val, el){
-      const label = LABELS[String(val)] ?? String(val);
-      const cls   = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
+      var key = String(val);
+      var label = (typeof LABELS[key] !== 'undefined') ? LABELS[key] : key;
+      var cls   = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
 
-      const rect = el.getBoundingClientRect();
-      const x = rect.left + (rect.width / 2);
-      const y = rect.top - 6;
+      var rect = el.getBoundingClientRect();
+      var x = rect.left + (rect.width / 2);
+      var y = rect.top - 6;
 
-      const bubble = document.createElement('div');
-      bubble.className = `score-bubble ${cls}`;
+      var bubble = document.createElement('div');
+      bubble.className = 'score-bubble ' + cls;
       bubble.textContent = label;
-      bubble.style.left = `${x}px`;
-      bubble.style.top  = `${y}px`;
+      bubble.style.left = x + 'px';
+      bubble.style.top  = y + 'px';
 
       document.body.appendChild(bubble);
-      const remove = () => bubble.remove();
+      var remove = function(){ if (bubble && bubble.parentNode) bubble.parentNode.removeChild(bubble); };
       bubble.addEventListener('animationend', remove, { once:true });
       setTimeout(remove, 1500);
+    }
+  </script>
+  {% endif %}
+
+  {% if game.phase == 'final_ranking' %}
+  <!-- Lightweight, robust client-side PNG export -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha256-wtWn3gS1e+JpMuqk2gD4mds0qShT2FhLJ5p9B7vJ2x0=" crossorigin="anonymous"></script>
+  <script>
+    function exportFinalPNG(){
+      var target = document.getElementById('final-capture');
+      if(!target){ alert('Nothing to export.'); return; }
+      var bg = getComputedStyle(document.body).backgroundColor || '#1a1a1a';
+
+      // SCALE=1 exports at on-screen size; bump to window.devicePixelRatio for sharper PNG.
+      var SCALE = 1;
+
+      if (typeof html2canvas === 'undefined') {
+        alert('Export library failed to load.');
+        return;
+      }
+
+      html2canvas(target, {
+        backgroundColor: bg,
+        useCORS: true,
+        scale: SCALE,
+        logging: false,
+        removeContainer: true
+      }).then(function(canvas){
+        canvas.toBlob(function(pngBlob){
+          if(!pngBlob){ alert('Export failed.'); return; }
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(pngBlob);
+          a.download = 'final-standings.png';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function(){
+            URL.revokeObjectURL(a.href);
+            if (a.parentNode) a.parentNode.removeChild(a);
+          }, 300);
+        }, 'image/png', 1);
+      }).catch(function(){
+        alert('Could not render PNG in this browser.');
+      });
     }
   </script>
   {% endif %}
