@@ -17,12 +17,19 @@
     .container{flex:1;overflow-y:auto;padding:15px 2px;-ms-overflow-style:none;scrollbar-width:none;}
     .container::-webkit-scrollbar{display:none;}
 
+    /* Bottom controls bar pinned to bottom of SCREEN */
     .controls{flex-shrink:0;padding:10px;background:#000;border-top:2px solid var(--border-color);}
     .button-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:10px;}
     .button-grid.single{grid-template-columns:1fr;}
+    .button-grid.duo{grid-template-columns:repeat(2,1fr);} /* NEW: side-by-side buttons */
+    .button-grid.duo form{margin:0;}
+    @media (max-width: 420px){
+      .button-grid.duo{grid-template-columns:1fr;} /* stack on very narrow screens */
+    }
     .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
     .button-grid button,.utility-grid button{width:100%;padding:20px 0;font-size:1.8em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;touch-action:manipulation;}
 
+    /* Buttons: - = green, + = red, 0 = grey */
     .score-btn.minus { background: var(--secondary-color); color:#fff; }
     .score-btn.plus  { background: var(--primary-color);  color:#fff; }
     .score-btn.zero  { background: #616161; color:#fff; }
@@ -56,7 +63,7 @@
     .scoreboard tbody th,.scoreboard tbody td{font-size:1.5em;padding:12px 5px;vertical-align:middle;}
     .scoreboard tbody th{background:#2b2b2b;font-size:1.1em;}
     .scoreboard tbody td{background:var(--accent-color);color:var(--accent-text-color);font-weight:bold;}
-    .scoreboard .total-row td{background:#333;color:var(--text-color);}
+    .scoreboard .total-row td{background:#333;color:#fff;}
 
     .scoreboard td.score-pos,
     .scoreboard .total-row td.score-pos { background: var(--primary-color); color:#fff; }
@@ -67,6 +74,7 @@
 
     .current-player-header{color:var(--primary-color);font-weight:bold;}
 
+    /* Centered header with large ROUND + number, tiny / 20, and medium turn */
     .info-bar{
       display:flex; flex-direction:column; align-items:center; justify-content:center;
       gap:6px; margin-bottom:15px;
@@ -87,6 +95,7 @@
     .pill.zero { background: #616161;               color:#fff; }
     .pill.ghost { visibility:hidden; }
 
+    /* Responsive images on setup + final pages */
     .homepage-dartboard,
     .final-standings-img{
       display:block; width:auto; height:auto;
@@ -94,6 +103,7 @@
       margin:0 auto 20px; object-fit: contain;
     }
 
+    /* Floating score bubble */
     .score-bubble{
       position:fixed; z-index:9999; padding:6px 10px; border-radius:999px; font-weight:800; font-size:0.95em;
       white-space:nowrap; pointer-events:none; box-shadow:0 6px 16px rgba(0,0,0,0.35);
@@ -351,9 +361,9 @@
   </div>
   {% elif game.phase == 'final_ranking' %}
   <div class="controls">
-    <div class="button-grid single">
-      <button type="button" class="export-btn" style="grid-column:1 / -1;" onclick="exportFinalPNG()">Export PNG</button>
-      <form action="{{ url_for('restart') }}" method="post" style="grid-column:1 / -1;" onsubmit="return confirm('Start a new game?');">
+    <div class="button-grid duo">
+      <button type="button" class="export-btn" onclick="exportFinalPNG()">Export Scores</button>
+      <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Start a new game?');">
         <button type="submit" class="restart-btn">Start New Game</button>
       </form>
     </div>
@@ -511,17 +521,29 @@
 
   {% if game.phase == 'final_ranking' %}
   <script>
-    function exportFinalPNG(){
-      var el = document.getElementById('final-capture');
-      if(!el){ alert('Nothing to export.'); return; }
-      var rect = el.getBoundingClientRect();
-      var dpr = window.devicePixelRatio || 1;
-      var w = Math.round(rect.width * dpr);
-      var h = Math.round(rect.height * dpr);
-      // Navigate to the server exporter (downloads the PNG)
-      var url = '{{ url_for("export_png") }}' + '?width=' + w + '&height=' + h;
-      window.location.href = url;
-    }
+  function exportFinalPNG(){
+    const el = document.getElementById('final-capture');
+    if(!el){ alert('Nothing to export.'); return; }
+
+    const rect = el.getBoundingClientRect();
+
+    // Use CSS pixels (NOT devicePixelRatio) and cap size for smaller files
+    const MAX_W = 1100;    // tune these caps if you like
+    const MAX_H = 800;
+
+    // Start with on-screen size (CSS px)
+    let w = Math.round(rect.width);
+    let h = Math.round(rect.height);
+
+    // Apply caps while keeping aspect ratio
+    const ar = rect.height / rect.width;
+    if (w > MAX_W) { w = MAX_W; h = Math.round(w * ar); }
+    if (h > MAX_H) { h = MAX_H; w = Math.round(h / ar); }
+
+    // Navigate to server exporter
+    const url = '{{ url_for("export_png") }}' + '?width=' + w + '&height=' + h;
+    window.location.href = url;
+  }
   </script>
   {% endif %}
 </body>

@@ -338,170 +338,234 @@ def _ensure_final(gs: dict):
 
 def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     """
-    Draw a PNG of the final standings (headers, Final row, tie-breakers, and 20 base rounds).
-    Colors mirror your UI scheme. It scales to the requested width/height.
+    Draw a PNG of the final standings with legible text and per-round running totals ("T +…")
+    shown as a pill beneath the delta in each base-round cell.
     """
-    # Colors (match your CSS theme)
-    BG = (26, 26, 26)              # --bg-color
-    TEXT = (240, 240, 240)         # --text-color
-    BORDER = (68, 68, 68)          # --border-color
-    RED = (217, 39, 39)            # --primary-color  (pos / +)
-    GREEN = (0, 135, 70)           # --secondary-color (neg / -)
-    ZERO = (97, 97, 97)            # zero cells
-    ACCENT_BG = (229, 216, 177)    # default cell background
-    ACCENT_TXT = (0, 0, 0)
-    TOTAL_BG = (51, 51, 51)        # total row background
+    from PIL import Image, ImageDraw, ImageFont
 
-    # Dimensions & layout
-    padding = 16
+    # Colors (match your CSS theme)
+    BG = (26, 26, 26)
+    TEXT = (240, 240, 240)
+    BORDER = (68, 68, 68)
+    RED = (217, 39, 39)          # + (pos)
+    GREEN = (0, 135, 70)         # - (neg)
+    ZERO = (97, 97, 97)          # 0
+    ACCENT_BG = (229, 216, 177)  # empty cell background
+    ACCENT_TXT = (0, 0, 0)
+    TOTAL_BG = (51, 51, 51)
+
+    # Layout tuned for readability
+    PADDING = 12
+    MIN_CELL_H = 36  # keep text chunky/legible
+
     cols = max(1, len(gs['final_standings'])) + 1  # +1 for label column
-    # Rows: 2 header rows + 1 final + TB + 20 base rounds
     tb_rows = int(gs.get('max_playoff_rounds', 0))
-    row_count = 2 + 1 + tb_rows + 20
-    # Fit to requested width/height
-    inner_w = max(200, width - 2 * padding)
-    inner_h = max(200, height - 2 * padding)
+    row_count = 2 + 1 + tb_rows + 20  # headers(2) + final(1) + TB + rounds(20)
+
+    # Compute cell size from requested canvas, then enforce readable minimums
+    inner_w = max(200, width - 2 * PADDING)
+    inner_h = max(200, height - 2 * PADDING)
     cell_w = inner_w // cols
     cell_h = inner_h // row_count
-    # If the requested height is too small, keep a minimum row height
-    cell_h = max(28, cell_h)
-    # Recompute inner_h & total height from actual cell size
-    inner_h = cell_h * row_count
-    canvas_w = cell_w * cols + 2 * padding
-    canvas_h = inner_h + 2 * padding
+    cell_h = max(MIN_CELL_H, cell_h)
 
-    # Create image
+    # Recompute exact canvas dimensions
+    inner_h = cell_h * row_count
+    inner_w = cell_w * cols
+    canvas_w = inner_w + 2 * PADDING
+    canvas_h = inner_h + 2 * PADDING
+
     im = Image.new("RGB", (canvas_w, canvas_h), BG)
     d = ImageDraw.Draw(im)
 
-    # Fonts (scaled to row height)
-    f_small = _pick_font(max(12, int(cell_h * 0.42)))
-    f_medium = _pick_font(max(14, int(cell_h * 0.52)))
-    f_big = _pick_font(max(16, int(cell_h * 0.60)))
+    def _pick_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        try:
+            return ImageFont.truetype("DejaVuSans.ttf", size)
+        except Exception:
+            return ImageFont.load_default()
 
-    # Helpers for rectangles
+    # Font sizes
+    f_small  = _pick_font(max(14, int(cell_h * 0.62)))  # TB values + round deltas (if tight)
+    f_medium = _pick_font(max(16, int(cell_h * 0.72)))  # headers, labels
+    f_big    = _pick_font(max(18, int(cell_h * 0.82)))  # ordinal header
+    f_delta  = _pick_font(max(16, int(cell_h * 0.70)))  # big delta in base rounds
+    f_pill   = _pick_font(max(12, int(cell_h * 0.48)))  # pill text "T +…"
+
     def rect(x, y, w, h, fill=None, outline=BORDER):
         d.rectangle([x, y, x + w, y + h], fill=fill, outline=outline)
 
-    # Column headers (row 0 & row 1)
-    y = padding
-    # Row 0: ordinals
-    rect(padding, y, inner_w, cell_h, fill=None, outline=BORDER)
-    # Labels column blank
-    _x = padding
-    rect(_x, y, cell_w, cell_h, fill=None, outline=BORDER)
-    _x += cell_w
+    def _ordinal(n: int) -> str:
+        s = 'th'
+        if n % 10 == 1 and n % 100 != 11: s = 'st'
+        elif n % 10 == 2 and n % 100 != 12: s = 'nd'
+        elif n % 10 == 3 and n % 100 != 13: s = 'rd'
+        return f"{n}{s}"
+
+    def _draw_centered_text(draw, xy, text, font, fill, box_w, box_h):
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        x = xy[0] + (box_w - tw) / 2
+        y = xy[1] + (box_h - th) / 2
+        draw.text((x, y), text, font=font, fill=fill)
+
+    def _pill_colors(total_val: int):
+        if total_val > 0:  # positive running total -> red pill, white text
+            return RED, (255, 255, 255)
+        if total_val < 0:  # negative running total -> green pill, white text
+            return GREEN, (255, 255, 255)
+        return ZERO, (255, 255, 255)  # zero -> grey pill, white text
+
+    def _cell_fill_for_delta(v: int):
+        if v > 0:  return RED, TEXT, f"+{v}"
+        if v < 0:  return GREEN, TEXT, str(v)
+        return ZERO, TEXT, "0"
+
+    # Precompute running totals per player for the 20 base rounds
+    players = [st['name'] for st in gs['final_standings']]
+    running_totals = {p: [] for p in players}
+    totals_so_far = {p: 0 for p in players}
+    for r in range(20):
+        for p in players:
+            v = int(gs['round_history'][r].get(p, 0))
+            totals_so_far[p] += v
+            running_totals[p].append(totals_so_far[p])
+
+    # --- Row 0: Ordinals ---
+    y = PADDING
+    rect(PADDING, y, inner_w, cell_h)
+    x = PADDING
+    rect(x, y, cell_w, cell_h); x += cell_w  # label col
     for st in gs['final_standings']:
-        rect(_x, y, cell_w, cell_h, fill=None, outline=BORDER)
-        _draw_centered_text(d, (_x, y), _ordinal(int(st['rank'])), f_big, TEXT, cell_w, cell_h)
-        _x += cell_w
+        rect(x, y, cell_w, cell_h)
+        _draw_centered_text(d, (x, y), _ordinal(int(st['rank'])), f_big, TEXT, cell_w, cell_h)
+        x += cell_w
     y += cell_h
 
-    # Row 1: Player names
-    rect(padding, y, inner_w, cell_h, fill=None, outline=BORDER)
-    _x = padding
-    rect(_x, y, cell_w, cell_h, fill=None, outline=BORDER)
-    _draw_centered_text(d, (_x, y), "Player", f_medium, TEXT, cell_w, cell_h)
-    _x += cell_w
+    # --- Row 1: Player names ---
+    rect(PADDING, y, inner_w, cell_h)
+    x = PADDING
+    rect(x, y, cell_w, cell_h)
+    _draw_centered_text(d, (x, y), "Player", f_medium, TEXT, cell_w, cell_h)
+    x += cell_w
     for st in gs['final_standings']:
-        rect(_x, y, cell_w, cell_h, fill=None, outline=BORDER)
-        _draw_centered_text(d, (_x, y), st['name'], f_medium, TEXT, cell_w, cell_h)
-        _x += cell_w
+        rect(x, y, cell_w, cell_h)
+        _draw_centered_text(d, (x, y), st['name'], f_medium, TEXT, cell_w, cell_h)
+        x += cell_w
     y += cell_h
 
-    # Row 2: Final totals
-    _x = padding
-    for c in range(cols):
-        fill = TOTAL_BG if c >= 0 else None
-        rect(_x, y, cell_w, cell_h, fill=fill, outline=BORDER)
-        _x += cell_w
-
-    _x = padding
-    rect(_x, y, cell_w, cell_h, fill=TOTAL_BG, outline=BORDER)
-    _draw_centered_text(d, (_x, y), "Final", f_medium, TEXT, cell_w, cell_h)
-    _x += cell_w
-
+    # --- Row 2: Final totals ---
+    x = PADDING
+    for _ in range(cols):
+        rect(x, y, cell_w, cell_h, fill=TOTAL_BG)
+        x += cell_w
+    x = PADDING
+    _draw_centered_text(d, (x, y), "Final", f_medium, TEXT, cell_w, cell_h)
+    x += cell_w
     for st in gs['final_standings']:
         s = int(st['score'])
-        if s > 0:
-            fill, t = RED, TEXT
-            txt = f"+{s}"
-        elif s < 0:
-            fill, t = GREEN, TEXT
-            txt = str(s)
-        else:
-            fill, t = ZERO, TEXT
-            txt = "0"
-        rect(_x, y, cell_w, cell_h, fill=fill, outline=BORDER)
-        _draw_centered_text(d, (_x, y), txt, f_medium, t, cell_w, cell_h)
-        _x += cell_w
+        fill, t, txt = _cell_fill_for_delta(s)
+        rect(x, y, cell_w, cell_h, fill=fill)
+        _draw_centered_text(d, (x, y), txt, f_medium, t, cell_w, cell_h)
+        x += cell_w
     y += cell_h
 
-    # Tie-breaker rows (TB N..1)
+    # --- Tie-breakers: TB N..1 (delta only; no running total) ---
     for i in range(tb_rows, 0, -1):
-        _x = padding
-        for c in range(cols):
-            rect(_x, y, cell_w, cell_h, fill=None, outline=BORDER)
-            _x += cell_w
-
-        _x = padding
-        rect(_x, y, cell_w, cell_h, fill=None, outline=BORDER)
-        _draw_centered_text(d, (_x, y), f"TB {i:02d}", f_medium, TEXT, cell_w, cell_h)
-        _x += cell_w
-
+        x = PADDING
+        for _ in range(cols):
+            rect(x, y, cell_w, cell_h)
+            x += cell_w
+        x = PADDING
+        _draw_centered_text(d, (x, y), f"TB {i:02d}", f_medium, TEXT, cell_w, cell_h)
+        x += cell_w
         for st in gs['final_standings']:
             hist = gs['all_playoff_history'].get(st['name'], [])
             if i <= len(hist):
                 v = int(hist[i-1])
-                if v > 0:
-                    fill, t, txt = RED, TEXT, f"+{v}"
-                elif v < 0:
-                    fill, t, txt = GREEN, TEXT, str(v)
-                else:
-                    fill, t, txt = ZERO, TEXT, "0"
-                rect(_x, y, cell_w, cell_h, fill=fill, outline=BORDER)
-                _draw_centered_text(d, (_x, y), txt, f_small, t, cell_w, cell_h)
+                fill, t, txt = _cell_fill_for_delta(v)
+                rect(x, y, cell_w, cell_h, fill=fill)
+                _draw_centered_text(d, (x, y), txt, f_small, t, cell_w, cell_h)
             else:
-                rect(_x, y, cell_w, cell_h, fill=ACCENT_BG, outline=BORDER)
-                _draw_centered_text(d, (_x, y), "-", f_small, ACCENT_TXT, cell_w, cell_h)
-            _x += cell_w
+                rect(x, y, cell_w, cell_h, fill=ACCENT_BG)
+                _draw_centered_text(d, (x, y), "-", f_small, ACCENT_TXT, cell_w, cell_h)
+            x += cell_w
         y += cell_h
 
-    # Base rounds 20..1
-    for round_index in range(19, -1, -1):
-        _x = padding
-        for c in range(cols):
-            rect(_x, y, cell_w, cell_h, fill=None, outline=BORDER)
-            _x += cell_w
+    # --- Base rounds: 20..1 (delta + running total pill) ---
+    for r_idx in range(19, -1, -1):
+        x = PADDING
+        for _ in range(cols):
+            rect(x, y, cell_w, cell_h)
+            x += cell_w
 
-        _x = padding
-        rect(_x, y, cell_w, cell_h, fill=None, outline=BORDER)
-        _draw_centered_text(d, (_x, y), f"{round_index+1:02d}", f_medium, TEXT, cell_w, cell_h)
-        _x += cell_w
+        # label column
+        x = PADDING
+        _draw_centered_text(d, (x, y), f"{r_idx+1:02d}", f_medium, TEXT, cell_w, cell_h)
+        x += cell_w
 
         for st in gs['final_standings']:
             name = st['name']
-            v = gs['round_history'][round_index].get(name)
-            if v is None:
-                rect(_x, y, cell_w, cell_h, fill=ACCENT_BG, outline=BORDER)
+            raw = gs['round_history'][r_idx].get(name)
+            if raw is None:
+                rect(x, y, cell_w, cell_h, fill=ACCENT_BG)
             else:
-                v = int(v)
-                if v > 0:
-                    fill, t, txt = RED, TEXT, f"+{v}"
-                elif v < 0:
-                    fill, t, txt = GREEN, TEXT, str(v)
-                else:
-                    fill, t, txt = ZERO, TEXT, "0"
-                rect(_x, y, cell_w, cell_h, fill=fill, outline=BORDER)
-                _draw_centered_text(d, (_x, y), txt, f_small, t, cell_w, cell_h)
-            _x += cell_w
+                v = int(raw)
+                fill, t, txt = _cell_fill_for_delta(v)
+                rect(x, y, cell_w, cell_h, fill=fill)
+
+                # Two-line layout within the cell
+                # 1) Delta (big, top)
+                delta_bbox = d.textbbox((0, 0), txt, font=f_delta)
+                delta_w = delta_bbox[2] - delta_bbox[0]
+                delta_h = delta_bbox[3] - delta_bbox[1]
+
+                # 2) Pill ("T +…", centered under delta)
+                total_val = int(running_totals[name][r_idx])
+                pill_text = f"T {'+' if total_val > 0 else ''}{total_val}"
+                pill_bg, pill_fg = _pill_colors(total_val)
+
+                pill_bbox = d.textbbox((0, 0), pill_text, font=f_pill)
+                tw = pill_bbox[2] - pill_bbox[0]
+                th = pill_bbox[3] - pill_bbox[1]
+                pad_x = max(8, int(cell_w * 0.08))
+                pad_y = max(3, int(cell_h * 0.10))
+                pill_w = tw + 2 * pad_x
+                pill_h = th + 2 * pad_y
+
+                total_block_h = delta_h + 6 + pill_h  # spacing = 6px
+                base_y = y + (cell_h - total_block_h) / 2
+
+                # draw delta
+                dx = x + (cell_w - delta_w) / 2
+                dy = base_y
+                d.text((dx, dy), txt, font=f_delta, fill=t)
+
+                # draw pill background (rounded)
+                px0 = x + (cell_w - pill_w) / 2
+                py0 = dy + delta_h + 6
+                px1 = px0 + pill_w
+                py1 = py0 + pill_h
+                radius = pill_h / 2
+                try:
+                    d.rounded_rectangle([px0, py0, px1, py1], radius=radius, fill=pill_bg)
+                except Exception:
+                    # Fallback for very old Pillow: draw a normal rectangle
+                    d.rectangle([px0, py0, px1, py1], fill=pill_bg)
+
+                # pill text
+                tx = px0 + pad_x
+                ty = py0 + pad_y
+                d.text((tx, ty), pill_text, font=f_pill, fill=pill_fg)
+
+            x += cell_w
         y += cell_h
 
-    # Output buffer
     buf = BytesIO()
     im.save(buf, format="PNG")
     buf.seek(0)
     return buf
+
 
 @app.get('/export.png')
 def export_png():
@@ -512,22 +576,21 @@ def export_png():
     if gs.get('phase') != 'final_ranking':
         return "Final standings not available yet.", 400
 
-    # Make sure final standings are computed
     _ensure_final(gs)
 
-    # Dimensions from client (CSS pixels * devicePixelRatio recommended)
     try:
         width = int(request.args.get('width', '900'))
         height = int(request.args.get('height', '600'))
     except Exception:
         width, height = 900, 600
 
-    # Safety clamps
-    width = max(400, min(width, 6000))
-    height = max(300, min(height, 6000))
+    # Tighter clamps for a smaller, readable PNG
+    width = max(500, min(width, 1100))
+    height = max(400, min(height, 800))
 
     img_buf = render_final_png(gs, width, height)
     return send_file(img_buf, mimetype='image/png', as_attachment=True, download_name='final-standings.png')
+
 # ---------------------------------------------------------------------
 
 if __name__ == '__main__':
