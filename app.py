@@ -264,6 +264,7 @@ def resolve_playoff_round(gs: dict):
     for p, tb in scores.items():
         gs['all_playoff_history'].setdefault(p, []).append(tb)
 
+    # If any tie remains (duplicate TB values), continue another TB round
     if len(set(scores.values())) < len(scores):
         gs['playoff_round'] += 1
         gs['current_player_index'] = 0

@@ -32,13 +32,13 @@
     .restart-btn{background:#f44336;color:#fff;}
 
     .setup-screen {
-  text-align:center;
-  padding-top:4vh;   /* smaller top spacing */
-  max-width:900px;
-  margin:0 auto;
-  padding-left:8px;
-  padding-right:8px;
-}
+      text-align:center;
+      padding-top:4vh;
+      max-width:900px;
+      margin:0 auto;
+      padding-left:8px;
+      padding-right:8px;
+    }
 
     .setup-screen h1{margin-bottom:10px;}
     .flash{margin:0 auto 16px;padding:12px 16px;border-radius:8px;border:1px solid #ff4d4d;background:#2a0000;color:#ffcccc;font-weight:600;}
@@ -57,48 +57,73 @@
     .scoreboard thead th{font-size:1.2em;padding:8px 5px;line-height:1.4;vertical-align:middle;background:#333;}
     .scoreboard tbody th,.scoreboard tbody td{font-size:1.5em;padding:12px 5px;vertical-align:middle;}
     .scoreboard tbody th{background:#2b2b2b;font-size:1.1em;}
-    /* default background (will be overridden by per-score classes) */
+    /* Keep cells neutral; color pills inside */
     .scoreboard tbody td{background:var(--accent-color);color:var(--accent-text-color);font-weight:bold;}
     .scoreboard .total-row td{background:#333;color:var(--text-color);}
 
     .current-player-header{color:var(--primary-color);font-weight:bold;}
-.info-bar{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:15px;
-  font-size:1.3em;
-  font-weight:bold;
-}
-.final-standings-img {
-  max-width: 320px;  /* adjust size as you like */
-  height: auto;
-  display: block;
-  margin: 0 auto 20px; /* center with space below */
-}
-.homepage-dartboard {
-  max-width: 320px;  /* adjust to your liking */
-  width: 100%;
-  height: auto;
-  margin: 15px auto 25px;
-  display: block;
-  border-radius: 12px;  /* optional, smooth edges */
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5); /* optional, nice shadow */
-}
+    .info-bar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:15px;
+      font-size:1.3em;
+      font-weight:bold;
+    }
+    .final-standings-img {
+      max-width: 320px;
+      height: auto;
+      display: block;
+      margin: 0 auto 20px;
+    }
+    .homepage-dartboard {
+      max-width: 320px;
+      width: 100%;
+      height: auto;
+      margin: 15px auto 25px;
+      display: block;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
 
-.info-bar .left{ text-align:left; }
-.info-bar .right{ text-align:right; color: var(--primary-color); }
+    .info-bar .left{ text-align:left; }
+    .info-bar .right{ text-align:right; color: var(--primary-color); }
 
+    /* Highlight the live/current round row */
+    .scoreboard tr.current-row th { background:#3a3a3a; }
 
-    /* Per-score coloring for cells (overrides totals row style) */
-    .scoreboard td.score-pos,
-    .scoreboard .total-row td.score-pos { background: var(--primary-color); color:#fff; }
+    /* Two-line cell: delta + running total as colored "pills" */
+    .cell-wrap { display:flex; flex-direction:column; line-height:1.1; gap:2px; }
+    .pill { display:inline-block; padding:2px 6px; border-radius:8px; font-weight:800; }
+    .pill.pos  { background: var(--primary-color);  color:#fff; } /* + */
+    .pill.neg  { background: var(--secondary-color);color:#fff; } /* - */
+    .pill.zero { background: #616161;               color:#fff; } /* 0 */
+    .cell-wrap .cum .pill { font-weight:600; font-size:.8em; }
 
-    .scoreboard td.score-neg,
-    .scoreboard .total-row td.score-neg { background: var(--secondary-color); color:#fff; }
+    /* Floating score bubble */
+    .score-bubble{
+      position:fixed;
+      z-index:9999;
+      padding:6px 10px;
+      border-radius:999px;
+      font-weight:800;
+      font-size:0.95em;
+      white-space:nowrap;
+      pointer-events:none;
+      box-shadow:0 6px 16px rgba(0,0,0,0.35);
+      transform:translate(-50%, 0) scale(0.95);
+      opacity:0;
+      animation:floatUp 900ms ease-out forwards;
+    }
+    .score-bubble.pos  { background: var(--primary-color);  color:#fff; }
+    .score-bubble.neg  { background: var(--secondary-color);color:#fff; }
+    .score-bubble.zero { background: #616161;               color:#fff; }
 
-    .scoreboard td.score-zero,
-    .scoreboard .total-row td.score-zero { background: #616161; color:#fff; }
+    @keyframes floatUp{
+      0%   { transform:translate(-50%, 8px)  scale(0.95); opacity:0; }
+      15%  { transform:translate(-50%, 0px)  scale(1.00); opacity:1; }
+      100% { transform:translate(-50%, -64px) scale(1.05); opacity:0; }
+    }
   </style>
 </head>
 <body>
@@ -106,9 +131,9 @@
     {# ---------------- SETUP ---------------- #}
     {% if game.phase == 'setup' %}
       <div class="setup-screen">
-  <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}" 
-       alt="Darts Golf Scorer Dartboard" 
-       class="homepage-dartboard">
+        <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}"
+             alt="Darts Golf Scorer Dartboard"
+             class="homepage-dartboard">
 
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
@@ -136,10 +161,10 @@
 
     {# ---------------- PLAYING ---------------- #}
     {% elif game.phase == 'playing' %}
-<div class="info-bar" id="info-bar">
-  <span class="left">Tie-Breaker</span>
-  <span class="right">{{ game.playoff_group[game.current_player_index] }}'s Turn</span>
-</div>
+      <div class="info-bar" id="info-bar">
+        <span class="left">Round: {{ "%02d"|format(game.current_round) }} / 20</span>
+        <span class="right">{{ game.players[game.current_player_index] }}'s Turn</span>
+      </div>
 
       <table class="scoreboard" id="scoreboard">
         <thead>
@@ -157,15 +182,51 @@
               <td class="{{ cls }}">{% if s>0 %}+{% endif %}{{ s }}</td>
             {% endfor %}
           </tr>
+
+          {# --- LIVE current round row (delta + cumulative), each as its own pill --- #}
+          <tr class="current-row"><th>{{ "%02d"|format(game.current_round) }}</th>
+            {% for p in game.players %}
+              {% set v = game.round_history[game.current_round - 1].get(p) %}
+              {% if v is not none %}
+                {% set ns = namespace(total=0) %}
+                {% for r in range(game.current_round) %}
+                  {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
+                {% endfor %}
+                {% set delta_cls = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
+                {% set cum_cls = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
+                <td>
+                  <div class="cell-wrap">
+                    <div class="delta"><span class="pill {{ delta_cls }}">{{ v>0 and '+' or '' }}{{ v }}</span></div>
+                    <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
+                  </div>
+                </td>
+              {% else %}
+                <td></td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+
+          {# Past rounds (newest on top), delta + cumulative with individual colors #}
           {% for i in range(game.current_round - 1) | reverse %}
             <tr><th>{{ "%02d"|format(i + 1) }}</th>
               {% for p in game.players %}
                 {% set v = game.round_history[i].get(p) %}
-                {% set cls = '' %}
                 {% if v is not none %}
-                  {% if v>0 %}{% set cls='score-pos' %}{% elif v<0 %}{% set cls='score-neg' %}{% else %}{% set cls='score-zero' %}{% endif %}
+                  {% set ns = namespace(total=0) %}
+                  {% for r in range(i + 1) %}
+                    {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
+                  {% endfor %}
+                  {% set delta_cls = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
+                  {% set cum_cls = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
+                  <td>
+                    <div class="cell-wrap">
+                      <div class="delta"><span class="pill {{ delta_cls }}">{{ v>0 and '+' or '' }}{{ v }}</span></div>
+                      <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
+                    </div>
+                  </td>
+                {% else %}
+                  <td></td>
                 {% endif %}
-                <td class="{{ cls }}">{% if v is not none %}{% if v>0 %}+{% endif %}{{ v }}{% endif %}</td>
               {% endfor %}
             </tr>
           {% endfor %}
@@ -195,18 +256,19 @@
             {% endfor %}
           </tr>
 
-          {# Newest TB on top #}
+          {# Newest TB on top — now pills per cell #}
           {% set total_tb = game.playoff_history|length %}
           {% for round_scores in game.playoff_history | reverse %}
             {% set tb_num = total_tb - loop.index0 %}
             <tr><th>TB {{ "%02d"|format(tb_num) }}</th>
               {% for p in game.playoff_group %}
                 {% set v = round_scores.get(p) %}
-                {% set cls = '' %}
                 {% if v is not none %}
-                  {% if v>0 %}{% set cls='score-pos' %}{% elif v<0 %}{% set cls='score-neg' %}{% else %}{% set cls='score-zero' %}{% endif %}
+                  {% set pill = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
+                  <td><span class="pill {{ pill }}">{% if v>0 %}+{% endif %}{{ v }}</span></td>
+                {% else %}
+                  <td></td>
                 {% endif %}
-                <td class="{{ cls }}">{% if v is not none %}{% if v>0 %}+{% endif %}{{ v }}{% endif %}</td>
               {% endfor %}
             </tr>
           {% endfor %}
@@ -215,11 +277,11 @@
 
     {# -------------- FINAL RANKING -------------- #}
     {% elif game.phase == 'final_ranking' %}
-<div class="status-box">
-  <img src="{{ url_for('static', filename='images/finalstanding1.png') }}" 
-       alt="Final Standings" 
-       class="final-standings-img">
-</div>
+      <div class="status-box">
+        <img src="{{ url_for('static', filename='images/finalstanding1.png') }}"
+             alt="Final Standings"
+             class="final-standings-img">
+      </div>
 
       <table class="scoreboard" id="scoreboard">
         <thead>
@@ -244,27 +306,41 @@
               <td class="{{ cls }}">{% if s>0 %}+{% endif %}{{ s }}</td>
             {% endfor %}
           </tr>
+
+          {# Tie-breakers: pills (delta only) #}
           {% for i in range(game.max_playoff_rounds, 0, -1) %}
             <tr><th>TB {{ "%02d"|format(i) }}</th>
               {% for st in game.final_standings %}
                 {% set hist = game.all_playoff_history.get(st.name, []) %}
                 {% if i <= hist|length %}
                   {% set v = hist[i-1] %}
-                  {% set cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
-                  <td class="{{ cls }}">{% if v>0 %}+{% endif %}{{ v }}</td>
+                  {% set pill = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
+                  <td><span class="pill {{ pill }}">{% if v>0 %}+{% endif %}{{ v }}</span></td>
                 {% else %}
                   <td>-</td>
                 {% endif %}
               {% endfor %}
             </tr>
           {% endfor %}
+
+          {# Base rounds: delta + cumulative, each with its own pill color #}
           {% for i in range(19, -1, -1) %}
             <tr><th>{{ "%02d"|format(i + 1) }}</th>
               {% for st in game.final_standings %}
                 {% set v = game.round_history[i].get(st.name) %}
                 {% if v is not none %}
-                  {% set cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
-                  <td class="{{ cls }}">{% if v>0 %}+{% endif %}{{ v }}</td>
+                  {% set ns = namespace(total=0) %}
+                  {% for r in range(i + 1) %}
+                    {% set ns.total = ns.total + (game.round_history[r].get(st.name, 0)) %}
+                  {% endfor %}
+                  {% set delta_cls = 'pos' if v>0 else ('neg' if v<0 else 'zero') %}
+                  {% set cum_cls = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
+                  <td>
+                    <div class="cell-wrap">
+                      <div class="delta"><span class="pill {{ delta_cls }}">{{ v>0 and '+' or '' }}{{ v }}</span></div>
+                      <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
+                    </div>
+                  </td>
                 {% else %}
                   <td></td>
                 {% endif %}
@@ -280,12 +356,12 @@
   {% if game.phase in ['playing','playoff'] %}
   <div class="controls">
     <div class="button-grid">
-      <button type="button" class="score-btn minus" onclick="sendScore(-3)">-3</button>
-      <button type="button" class="score-btn minus" onclick="sendScore(-2)">-2</button>
-      <button type="button" class="score-btn minus" onclick="sendScore(-1)">-1</button>
-      <button type="button" class="score-btn zero"  onclick="sendScore(0)">0</button>
-      <button type="button" class="score-btn plus"  onclick="sendScore(1)">+1</button>
-      <button type="button" class="score-btn plus"  onclick="sendScore(2)">+2</button>
+      <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
+      <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
+      <button type="button" class="score-btn minus" onclick="hit(-1, this)">-1</button>
+      <button type="button" class="score-btn zero"  onclick="hit(0,  this)">0</button>
+      <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
+      <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
     </div>
     <div class="utility-grid">
       <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
@@ -294,7 +370,6 @@
       </form>
     </div>
   </div>
-
   {% elif game.phase == 'final_ranking' %}
   <div class="controls">
     <div class="button-grid single">
@@ -358,26 +433,63 @@
       if (v < 0) return 'score-neg';
       return 'score-zero';
     }
+    function pillFor(v){
+      if (v > 0) return 'pos';
+      if (v < 0) return 'neg';
+      return 'zero';
+    }
+    function sign(v){ return v>0?'+':''; }
 
     function renderPlaying(g){
-      qs('#info-bar').innerHTML = `<span>Round: ${String(g.current_round).padStart(2,'0')} / 20</span> - <span class="turn-info">${g.players[g.current_player_index]}'s Turn</span>`;
-      const headers = g.players.map((p,i)=>`<th class="${i===g.current_player_index?'current-player-header':''}">${p}</th>`).join('');
+      qs('#info-bar').innerHTML =
+        `<span>Round: ${String(g.current_round).padStart(2,'0')} / 20</span> - ` +
+        `<span class="turn-info">${g.players[g.current_player_index]}'s Turn</span>`;
+
+      const headers = g.players
+        .map((p,i)=>`<th class="${i===g.current_player_index?'current-player-header':''}">${p}</th>`)
+        .join('');
       const thead = `<thead><tr><th>&nbsp;</th>${headers}</tr></thead>`;
 
       const totals = g.players.map(p=>{
         const s = g.scores[p] || 0;
-        return `<td class="${clsFor(s)}">${s>0?'+':''}${s}</td>`;
+        return `<td class="${clsFor(s)}">${sign(s)}${s}</td>`;
       }).join('');
 
       let tbody = `<tbody><tr class="total-row"><th>Total</th>${totals}</tr>`;
+
+      // --- LIVE current round (delta + cumulative with independent colors) ---
+      const curIdx = g.current_round - 1;
+      const currentCells = g.players.map(p=>{
+        const v = g.round_history[curIdx]?.[p];
+        if (v === undefined) return `<td></td>`;
+        const running = g.round_history.slice(0, g.current_round)
+          .reduce((sum, rh)=> sum + (rh[p]||0), 0);
+        return `<td>
+                  <div class="cell-wrap">
+                    <div class="delta"><span class="pill ${pillFor(v)}">${sign(v)}${v}</span></div>
+                    <div class="cum"><span class="pill ${pillFor(running)}">T ${sign(running)}${running}</span></div>
+                  </div>
+                </td>`;
+      }).join('');
+      tbody += `<tr class="current-row"><th>${String(g.current_round).padStart(2,'0')}</th>${currentCells}</tr>`;
+
+      // --- Past rounds (newest on top), delta + cumulative with independent colors ---
       for(let i=g.current_round-2;i>=0;i--){
         const cells = g.players.map(p=>{
           const v = g.round_history[i]?.[p];
           if (v === undefined) return `<td></td>`;
-          return `<td class="${clsFor(v)}">${v>0?'+':''}${v}</td>`;
+          const running = g.round_history.slice(0, i+1)
+            .reduce((sum, rh)=> sum + (rh[p]||0), 0);
+          return `<td>
+                    <div class="cell-wrap">
+                      <div class="delta"><span class="pill ${pillFor(v)}">${sign(v)}${v}</span></div>
+                      <div class="cum"><span class="pill ${pillFor(running)}">T ${sign(running)}${running}</span></div>
+                    </div>
+                  </td>`;
         }).join('');
         tbody += `<tr><th>${String(i+1).padStart(2,'0')}</th>${cells}</tr>`;
       }
+
       tbody += `</tbody>`;
       qs('#scoreboard').innerHTML = thead+tbody;
     }
@@ -389,25 +501,58 @@
 
       const totals = g.playoff_group.map(()=>{
         const s = g.playoff_base_score || 0;
-        return `<td class="${clsFor(s)}">${s>0?'+':''}${s}</td>`;
+        return `<td class="${clsFor(s)}">${sign(s)}${s}</td>`;
       }).join('');
 
       let tbody = `<tbody><tr class="total-row"><th>Total</th>${totals}</tr>`;
 
-      // Newest TB at top, labels stay chronological
+      // Newest TB at top — now pills per cell
       for (let idx = g.playoff_history.length - 1; idx >= 0; idx--) {
         const round_scores = g.playoff_history[idx];
         const tbNum = idx + 1;
         const cells = g.playoff_group.map(p=>{
           const v = round_scores[p];
           if (v === undefined) return `<td></td>`;
-          return `<td class="${clsFor(v)}">${v>0?'+':''}${v}</td>`;
+          return `<td><span class="pill ${pillFor(v)}">${sign(v)}${v}</span></td>`;
         }).join('');
         tbody += `<tr><th>TB ${String(tbNum).padStart(2,'0')}</th>${cells}</tr>`;
       }
 
       tbody += `</tbody>`;
       qs('#scoreboard').innerHTML = thead+tbody;
+    }
+
+    /* ---------- Floating bubble ---------- */
+    const LABELS = {
+      "-3": "Triple Bogey",
+      "-2": "Double Bogey",
+      "-1": "Bogey",
+       "0": "Par",
+       "1": "Birdie",
+       "2": "Double Birdie",
+    };
+    function hit(val, el){
+      showBubbleFor(val, el);
+      sendScore(val);
+    }
+    function showBubbleFor(val, el){
+      const label = LABELS[String(val)] ?? String(val);
+      const cls   = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
+
+      const rect = el.getBoundingClientRect();
+      const x = rect.left + (rect.width / 2);
+      const y = rect.top - 6;
+
+      const bubble = document.createElement('div');
+      bubble.className = `score-bubble ${cls}`;
+      bubble.textContent = label;
+      bubble.style.left = `${x}px`;
+      bubble.style.top  = `${y}px`;
+
+      document.body.appendChild(bubble);
+      const remove = () => bubble.remove();
+      bubble.addEventListener('animationend', remove, { once:true });
+      setTimeout(remove, 1500);
     }
   </script>
   {% endif %}
