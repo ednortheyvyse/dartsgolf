@@ -5,31 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Darts Golf Scorer</title>
   <style>
-    :root {
-      --bg-color:#1a1a1a; --text-color:#f0f0f0; --border-color:#444;
-      --primary-color:#d92727;  /* RED  (used for + scores) */
-      --secondary-color:#008746;/* GREEN (used for - scores) */
-      --accent-color:#e5d8b1; --accent-text-color:#000;
-    }
-
+	:root {
+  	--bg-color:#1a1a1a; --text-color:#f0f0f0; --border-color:#444;
+  	--primary-color:#E3292E;  /* RED (positive deltas) */
+ 	 --secondary-color:#309F6A; /* GREEN (negative deltas) */
+ 	 --accent-color:#F9DFBC;   /* SCORE CELL BACKGROUND */
+ 	 --accent-text-color:#000; /* running total text */
+	}
     html,body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg-color);color:var(--text-color);height:100svh;display:flex;flex-direction:column;}
     body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
     .container{flex:1;overflow-y:auto;padding:15px 2px;-ms-overflow-style:none;scrollbar-width:none;}
     .container::-webkit-scrollbar{display:none;}
 
-    /* Bottom controls bar pinned to bottom of SCREEN */
+    /* Bottom controls bar */
     .controls{flex-shrink:0;padding:10px;background:#000;border-top:2px solid var(--border-color);}
     .button-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:10px;}
     .button-grid.single{grid-template-columns:1fr;}
-    .button-grid.duo{grid-template-columns:repeat(2,1fr);} /* NEW: side-by-side buttons */
+    .button-grid.duo{grid-template-columns:repeat(2,1fr);}
     .button-grid.duo form{margin:0;}
     @media (max-width: 420px){
-      .button-grid.duo{grid-template-columns:1fr;} /* stack on very narrow screens */
+      .button-grid.duo{grid-template-columns:1fr;}
     }
     .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
     .button-grid button,.utility-grid button{width:100%;padding:20px 0;font-size:1.8em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;touch-action:manipulation;}
 
-    /* Buttons: - = green, + = red, 0 = grey */
     .score-btn.minus { background: var(--secondary-color); color:#fff; }
     .score-btn.plus  { background: var(--primary-color);  color:#fff; }
     .score-btn.zero  { background: #616161; color:#fff; }
@@ -37,15 +36,7 @@
     .restart-btn{background:#f44336;color:#fff;}
     .export-btn{background:#2196f3;color:#fff;}
 
-    .setup-screen {
-      text-align:center;
-      padding-top:4vh;
-      max-width:900px;
-      margin:0 auto;
-      padding-left:8px;
-      padding-right:8px;
-    }
-
+    .setup-screen { text-align:center; padding-top:4vh; max-width:900px; margin:0 auto; padding-left:8px; padding-right:8px; }
     .flash{margin:0 auto 16px;padding:12px 16px;border-radius:8px;border:1px solid #ff4d4d;background:#2a0000;color:#ffcccc;font-weight:600;}
     .setup-screen input[name="players"]{width:100%;min-height:50px;font-size:clamp(16px,4vw,22px);line-height:1.2;padding:12px 15px;box-sizing:border-box;margin:10px auto;border-radius:8px;border:1px solid var(--border-color);background:#101010;color:var(--text-color);}
     .setup-screen small{display:block;color:#bbb;margin-top:2px;margin-bottom:12px;}
@@ -60,11 +51,12 @@
     .scoreboard{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:20px;}
     .scoreboard th,.scoreboard td{border:1px solid var(--border-color);text-align:center;word-wrap:break-word;}
     .scoreboard thead th{font-size:1.2em;padding:8px 5px;line-height:1.4;vertical-align:middle;background:#333;}
-    .scoreboard tbody th,.scoreboard tbody td{font-size:1.5em;padding:12px 5px;vertical-align:middle;}
-    .scoreboard tbody th{background:#2b2b2b;font-size:1.1em;}
-    .scoreboard tbody td{background:var(--accent-color);color:var(--accent-text-color);font-weight:bold;}
-    .scoreboard .total-row td{background:#333;color:#fff;}
+    .scoreboard tbody th,.scoreboard tbody td{font-size:1.5em;vertical-align:middle;}
+    .scoreboard tbody th{background:#2b2b2b;font-size:1.1em;padding:12px 5px;}
+    .scoreboard tbody td{background:var(--accent-color);color:var(--accent-text-color);font-weight:bold;padding:12px 5px;}
+    .scoreboard .total-row td{background:#333;color:#fff;} /* totals row stays neutral */
 
+    /* These remain for other contexts but we won't apply them to round cells anymore */
     .scoreboard td.score-pos,
     .scoreboard .total-row td.score-pos { background: var(--primary-color); color:#fff; }
     .scoreboard td.score-neg,
@@ -74,34 +66,69 @@
 
     .current-player-header{color:var(--primary-color);font-weight:bold;}
 
-    /* Centered header with large ROUND + number, tiny / 20, and medium turn */
-    .info-bar{
-      display:flex; flex-direction:column; align-items:center; justify-content:center;
-      gap:6px; margin-bottom:15px;
-    }
+    /* Header / info */
+    .info-bar{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; margin-bottom:15px; }
     .round-count{ display:flex; align-items:flex-end; justify-content:center; gap:8px; line-height:1; margin-top:4px; flex-wrap:nowrap; }
     .round-label{ font-size: clamp(28px, 7vw, 56px); font-weight: 900; letter-spacing: 0.06em; }
-    .round-number{ font-size: clamp(44px, 12vw, 96px); font-weight: 900; line-height: .9; }
+    .round-number{ font-size: clamp(44px, 12vw, 96px); font-weight: 900; line-height: .9; color:#bbb; } /* grey current round number */
     .round-total{ font-size: clamp(10px, 2.8vw, 16px); font-weight: 700; opacity: .85; margin-left: 2px; align-self: flex-start; transform: translateY(-6px); }
     .turn-info{ font-size: clamp(18px, 4.2vw, 28px); font-weight: 700; color: var(--primary-color); text-align:center; }
 
     .scoreboard tr.current-row th { background:#3a3a3a; }
-    .cell-wrap { display:flex; flex-direction:column; line-height:1.1; gap:4px; align-items:center; justify-content:center; }
-    .cell-wrap .delta { font-weight:800; font-size:1em; }
-    .cell-wrap .cum   { font-weight:700; font-size:.8em; }
-    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-weight:800; }
-    .pill.pos  { background: var(--primary-color);  color:#fff; }
-    .pill.neg  { background: var(--secondary-color);color:#fff; }
-    .pill.zero { background: #616161;               color:#fff; }
-    .pill.ghost { visibility:hidden; }
 
-    /* Responsive images on setup + final pages */
-    .homepage-dartboard,
-    .final-standings-img{
-      display:block; width:auto; height:auto;
-      max-width: min(92vw, 520px); max-height: 48vh;
-      margin:0 auto 20px; object-fit: contain;
+    /* --- Compact layout with true quarter-circle delta --- */
+    .cell {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 58px;
+      width: 100%;
+      height: 100%;
     }
+
+    /* Running total = black text, no pill background */
+    .total-pill {
+      color: #000;              /* BLACK */
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-weight: 900;
+      font-size: 1.2em;
+      line-height: 1;
+    }
+
+    /* Bottom-right quarter-circle delta chip — sign-coloured; 0 = black */
+    .delta-corner {
+      position:absolute;
+      right:0; bottom:0;
+      height: 50%;
+      aspect-ratio: 1 / 1;
+      width: auto;
+      border-top-left-radius: 100%;
+      background:#000;     /* default; overridden below */
+      color:#fff;
+      display:flex; align-items:flex-end; justify-content:flex-end;
+      padding: 2px 5px;
+      font-weight: 900; font-size: .78em; line-height: 1;
+      box-shadow: none;
+      pointer-events: none;
+    }
+    .delta-corner.pos  { background: var(--primary-color); }   /* RED for + */
+    .delta-corner.neg  { background: var(--secondary-color); } /* GREEN for - */
+    .delta-corner.zero { background: #000; }                   /* BLACK for 0 */
+    .delta-corner.hidden { opacity:0; }
+
+    /* Remove inner padding on score cells so the wedge is truly flush */
+    .scoreboard.playing tbody td,
+    .scoreboard.final   tbody td { padding:0; }
+
+    /* Ensure the .cell fills each td in those tables */
+    .scoreboard.playing td .cell,
+    .scoreboard.final   td .cell { width:100%; height:100%; }
+
+    .homepage-dartboard,
+    .final-standings-img{ display:block; width:auto; height:auto; max-width: min(92vw, 520px); max-height: 48vh; margin:0 auto 20px; object-fit: contain; }
 
     /* Floating score bubble */
     .score-bubble{
@@ -112,7 +139,7 @@
     }
     .score-bubble.pos  { background: var(--primary-color);  color:#fff; }
     .score-bubble.neg  { background: var(--secondary-color);color:#fff; }
-    .score-bubble.zero { background: #616161;               color:#fff; }
+    .score-bubble.zero { background: #000;                  color:#fff; } /* 0 = black */
 
     @keyframes floatUp{
       0%   { transform:translate(-50%, 8px)  scale(0.95); opacity:0; }
@@ -158,7 +185,8 @@
         <div class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</div>
       </div>
 
-      <table class="scoreboard" id="scoreboard">
+      <!-- NOTE: 'playing' class -->
+      <table class="scoreboard playing" id="scoreboard">
         <thead>
           <tr><th>&nbsp;</th>
             {% for p in game.players %}
@@ -167,11 +195,11 @@
           </tr>
         </thead>
         <tbody>
+          <!-- Totals row stays neutral; no sign colouring -->
           <tr class="total-row"><th>Total</th>
             {% for p in game.players %}
               {% set s = game.scores.get(p,0) %}
-              {% set cls = 'score-pos' if s>0 else ('score-neg' if s<0 else 'score-zero') %}
-              <td class="{{ cls }}">{% if s>0 %}+{% endif %}{{ s }}</td>
+              <td>{% if s>0 %}+{% endif %}{{ s }}</td>
             {% endfor %}
           </tr>
 
@@ -183,19 +211,19 @@
                 {% for r in range(game.current_round) %}
                   {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
                 {% endfor %}
-                {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
-                {% set cum_cls  = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
-                <td class="{{ cell_cls }}">
-                  <div class="cell-wrap">
-                    <div class="delta">{{ v>0 and '+' or '' }}{{ v }}</div>
-                    <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
+                <td>
+                  <div class="cell">
+                    <span class="total-pill">{{ ns.total>0 and '+' or '' }}{{ ns.total }}</span>
+                    <span class="delta-corner {{ 'pos' if v>0 else ('neg' if v<0 else 'zero') }}">
+                      {{ v>0 and '+' or '' }}{{ v }}
+                    </span>
                   </div>
                 </td>
               {% else %}
                 <td>
-                  <div class="cell-wrap">
-                    <div class="delta ghostline">0</div>
-                    <div class="cum"><span class="pill zero ghost">T 0</span></div>
+                  <div class="cell">
+                    <span class="total-pill">0</span>
+                    <span class="delta-corner hidden">0</span>
                   </div>
                 </td>
               {% endif %}
@@ -211,12 +239,12 @@
                   {% for r in range(i + 1) %}
                     {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
                   {% endfor %}
-                  {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
-                  {% set cum_cls  = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
-                  <td class="{{ cell_cls }}">
-                    <div class="cell-wrap">
-                      <div class="delta">{{ v>0 and '+' or '' }}{{ v }}</div>
-                      <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
+                  <td>
+                    <div class="cell">
+                      <span class="total-pill">{{ ns.total>0 and '+' or '' }}{{ ns.total }}</span>
+                      <span class="delta-corner {{ 'pos' if v>0 else ('neg' if v<0 else 'zero') }}">
+                        {{ v>0 and '+' or '' }}{{ v }}
+                      </span>
                     </div>
                   </td>
                 {% else %}
@@ -242,11 +270,11 @@
           </tr>
         </thead>
         <tbody>
+          <!-- Base playoff totals neutral -->
           <tr class="total-row"><th>Total</th>
             {% for _ in game.playoff_group %}
               {% set s = game.playoff_base_score %}
-              {% set cls = 'score-pos' if s>0 else ('score-neg' if s<0 else 'score-zero') %}
-              <td class="{{ cls }}">{% if s>0 %}+{% endif %}{{ s }}</td>
+              <td>{% if s>0 %}+{% endif %}{{ s }}</td>
             {% endfor %}
           </tr>
 
@@ -257,8 +285,7 @@
               {% for p in game.playoff_group %}
                 {% set v = round_scores.get(p) %}
                 {% if v is not none %}
-                  {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
-                  <td class="{{ cell_cls }}">{{ v>0 and '+' or '' }}{{ v }}</td>
+                  <td>{% if v>0 %}+{% endif %}{{ v }}</td>
                 {% else %}
                   <td></td>
                 {% endif %}
@@ -274,7 +301,8 @@
           <img src="{{ url_for('static', filename='images/finalstanding1.png') }}" alt="Final Standings" class="final-standings-img">
         </div>
 
-        <table class="scoreboard" id="scoreboard">
+        <!-- NOTE: 'final' class -->
+        <table class="scoreboard final" id="scoreboard">
           <thead>
             <tr><th>&nbsp;</th>
               {% for st in game.final_standings %}
@@ -290,22 +318,22 @@
             </tr>
           </thead>
           <tbody>
+            <!-- Final totals neutral -->
             <tr class="total-row"><th>Final</th>
               {% for st in game.final_standings %}
                 {% set s = st.score %}
-                {% set cls = 'score-pos' if s>0 else ('score-neg' if s<0 else 'score-zero') %}
-                <td class="{{ cls }}">{% if s>0 %}+{% endif %}{{ s }}</td>
+                <td>{% if s>0 %}+{% endif %}{{ s }}</td>
               {% endfor %}
             </tr>
 
+            <!-- TB rows neutral (no sign colouring) -->
             {% for i in range(game.max_playoff_rounds, 0, -1) %}
               <tr><th>TB {{ "%02d"|format(i) }}</th>
                 {% for st in game.final_standings %}
                   {% set hist = game.all_playoff_history.get(st.name, []) %}
                   {% if i <= hist|length %}
                     {% set v = hist[i-1] %}
-                    {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
-                    <td class="{{ cell_cls }}">{% if v>0 %}+{% endif %}{{ v }}</td>
+                    <td>{% if v>0 %}+{% endif %}{{ v }}</td>
                   {% else %}
                     <td>-</td>
                   {% endif %}
@@ -322,12 +350,12 @@
                     {% for r in range(i + 1) %}
                       {% set ns.total = ns.total + (game.round_history[r].get(st.name, 0)) %}
                     {% endfor %}
-                    {% set cell_cls = 'score-pos' if v>0 else ('score-neg' if v<0 else 'score-zero') %}
-                    {% set cum_cls  = 'pos' if ns.total>0 else ('neg' if ns.total<0 else 'zero') %}
-                    <td class="{{ cell_cls }}">
-                      <div class="cell-wrap">
-                        <div class="delta">{{ v>0 and '+' or '' }}{{ v }}</div>
-                        <div class="cum"><span class="pill {{ cum_cls }}">T {{ ns.total>0 and '+' or '' }}{{ ns.total }}</span></div>
+                    <td>
+                      <div class="cell">
+                        <span class="total-pill">{{ ns.total>0 and '+' or '' }}{{ ns.total }}</span>
+                        <span class="delta-corner {{ 'pos' if v>0 else ('neg' if v<0 else 'zero') }}">
+                          {{ v>0 and '+' or '' }}{{ v }}
+                        </span>
                       </div>
                     </td>
                   {% else %}
@@ -390,7 +418,7 @@
 
     if (chipList) {
       chipList.innerHTML = recentNames.map(function(n){
-        return '<div class="chip" data-name="'+n+'" onclick="toggleName(\''+n.replace(/'/g,"\\'")+'\')">'+n+'</div>';
+        return '<div class="chip" data-name="'+n+'" onclick="toggleName(\''+n.replace(/\'/g,"\\'")+'\')">'+n+'</div>';
       }).join('');
     }
   </script>
@@ -419,8 +447,6 @@
       else if(g.phase==='playoff'){ renderPlayoff(g); var u2=qs('#undoBtn'); if(u2) u2.setAttribute('disabled','disabled'); }
     }
 
-    function clsFor(v){ if (v > 0) return 'score-pos'; if (v < 0) return 'score-neg'; return 'score-zero'; }
-    function pillFor(v){ if (v > 0) return 'pos'; if (v < 0) return 'neg'; return 'zero'; }
     function sign(v){ return v>0?'+':''; }
 
     function renderPlaying(g){
@@ -435,9 +461,10 @@
       var headers = g.players.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
       var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
+      // Totals row neutral
       var totals = g.players.map(function(p){
         var s = g.scores[p] || 0;
-        return '<td class="'+clsFor(s)+'">'+sign(s)+s+'</td>';
+        return '<td>'+sign(s)+s+'</td>';
       }).join('');
 
       var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
@@ -447,13 +474,16 @@
       var currentCells = g.players.map(function(p){
         var v = curRow[p];
         if (typeof v === 'undefined') {
-          return '<td><div class="cell-wrap"><div class="delta ghostline">0</div><div class="cum"><span class="pill zero ghost">T 0</span></div></div></td>';
+          return '<td><div class="cell">'+
+                   '<span class="total-pill">0</span>'+
+                   '<span class="delta-corner hidden">0</span>'+
+                 '</div></td>';
         }
         var running = g.round_history.slice(0, g.current_round).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
-        return '<td class="'+clsFor(v)+'">'+
-                 '<div class="cell-wrap">'+
-                   '<div class="delta">'+sign(v)+v+'</div>'+
-                   '<div class="cum"><span class="pill '+pillFor(running)+'">T '+sign(running)+running+'</span></div>'+
+        return '<td>'+
+                 '<div class="cell">'+
+                   '<span class="total-pill">'+sign(running)+running+'</span>'+
+                   '<span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+sign(v)+v+'</span>'+
                  '</div>'+
                '</td>';
       }).join('');
@@ -465,10 +495,10 @@
           var v = row[p];
           if (typeof v === 'undefined') return '<td></td>';
           var running = g.round_history.slice(0, i+1).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
-          return '<td class="'+clsFor(v)+'">'+
-                   '<div class="cell-wrap">'+
-                     '<div class="delta">'+sign(v)+v+'</div>'+
-                     '<div class="cum"><span class="pill '+pillFor(running)+'">T '+sign(running)+running+'</span></div>'+
+          return '<td>'+
+                   '<div class="cell">'+
+                     '<span class="total-pill">'+sign(running)+running+'</span>'+
+                     '<span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+sign(v)+v+'</span>'+
                    '</div>'+
                  '</td>';
         }).join('');
@@ -486,7 +516,8 @@
       var headers = g.playoff_group.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
       var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
-      var totals = g.playoff_group.map(function(){ var s = g.playoff_base_score || 0; return '<td class="'+clsFor(s)+'">'+sign(s)+s+'</td>'; }).join('');
+      // Base playoff totals neutral
+      var totals = g.playoff_group.map(function(){ var s = g.playoff_base_score || 0; return '<td>'+sign(s)+s+'</td>'; }).join('');
 
       var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
@@ -496,7 +527,7 @@
         var cells = g.playoff_group.map(function(p){
           var v = round_scores[p];
           if (typeof v === 'undefined') return '<td></td>';
-          return '<td class="'+clsFor(v)+'">'+sign(v)+v+'</td>';
+          return '<td>'+sign(v)+v+'</td>';
         }).join('');
         tbody += '<tr><th>TB '+String(tbNum).padStart(2,'0')+'</th>'+cells+'</tr>';
       }
@@ -526,21 +557,13 @@
     if(!el){ alert('Nothing to export.'); return; }
 
     const rect = el.getBoundingClientRect();
+    const MAX_W = 1100, MAX_H = 800;
 
-    // Use CSS pixels (NOT devicePixelRatio) and cap size for smaller files
-    const MAX_W = 1100;    // tune these caps if you like
-    const MAX_H = 800;
-
-    // Start with on-screen size (CSS px)
-    let w = Math.round(rect.width);
-    let h = Math.round(rect.height);
-
-    // Apply caps while keeping aspect ratio
+    let w = Math.round(rect.width), h = Math.round(rect.height);
     const ar = rect.height / rect.width;
     if (w > MAX_W) { w = MAX_W; h = Math.round(w * ar); }
     if (h > MAX_H) { h = MAX_H; w = Math.round(h / ar); }
 
-    // Navigate to server exporter
     const url = '{{ url_for("export_png") }}' + '?width=' + w + '&height=' + h;
     window.location.href = url;
   }

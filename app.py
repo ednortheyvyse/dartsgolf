@@ -52,7 +52,7 @@ def _fresh_state() -> dict:
         'max_playoff_rounds': 0,
 
         # Per-browser convenience
-        'recent_names': [],              # most-recent first, unique (case-insensitive)
+        'recent_names': [],
     }
 
 def _get_state() -> dict:
@@ -300,14 +300,12 @@ def _ordinal(n: int) -> str:
     return f"{n}{s}"
 
 def _pick_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    # Try DejaVu (bundled with many Pillow installs), fallback to default bitmap
     try:
         return ImageFont.truetype("DejaVuSans.ttf", size)
     except Exception:
         return ImageFont.load_default()
 
 def _draw_centered_text(draw: ImageDraw.ImageDraw, xy, text, font, fill, box_w, box_h):
-    # Center text inside a box anchored at (xy)
     bbox = draw.textbbox((0, 0), text, font=font)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
@@ -316,7 +314,6 @@ def _draw_centered_text(draw: ImageDraw.ImageDraw, xy, text, font, fill, box_w, 
     draw.text((x, y), text, font=font, fill=fill)
 
 def _ensure_final(gs: dict):
-    """Make sure final_standings/max_playoff_rounds are populated (mirrors index())."""
     if gs['phase'] != 'final_ranking':
         return
     if gs['final_standings']:
@@ -338,38 +335,38 @@ def _ensure_final(gs: dict):
 
 def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     """
-    Draw a PNG of the final standings with legible text and per-round running totals ("T +…")
-    shown as a pill beneath the delta in each base-round cell.
+    Final standings PNG:
+    - Running total text: BLACK on F9DFBC cell background.
+    - Delta: bottom-right quarter-circle wedge (red for +, green for -, black for 0).
+    - No cell colour-coding by sign (only the wedge conveys sign).
     """
     from PIL import Image, ImageDraw, ImageFont
 
-    # Colors (match your CSS theme)
+    # Colors
     BG = (26, 26, 26)
     TEXT = (240, 240, 240)
     BORDER = (68, 68, 68)
-    RED = (217, 39, 39)          # + (pos)
-    GREEN = (0, 135, 70)         # - (neg)
-    ZERO = (97, 97, 97)          # 0
-    ACCENT_BG = (229, 216, 177)  # empty cell background
-    ACCENT_TXT = (0, 0, 0)
+    RED   = (0xE3, 0x29, 0x2E)   # #E3292E
+    GREEN = (0x30, 0x9F, 0x6A)    # #309F6A
+    ZERO = (0, 0, 0)            # BLACK for zero
+    ACCENT_BG = (249, 223, 188) # #F9DFBC for score cells
+    ACCENT_TXT = (0, 0, 0)      # black text on accent
     TOTAL_BG = (51, 51, 51)
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
 
-    # Layout tuned for readability
     PADDING = 12
-    MIN_CELL_H = 36  # keep text chunky/legible
+    MIN_CELL_H = 36
 
-    cols = max(1, len(gs['final_standings'])) + 1  # +1 for label column
+    cols = max(1, len(gs['final_standings'])) + 1  # +1 label col
     tb_rows = int(gs.get('max_playoff_rounds', 0))
-    row_count = 2 + 1 + tb_rows + 20  # headers(2) + final(1) + TB + rounds(20)
+    row_count = 2 + 1 + tb_rows + 20  # headers(2) + final(1) + TB + 20 rounds
 
-    # Compute cell size from requested canvas, then enforce readable minimums
     inner_w = max(200, width - 2 * PADDING)
     inner_h = max(200, height - 2 * PADDING)
     cell_w = inner_w // cols
-    cell_h = inner_h // row_count
-    cell_h = max(MIN_CELL_H, cell_h)
+    cell_h = max(MIN_CELL_H, inner_h // row_count)
 
-    # Recompute exact canvas dimensions
     inner_h = cell_h * row_count
     inner_w = cell_w * cols
     canvas_w = inner_w + 2 * PADDING
@@ -384,44 +381,22 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
         except Exception:
             return ImageFont.load_default()
 
-    # Font sizes
-    f_small  = _pick_font(max(14, int(cell_h * 0.62)))  # TB values + round deltas (if tight)
+    # Fonts
+    f_small  = _pick_font(max(14, int(cell_h * 0.62)))  # TB/labels
     f_medium = _pick_font(max(16, int(cell_h * 0.72)))  # headers, labels
-    f_big    = _pick_font(max(18, int(cell_h * 0.82)))  # ordinal header
-    f_delta  = _pick_font(max(16, int(cell_h * 0.70)))  # big delta in base rounds
-    f_pill   = _pick_font(max(12, int(cell_h * 0.48)))  # pill text "T +…"
+    f_big    = _pick_font(max(18, int(cell_h * 0.82)))  # ordinals
+    f_total  = _pick_font(max(18, int(cell_h * 0.78)))  # running total
+    f_delta  = _pick_font(max(11, int(cell_h * 0.50)))  # wedge text
 
     def rect(x, y, w, h, fill=None, outline=BORDER):
         d.rectangle([x, y, x + w, y + h], fill=fill, outline=outline)
 
-    def _ordinal(n: int) -> str:
-        s = 'th'
-        if n % 10 == 1 and n % 100 != 11: s = 'st'
-        elif n % 10 == 2 and n % 100 != 12: s = 'nd'
-        elif n % 10 == 3 and n % 100 != 13: s = 'rd'
-        return f"{n}{s}"
-
-    def _draw_centered_text(draw, xy, text, font, fill, box_w, box_h):
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-        x = xy[0] + (box_w - tw) / 2
-        y = xy[1] + (box_h - th) / 2
-        draw.text((x, y), text, font=font, fill=fill)
-
-    def _pill_colors(total_val: int):
-        if total_val > 0:  # positive running total -> red pill, white text
-            return RED, (255, 255, 255)
-        if total_val < 0:  # negative running total -> green pill, white text
-            return GREEN, (255, 255, 255)
-        return ZERO, (255, 255, 255)  # zero -> grey pill, white text
-
     def _cell_fill_for_delta(v: int):
-        if v > 0:  return RED, TEXT, f"+{v}"
-        if v < 0:  return GREEN, TEXT, str(v)
-        return ZERO, TEXT, "0"
+        if v > 0:  return RED, WHITE, f"+{v}"
+        if v < 0:  return GREEN, WHITE, f"{v}"
+        return ZERO, WHITE, "0"  # black for zero
 
-    # Precompute running totals per player for the 20 base rounds
+    # Precompute running totals
     players = [st['name'] for st in gs['final_standings']]
     running_totals = {p: [] for p in players}
     totals_so_far = {p: 0 for p in players}
@@ -431,18 +406,18 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
             totals_so_far[p] += v
             running_totals[p].append(totals_so_far[p])
 
-    # --- Row 0: Ordinals ---
+    # Row 0: Ordinals
     y = PADDING
     rect(PADDING, y, inner_w, cell_h)
     x = PADDING
-    rect(x, y, cell_w, cell_h); x += cell_w  # label col
+    rect(x, y, cell_w, cell_h); x += cell_w
     for st in gs['final_standings']:
         rect(x, y, cell_w, cell_h)
         _draw_centered_text(d, (x, y), _ordinal(int(st['rank'])), f_big, TEXT, cell_w, cell_h)
         x += cell_w
     y += cell_h
 
-    # --- Row 1: Player names ---
+    # Row 1: Names
     rect(PADDING, y, inner_w, cell_h)
     x = PADDING
     rect(x, y, cell_w, cell_h)
@@ -454,7 +429,7 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
         x += cell_w
     y += cell_h
 
-    # --- Row 2: Final totals ---
+    # Row 2: Final totals (neutral dark row, no sign colour)
     x = PADDING
     for _ in range(cols):
         rect(x, y, cell_w, cell_h, fill=TOTAL_BG)
@@ -464,13 +439,13 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     x += cell_w
     for st in gs['final_standings']:
         s = int(st['score'])
-        fill, t, txt = _cell_fill_for_delta(s)
-        rect(x, y, cell_w, cell_h, fill=fill)
-        _draw_centered_text(d, (x, y), txt, f_medium, t, cell_w, cell_h)
+        txt = f"+{s}" if s > 0 else f"{s}"
+        rect(x, y, cell_w, cell_h, fill=TOTAL_BG)
+        _draw_centered_text(d, (x, y), txt, f_medium, TEXT, cell_w, cell_h)
         x += cell_w
     y += cell_h
 
-    # --- Tie-breakers: TB N..1 (delta only; no running total) ---
+    # Tie-breakers (neutral cells; sign not colour-coded)
     for i in range(tb_rows, 0, -1):
         x = PADDING
         for _ in range(cols):
@@ -483,23 +458,22 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
             hist = gs['all_playoff_history'].get(st['name'], [])
             if i <= len(hist):
                 v = int(hist[i-1])
-                fill, t, txt = _cell_fill_for_delta(v)
-                rect(x, y, cell_w, cell_h, fill=fill)
-                _draw_centered_text(d, (x, y), txt, f_small, t, cell_w, cell_h)
+                rect(x, y, cell_w, cell_h)  # neutral
+                _draw_centered_text(d, (x, y), f"+{v}" if v>0 else f"{v}", f_small, TEXT, cell_w, cell_h)
             else:
-                rect(x, y, cell_w, cell_h, fill=ACCENT_BG)
-                _draw_centered_text(d, (x, y), "-", f_small, ACCENT_TXT, cell_w, cell_h)
+                rect(x, y, cell_w, cell_h)
+                _draw_centered_text(d, (x, y), "-", f_small, TEXT, cell_w, cell_h)
             x += cell_w
         y += cell_h
 
-    # --- Base rounds: 20..1 (delta + running total pill) ---
+    # Base rounds: 20..1 (cells F9DFBC; running total BLACK; wedge shows sign)
     for r_idx in range(19, -1, -1):
         x = PADDING
         for _ in range(cols):
             rect(x, y, cell_w, cell_h)
             x += cell_w
 
-        # label column
+        # Label col
         x = PADDING
         _draw_centered_text(d, (x, y), f"{r_idx+1:02d}", f_medium, TEXT, cell_w, cell_h)
         x += cell_w
@@ -508,55 +482,38 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
             name = st['name']
             raw = gs['round_history'][r_idx].get(name)
             if raw is None:
-                rect(x, y, cell_w, cell_h, fill=ACCENT_BG)
+                rect(x, y, cell_w, cell_h)
             else:
                 v = int(raw)
-                fill, t, txt = _cell_fill_for_delta(v)
-                rect(x, y, cell_w, cell_h, fill=fill)
+                # Fill score cell with F9DFBC
+                rect(x, y, cell_w, cell_h, fill=ACCENT_BG)
 
-                # Two-line layout within the cell
-                # 1) Delta (big, top)
-                delta_bbox = d.textbbox((0, 0), txt, font=f_delta)
-                delta_w = delta_bbox[2] - delta_bbox[0]
-                delta_h = delta_bbox[3] - delta_bbox[1]
-
-                # 2) Pill ("T +…", centered under delta)
+                # Running total (black)
                 total_val = int(running_totals[name][r_idx])
-                pill_text = f"T {'+' if total_val > 0 else ''}{total_val}"
-                pill_bg, pill_fg = _pill_colors(total_val)
+                total_text = f"{'+' if total_val > 0 else ''}{total_val}"
+                tbx = d.textbbox((0, 0), total_text, font=f_total)
+                tw = tbx[2] - tbx[0]
+                th = tbx[3] - tbx[1]
+                cx = x + (cell_w - tw) / 2
+                cy = y + (cell_h - th) / 2
+                d.text((cx, cy), total_text, font=f_total, fill=BLACK)
 
-                pill_bbox = d.textbbox((0, 0), pill_text, font=f_pill)
-                tw = pill_bbox[2] - pill_bbox[0]
-                th = pill_bbox[3] - pill_bbox[1]
-                pad_x = max(8, int(cell_w * 0.08))
-                pad_y = max(3, int(cell_h * 0.10))
-                pill_w = tw + 2 * pad_x
-                pill_h = th + 2 * pad_y
+                # Delta wedge (BR corner) — red/green/black
+                wedge_r = int(min(cell_w, cell_h) * 0.52)
+                bx1 = x + cell_w
+                by1 = y + cell_h
+                bx0 = bx1 - 2*wedge_r
+                by0 = by1 - 2*wedge_r
+                delta_text = f"+{v}" if v > 0 else f"{v}"
+                fill_color = RED if v > 0 else (GREEN if v < 0 else ZERO)
+                d.pieslice([bx0, by0, bx1, by1], start=270, end=360, fill=fill_color)
 
-                total_block_h = delta_h + 6 + pill_h  # spacing = 6px
-                base_y = y + (cell_h - total_block_h) / 2
-
-                # draw delta
-                dx = x + (cell_w - delta_w) / 2
-                dy = base_y
-                d.text((dx, dy), txt, font=f_delta, fill=t)
-
-                # draw pill background (rounded)
-                px0 = x + (cell_w - pill_w) / 2
-                py0 = dy + delta_h + 6
-                px1 = px0 + pill_w
-                py1 = py0 + pill_h
-                radius = pill_h / 2
-                try:
-                    d.rounded_rectangle([px0, py0, px1, py1], radius=radius, fill=pill_bg)
-                except Exception:
-                    # Fallback for very old Pillow: draw a normal rectangle
-                    d.rectangle([px0, py0, px1, py1], fill=pill_bg)
-
-                # pill text
-                tx = px0 + pad_x
-                ty = py0 + pad_y
-                d.text((tx, ty), pill_text, font=f_pill, fill=pill_fg)
+                # Delta text inside wedge (white for contrast)
+                tbd = d.textbbox((0,0), delta_text, font=f_delta)
+                dw = tbd[2]-tbd[0]; dh = tbd[3]-tbd[1]
+                tx = x + cell_w - max(8, int(wedge_r*0.45)) - dw/2
+                ty = y + cell_h - max(8, int(wedge_r*0.45)) - dh/2
+                d.text((tx, ty), delta_text, font=f_delta, fill=WHITE)
 
             x += cell_w
         y += cell_h
@@ -584,7 +541,6 @@ def export_png():
     except Exception:
         width, height = 900, 600
 
-    # Tighter clamps for a smaller, readable PNG
     width = max(500, min(width, 1100))
     height = max(400, min(height, 800))
 
