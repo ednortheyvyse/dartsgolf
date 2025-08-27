@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Game Stats</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root {
+    --bg-color: #1a1a1a;
+    --text-color: #f0f0f0;
+    --border-color: #444;
+    --primary-color: #E3292E;
+    --secondary-color: #309F6A;
+    --accent-color: #F9DFBC;
+    --accent-text-color: #000;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg-color);
+    color: var(--text-color);
+    height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  .container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px 2px;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .container::-webkit-scrollbar {
+    display: none;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 2em;
+    margin-bottom: 24px;
+  }
+
+  .stat-block {
+    background: #2b2b2b;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 0 12px 20px 12px;
+  }
+
+  .stat-title {
+    font-size: 1.2em;
+    color: var(--accent-color);
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #ffffff;
+  }
+
+  .stat-player {
+    color: var(--primary-color);
+    font-weight: bold;
+    margin-right: 6px;
+  }
+
+  .stat-block small {
+    display: block;
+    margin-top: 6px;
+    color: #bdbdbd;
+    font-size: 0.9em;
+  }
+
+  /* Bottom controls bar */
+  .controls {
+    flex-shrink: 0;
+    padding: 10px;
+    background: #000;
+    border-top: 2px solid var(--border-color);
+  }
+
+  .button-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .button-grid.single {
+    grid-template-columns: 1fr;
+  }
+
+  .button-grid.duo {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .button-grid.duo form {
+    margin: 0;
+  }
+
+  @media (max-width: 420px) {
+    .button-grid.duo {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .utility-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .button-grid button,
+  .utility-grid button {
+    width: 100%;
+    padding: 20px 0;
+    font-size: 1.8em;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .export-btn {
+    background: var(--secondary-color);
+    color: #fff;
+  }
+
+  .restart-btn {
+    background: var(--primary-color);
+    color: #fff;
+  }
+</style>
+
+</head>
+<body>
+  <div class="container">
+    <h1>Game Stats</h1>
+
+    <!-- Original stats with descriptions -->
+    <div class="stat-block">
+      <div class="stat-title">⛳ Best Birdie Streak</div>
+      <div class="stat-value"><span class="stat-player">{{ best_birdie[0] }}</span>{{ best_birdie[1]['birdie_streak'] }}</div>
+      <small>Longest consecutive rounds scoring under par.</small>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-title">🔥 Best Bogey Streak</div>
+      <div class="stat-value"><span class="stat-player">{{ best_bogey[0] }}</span>{{ best_bogey[1]['bogey_streak'] }}</div>
+      <small>Longest consecutive rounds scoring over par.</small>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-title">📈 Best Average Score</div>
+      <div class="stat-value"><span class="stat-player">{{ best_avg[0] }}</span>{{ "%.2f"|format(best_avg[1]['average']) }}</div>
+      <small>Lowest average score across all rounds.</small>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-title">📉 Worst Average Score</div>
+      <div class="stat-value"><span class="stat-player">{{ worst_avg[0] }}</span>{{ "%.2f"|format(worst_avg[1]['average']) }}</div>
+      <small>Highest average score across all rounds.</small>
+    </div>
+
+    <!-- New blocks -->
+    <div class="stat-block">
+      <div class="stat-title">🏅 Best Single Round</div>
+      <div class="stat-value">
+        {% if best_round %}
+          <span class="stat-player">{{ best_round.player }}</span>Round {{ best_round.round }} ({{ best_round.score }})
+        {% else %}
+          —
+        {% endif %}
+      </div>
+      <small>Lowest individual round score in the game.</small>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-title">🕊️ Most Birdies</div>
+      <div class="stat-value"><span class="stat-player">{{ most_birdies[0] }}</span>{{ most_birdies[1] }}</div>
+      <small>Most rounds finished under par.</small>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-title">😬 Most Bogeys</div>
+      <div class="stat-value"><span class="stat-player">{{ most_bogeys[0] }}</span>{{ most_bogeys[1] }}</div>
+      <small>Most rounds finished over par.</small>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-title">🎯 Most Consistent Player</div>
+      <div class="stat-value">
+        {% if most_consistent_name and most_consistent_value is not none %}
+          <span class="stat-player">{{ most_consistent_name }}</span>{{ "%.2f"|format(most_consistent_value) }}
+        {% else %}
+          N/A
+        {% endif %}
+      </div>
+      <small>Lowest score variation across rounds (standard deviation).</small>
+    </div>
+
+    <div class="stat-block">
+      <div class="stat-title">📊 Comeback Player</div>
+      <div class="stat-value">
+        <span class="stat-player">{{ comeback_player[0] }}</span>
+        {% if comeback_player[1] > 0 %}+{% endif %}{{ comeback_player[1] }}
+      </div>
+      <small>Biggest improvement between first and second half.</small>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="button-grid single">
+      <a href="{{ url_for('index') }}">
+        <button type="button" class="export-btn">Back to Final Standings</button>
+      </a>
+      <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Start a new game?');">
+        <button type="submit" class="restart-btn">Start New Game</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

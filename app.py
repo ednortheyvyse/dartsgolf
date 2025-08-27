@@ -3,6 +3,7 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 from collections import defaultdict
+import statistics  # for consistency (std dev)
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, send_file
 
@@ -348,9 +349,8 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     BORDER = (68, 68, 68)
     RED   = (0xE3, 0x29, 0x2E)   # #E3292E
     GREEN = (0x30, 0x9F, 0x6A)    # #309F6A
-    ZERO = (0, 0, 0)            # BLACK for zero
-    ACCENT_BG = (249, 223, 188) # #F9DFBC for score cells
-    ACCENT_TXT = (0, 0, 0)      # black text on accent
+    ZERO = (0, 0, 0)
+    ACCENT_BG = (249, 223, 188) # #F9DFBC
     TOTAL_BG = (51, 51, 51)
     WHITE = (255, 255, 255)
     BLACK = (0, 0, 0)
@@ -391,11 +391,6 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     def rect(x, y, w, h, fill=None, outline=BORDER):
         d.rectangle([x, y, x + w, y + h], fill=fill, outline=outline)
 
-    def _cell_fill_for_delta(v: int):
-        if v > 0:  return RED, WHITE, f"+{v}"
-        if v < 0:  return GREEN, WHITE, f"{v}"
-        return ZERO, WHITE, "0"  # black for zero
-
     # Precompute running totals
     players = [st['name'] for st in gs['final_standings']]
     running_totals = {p: [] for p in players}
@@ -429,7 +424,7 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
         x += cell_w
     y += cell_h
 
-    # Row 2: Final totals (neutral dark row, no sign colour)
+    # Row 2: Final totals (neutral dark row)
     x = PADDING
     for _ in range(cols):
         rect(x, y, cell_w, cell_h, fill=TOTAL_BG)
@@ -445,7 +440,8 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
         x += cell_w
     y += cell_h
 
-    # Tie-breakers (neutral cells; sign not colour-coded)
+    # Tie-breakers (neutral cells)
+    tb_rows = int(gs.get('max_playoff_rounds', 0))
     for i in range(tb_rows, 0, -1):
         x = PADDING
         for _ in range(cols):
@@ -458,7 +454,7 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
             hist = gs['all_playoff_history'].get(st['name'], [])
             if i <= len(hist):
                 v = int(hist[i-1])
-                rect(x, y, cell_w, cell_h)  # neutral
+                rect(x, y, cell_w, cell_h)
                 _draw_centered_text(d, (x, y), f"+{v}" if v>0 else f"{v}", f_small, TEXT, cell_w, cell_h)
             else:
                 rect(x, y, cell_w, cell_h)
@@ -466,7 +462,8 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
             x += cell_w
         y += cell_h
 
-    # Base rounds: 20..1 (cells F9DFBC; running total BLACK; wedge shows sign)
+    # Base rounds: 20..1
+    ACCENT_BG = (249, 223, 188) # #F9DFBC
     for r_idx in range(19, -1, -1):
         x = PADDING
         for _ in range(cols):
@@ -485,30 +482,23 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
                 rect(x, y, cell_w, cell_h)
             else:
                 v = int(raw)
-                # Fill score cell with F9DFBC
                 rect(x, y, cell_w, cell_h, fill=ACCENT_BG)
 
-                # Running total (black)
                 total_val = int(running_totals[name][r_idx])
                 total_text = f"{'+' if total_val > 0 else ''}{total_val}"
                 tbx = d.textbbox((0, 0), total_text, font=f_total)
-                tw = tbx[2] - tbx[0]
-                th = tbx[3] - tbx[1]
+                tw = tbx[2] - tbx[0]; th = tbx[3] - tbx[1]
                 cx = x + (cell_w - tw) / 2
                 cy = y + (cell_h - th) / 2
                 d.text((cx, cy), total_text, font=f_total, fill=BLACK)
 
-                # Delta wedge (BR corner) — red/green/black
                 wedge_r = int(min(cell_w, cell_h) * 0.52)
-                bx1 = x + cell_w
-                by1 = y + cell_h
-                bx0 = bx1 - 2*wedge_r
-                by0 = by1 - 2*wedge_r
+                bx1 = x + cell_w; by1 = y + cell_h
+                bx0 = bx1 - 2*wedge_r; by0 = by1 - 2*wedge_r
                 delta_text = f"+{v}" if v > 0 else f"{v}"
-                fill_color = RED if v > 0 else (GREEN if v < 0 else ZERO)
+                fill_color = (0xE3, 0x29, 0x2E) if v > 0 else ((0x30, 0x9F, 0x6A) if v < 0 else (0,0,0))
                 d.pieslice([bx0, by0, bx1, by1], start=270, end=360, fill=fill_color)
 
-                # Delta text inside wedge (white for contrast)
                 tbd = d.textbbox((0,0), delta_text, font=f_delta)
                 dw = tbd[2]-tbd[0]; dh = tbd[3]-tbd[1]
                 tx = x + cell_w - max(8, int(wedge_r*0.45)) - dw/2
@@ -522,6 +512,110 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     im.save(buf, format="PNG")
     buf.seek(0)
     return buf
+    
+@app.route('/stats')
+def stats():
+    gs = _get_state()
+    if gs['phase'] != 'final_ranking':
+        flash("Stats are only available after the game ends.", "error")
+        return redirect(url_for('index'))
+
+    round_history = gs['round_history']
+    players = gs['players']
+
+    # Per-player aggregates (existing)
+    stats_data = {}
+    for p in players:
+        streak = {'birdie': 0, 'bogey': 0, 'best_birdie': 0, 'best_bogey': 0}
+        scores = []
+        for r in round_history:
+            v = r.get(p)
+            if v is not None:
+                scores.append(v)
+                if v < 0:
+                    streak['birdie'] += 1
+                    streak['bogey'] = 0
+                elif v > 0:
+                    streak['bogey'] += 1
+                    streak['birdie'] = 0
+                else:
+                    streak['bogey'] = 0
+                    streak['birdie'] = 0
+                streak['best_birdie'] = max(streak['best_birdie'], streak['birdie'])
+                streak['best_bogey'] = max(streak['best_bogey'], streak['bogey'])
+
+        total = sum(scores)
+        rounds = len(scores)
+        avg = total / rounds if rounds else 0
+        stats_data[p] = {
+            'average': avg,
+            'birdie_streak': streak['best_birdie'],
+            'bogey_streak': streak['best_bogey']
+        }
+
+    # Existing summary stats
+    best_birdie = max(stats_data.items(), key=lambda x: x[1]['birdie_streak'])
+    best_bogey  = max(stats_data.items(), key=lambda x: x[1]['bogey_streak'])
+    best_avg    = min(stats_data.items(), key=lambda x: x[1]['average'])  # lower is better
+    worst_avg   = max(stats_data.items(), key=lambda x: x[1]['average'])  # higher is worse
+
+    # NEW: Best Single Round (lowest delta in any round)
+    best_round = None
+    for i, round_data in enumerate(round_history):
+        for player, val in round_data.items():
+            if best_round is None or val < best_round['score']:
+                best_round = {'round': i + 1, 'player': player, 'score': val}
+
+    # NEW: Most Birdies / Bogeys (counts across all rounds)
+    birdie_counts = {p: sum(1 for r in round_history if r.get(p, 0) < 0) for p in players}
+    bogey_counts  = {p: sum(1 for r in round_history if r.get(p, 0) > 0) for p in players}
+    most_birdies  = max(birdie_counts.items(), key=lambda x: x[1])
+    most_bogeys   = max(bogey_counts.items(),  key=lambda x: x[1])
+
+    # NEW: Most Consistent Player (lowest std dev; need >=2 scores)
+    consistency = {}
+    for p in players:
+        scores = [r.get(p) for r in round_history if p in r]
+        if len(scores) >= 2:
+            consistency[p] = statistics.stdev(scores)
+        else:
+            consistency[p] = float('inf')  # undefined variance -> treat as worst
+    most_consistent_name = None
+    most_consistent_value = None
+    if consistency:
+        cand_name, cand_val = min(consistency.items(), key=lambda x: x[1])
+        if cand_val != float('inf'):
+            most_consistent_name = cand_name
+            most_consistent_value = cand_val
+
+    # NEW: Comeback Player (second half sum - first half sum)
+    improvement_scores = {}
+    for p in players:
+        first_half  = [r.get(p, 0) for r in round_history[:10] if p in r]
+        second_half = [r.get(p, 0) for r in round_history[10:] if p in r]
+        if first_half and second_half:
+            diff = sum(second_half) - sum(first_half)
+            improvement_scores[p] = diff
+    # If nobody qualifies (edge case), default a safe value
+    if improvement_scores:
+        comeback_player = max(improvement_scores.items(), key=lambda x: x[1])
+    else:
+        comeback_player = ("—", 0)
+
+    return render_template(
+        'stats.html',
+        stats=stats_data,
+        best_birdie=best_birdie,
+        best_bogey=best_bogey,
+        best_avg=best_avg,
+        worst_avg=worst_avg,
+        best_round=best_round,
+        most_birdies=most_birdies,
+        most_bogeys=most_bogeys,
+        most_consistent_name=most_consistent_name,
+        most_consistent_value=most_consistent_value,
+        comeback_player=comeback_player
+    )
 
 
 @app.get('/export.png')
