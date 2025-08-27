@@ -99,25 +99,35 @@
     }
 
     /* Bottom-right quarter-circle delta chip — sign-coloured; 0 = black */
-    .delta-corner {
-      position:absolute;
-      right:0; bottom:0;
-      height: 50%;
-      aspect-ratio: 1 / 1;
-      width: auto;
-      border-top-left-radius: 100%;
-      background:#000;     /* default; overridden below */
-      color:#fff;
-      display:flex; align-items:flex-end; justify-content:flex-end;
-      padding: 2px 5px;
-      font-weight: 900; font-size: .78em; line-height: 1;
-      box-shadow: none;
-      pointer-events: none;
-    }
-    .delta-corner.pos  { background: var(--primary-color); }   /* RED for + */
-    .delta-corner.neg  { background: var(--secondary-color); } /* GREEN for - */
-    .delta-corner.zero { background: #000; }                   /* BLACK for 0 */
-    .delta-corner.hidden { opacity:0; }
+.delta-corner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 32px;
+  height: 32px;
+  border-top-left-radius: 100%;
+  background: #000;
+  color: #fff;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  font-weight: 900;
+  font-size: 0.75em;
+  pointer-events: none;
+  padding: 2px 5px;
+  box-sizing: border-box;
+  overflow: hidden;
+  line-height: 1;
+}
+
+/* Colour by delta sign */
+.delta-corner.pos  { background: var(--primary-color); }
+.delta-corner.neg  { background: var(--secondary-color); }
+.delta-corner.zero { background: #000; }
+
+.delta-corner.hidden { opacity: 0; }
+
+
 
     /* Remove inner padding on score cells so the wedge is truly flush */
     .scoreboard.playing tbody td,
@@ -146,6 +156,7 @@
       15%  { transform:translate(-50%, 0px)  scale(1.00); opacity:1; }
       100% { transform:translate(-50%, -64px) scale(1.05); opacity:0; }
     }
+
 
     #final-capture{ overflow: visible; }
   </style>
