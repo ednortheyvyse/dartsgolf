@@ -201,13 +201,16 @@
     <div class="stat-block">
       <div class="stat-title">🎯 Most Consistent Player</div>
       <div class="stat-value">
-        {% if most_consistent_name and most_consistent_value is not none %}
-          <span class="stat-player">{{ most_consistent_name }}</span>{{ "%.2f"|format(most_consistent_value) }}
+        {% if most_consistent_name %}
+          <span class="stat-player">{{ most_consistent_name }}</span>
+          {{ "%.2f"|format(most_consistent_stdev) }}
+          <span style="font-size:.9em; opacity:.85;">stdev</span>
+          <span style="font-size:.9em; opacity:.85;">(avg {{ "%+.2f"|format(most_consistent_avg) }})</span>
         {% else %}
           N/A
         {% endif %}
       </div>
-      <small>Lowest score variation across rounds (standard deviation).</small>
+      <small>Lowest round-to-round variation (standard deviation). Ties favor better average score (more under par).</small>
     </div>
 
     <div class="stat-block">

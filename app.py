@@ -349,8 +349,8 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     BORDER = (68, 68, 68)
     RED   = (0xE3, 0x29, 0x2E)   # #E3292E
     GREEN = (0x30, 0x9F, 0x6A)    # #309F6A
-    ZERO = (0, 0, 0)
-    ACCENT_BG = (249, 223, 188) # #F9DFBC
+    ZERO = (0, 0, 0)            # BLACK for zero
+    ACCENT_BG = (249, 223, 188) # #F9DFBC for score cells
     TOTAL_BG = (51, 51, 51)
     WHITE = (255, 255, 255)
     BLACK = (0, 0, 0)
@@ -503,7 +503,7 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
                 dw = tbd[2]-tbd[0]; dh = tbd[3]-tbd[1]
                 tx = x + cell_w - max(8, int(wedge_r*0.45)) - dw/2
                 ty = y + cell_h - max(8, int(wedge_r*0.45)) - dh/2
-                d.text((tx, ty), delta_text, font=f_delta, fill=WHITE)
+                d.text((tx, ty), delta_text, font=f_delta, fill=(255,255,255))
 
             x += cell_w
         y += cell_h
@@ -572,50 +572,42 @@ def stats():
     most_birdies  = max(birdie_counts.items(), key=lambda x: x[1])
     most_bogeys   = max(bogey_counts.items(),  key=lambda x: x[1])
 
-    # NEW: Most Consistent Player (lowest std dev; need >=2 scores)
-    consistency = {}
+    # NEW: Most Consistent Player (lowest stdev); tie-break by better average (more negative is better)
+    consistent_candidates = []
     for p in players:
         scores = [r.get(p) for r in round_history if p in r]
         if len(scores) >= 2:
-            consistency[p] = statistics.stdev(scores)
-        else:
-            consistency[p] = float('inf')  # undefined variance -> treat as worst
+            sd = statistics.stdev(scores)
+            avg = sum(scores) / len(scores)  # golf: lower (more negative) is better
+            consistent_candidates.append((p, sd, avg))
+
     most_consistent_name = None
-    most_consistent_value = None
-    if consistency:
-        cand_name, cand_val = min(consistency.items(), key=lambda x: x[1])
-        if cand_val != float('inf'):
-            most_consistent_name = cand_name
-            most_consistent_value = cand_val
+    most_consistent_stdev = None
+    most_consistent_avg = None
+    if consistent_candidates:
+        consistent_candidates.sort(key=lambda t: (t[1], t[2]))  # sort by stdev, then avg
+        most_consistent_name, most_consistent_stdev, most_consistent_avg = consistent_candidates[0]
 
-    # NEW: Comeback Player (second half sum - first half sum)
-    improvement_scores = {}
-    for p in players:
-        first_half  = [r.get(p, 0) for r in round_history[:10] if p in r]
-        second_half = [r.get(p, 0) for r in round_history[10:] if p in r]
-        if first_half and second_half:
-            diff = sum(second_half) - sum(first_half)
-            improvement_scores[p] = diff
-    # If nobody qualifies (edge case), default a safe value
-    if improvement_scores:
-        comeback_player = max(improvement_scores.items(), key=lambda x: x[1])
-    else:
-        comeback_player = ("—", 0)
+# Comeback Player (strokes saved): first half total - second half total
+candidates = []
+for p in players:
+    first_half  = [r.get(p, 0) for r in round_history[:10] if p in r]
+    second_half = [r.get(p, 0) for r in round_history[10:] if p in r]
+    if first_half and second_half:
+        first_total = sum(first_half)
+        second_total = sum(second_half)
+        strokes_saved = first_total - second_total  # positive = improved (golf)
+        # keep second_total for tie-break (more negative is better)
+        candidates.append((p, strokes_saved, second_total))
 
-    return render_template(
-        'stats.html',
-        stats=stats_data,
-        best_birdie=best_birdie,
-        best_bogey=best_bogey,
-        best_avg=best_avg,
-        worst_avg=worst_avg,
-        best_round=best_round,
-        most_birdies=most_birdies,
-        most_bogeys=most_bogeys,
-        most_consistent_name=most_consistent_name,
-        most_consistent_value=most_consistent_value,
-        comeback_player=comeback_player
-    )
+if candidates:
+    # Max by strokes_saved; tie-break by smaller (more negative) second_total
+    candidates.sort(key=lambda t: (t[1], -t[2]))
+    winner_name, winner_saved, _ = candidates[0]
+    comeback_player = (winner_name, winner_saved)
+else:
+    comeback_player = ("—", 0)
+
 
 
 @app.get('/export.png')
