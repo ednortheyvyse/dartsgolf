@@ -199,34 +199,41 @@
     </div>
 
     <div class="stat-block">
-      <div class="stat-title">🎯 Most Consistent Player</div>
-      <div class="stat-value">
-        {% if most_consistent_name %}
-          <span class="stat-player">{{ most_consistent_name }}</span>
-          {{ "%.2f"|format(most_consistent_stdev) }}
-          <span style="font-size:.9em; opacity:.85;">stdev</span>
-          <span style="font-size:.9em; opacity:.85;">(avg {{ "%+.2f"|format(most_consistent_avg) }}, {{ most_consistent_rounds }} rds, swing {{ most_consistent_swing }})</span>
-        {% else %}
-          N/A
-        {% endif %}
-      </div>
-      <small>Lowest round-to-round variation (population standard deviation). Ties favor better average (more negative), then more rounds, then smaller worst-to-best swing.</small>
-    </div>
+  <div class="stat-title">🎯 Most Consistent Player</div>
+  <div class="stat-value">
+    {% if most_consistent_name %}
+      <span class="stat-player">{{ most_consistent_name }}</span>
+      {{ "%.2f"|format(most_consistent_stdev) }} stdev
+      <span style="font-size:.9em; opacity:.85;">over {{ most_consistent_rounds }} rounds</span>
+      <span style="font-size:.9em; opacity:.85;">(avg {{ "%+.2f"|format(most_consistent_avg) }}, swing {{ most_consistent_swing>=0 and '+' or '' }}{{ most_consistent_swing }})</span>
+    {% else %}
+      N/A
+    {% endif %}
+  </div>
+  <small>
+    Lower standard deviation = steadier scoring. Tie-breaks favor better average (more under par), then more rounds, then smaller round-to-round swing.
+  </small>
+</div>
 
     <div class="stat-block">
-      <div class="stat-title">📊 Comeback Player</div>
-      <div class="stat-value">
-        {% if comeback_player %}
-          <span class="stat-player">{{ comeback_player.player }}</span>
-          +{{ comeback_player.improvement }}
-          <span style="font-size:.9em; opacity:.85;">(from {{ "%+d"|format(comeback_player.from_score) }} on R{{ comeback_player.from_round }} to {{ "%+d"|format(comeback_player.to_score) }} on R{{ comeback_player.to_round }})</span>
-        {% else %}
-          —
-        {% endif %}
-      </div>
-      <small>Biggest improvement from worst cumulative point to a later better cumulative score (golf scoring: more negative is better).</small>
+  <div class="stat-title">📊 Comeback Player</div>
+  {% if comeback_player %}
+    <div class="stat-value">
+      <span class="stat-player">{{ comeback_player.player }}</span>
+      {{ comeback_player.improvement }} strokes saved
     </div>
-  </div>
+    <small>
+      From {{ comeback_player.from_score > 0 and '+' or '' }}{{ comeback_player.from_score }}
+      on Round {{ comeback_player.from_round }}
+      to {{ comeback_player.to_score > 0 and '+' or '' }}{{ comeback_player.to_score }}
+      on Round {{ comeback_player.to_round }}.
+    </small>
+  {% else %}
+    <div class="stat-value">—</div>
+    <small>No positive improvement detected.</small>
+  {% endif %}
+</div>
+
 
   <div class="controls">
     <div class="button-grid single">
