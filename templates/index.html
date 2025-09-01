@@ -27,6 +27,12 @@
       .button-grid.duo{grid-template-columns:1fr;}
     }
     .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    /* during playing we have three utility buttons */
+    .utility-grid.playing{grid-template-columns:repeat(3,1fr);}
+    @media (max-width: 420px){
+      .utility-grid.playing{grid-template-columns:1fr;}
+    }
+
     .button-grid button,.utility-grid button{width:100%;padding:20px 0;font-size:1.8em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;touch-action:manipulation;}
 
     .score-btn.minus { background: var(--secondary-color); color:#fff; }
@@ -35,6 +41,8 @@
     .undo-btn{background:#ff9800;color:#000;}
     .restart-btn{background:#f44336;color:#fff;}
     .export-btn{background:#2196f3;color:#fff;}
+    /* End Game uses same blue as export/view stats */
+    .end-btn{background:#2196f3;color:#fff;}
 
     .setup-screen { text-align:center; padding-top:4vh; max-width:900px; margin:0 auto; padding-left:8px; padding-right:8px; }
     .flash{margin:0 auto 16px;padding:12px 16px;border-radius:8px;border:1px solid #ff4d4d;background:#2a0000;color:#ffcccc;font-weight:600;}
@@ -56,107 +64,45 @@
     .scoreboard tbody td{background:var(--accent-color);color:var(--accent-text-color);font-weight:bold;padding:12px 5px;}
     .scoreboard .total-row td{background:#333;color:#fff;} /* totals row stays neutral */
 
-    /* These remain for other contexts but we won't apply them to round cells anymore */
-    .scoreboard td.score-pos,
-    .scoreboard .total-row td.score-pos { background: var(--primary-color); color:#fff; }
-    .scoreboard td.score-neg,
-    .scoreboard .total-row td.score-neg { background: var(--secondary-color); color:#fff; }
-    .scoreboard td.score-zero,
-    .scoreboard .total-row td.score-zero { background: #616161; color:#fff; }
-
     .current-player-header{color:var(--primary-color);font-weight:bold;}
 
     /* Header / info */
     .info-bar{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; margin-bottom:15px; }
     .round-count{ display:flex; align-items:flex-end; justify-content:center; gap:8px; line-height:1; margin-top:4px; flex-wrap:nowrap; }
     .round-label{ font-size: clamp(28px, 7vw, 56px); font-weight: 900; letter-spacing: 0.06em; }
-    .round-number{ font-size: clamp(44px, 12vw, 96px); font-weight: 900; line-height: .9; color:#bbb; } /* grey current round number */
+    .round-number{ font-size: clamp(44px, 12vw, 96px); font-weight: 900; line-height: .9; color:#bbb; }
     .round-total{ font-size: clamp(10px, 2.8vw, 16px); font-weight: 700; opacity: .85; margin-left: 2px; align-self: flex-start; transform: translateY(-6px); }
     .turn-info{ font-size: clamp(18px, 4.2vw, 28px); font-weight: 700; color: var(--primary-color); text-align:center; }
+
+    .end-banner{ margin-top:6px; padding:8px 12px; border:1px dashed #2196f3; color:#fff; background:#182634; border-radius:8px; font-weight:700; text-align:center; }
 
     .scoreboard tr.current-row th { background:#3a3a3a; }
 
     /* --- Compact layout with true quarter-circle delta --- */
-    .cell {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 58px;
-      width: 100%;
-      height: 100%;
-    }
+    .cell { position: relative; display: flex; align-items: center; justify-content: center; min-height: 58px; width: 100%; height: 100%; }
+    .total-pill { color:#000; background:none; padding:0; border-radius:0; font-weight:900; font-size:1.2em; line-height:1; }
 
-    /* Running total = black text, no pill background */
-    .total-pill {
-      color: #000;              /* BLACK */
-      background: none;
-      padding: 0;
-      border-radius: 0;
-      font-weight: 900;
-      font-size: 1.2em;
-      line-height: 1;
-    }
+    .delta-corner { position:absolute; right:0; bottom:0; width:32px; height:32px; border-top-left-radius:100%; background:#000; color:#fff; display:flex; align-items:flex-end; justify-content:flex-end; font-weight:900; font-size:.75em; pointer-events:none; padding:2px 5px; box-sizing:border-box; overflow:hidden; line-height:1; }
+    .delta-corner.pos  { background: var(--primary-color); }
+    .delta-corner.neg  { background: var(--secondary-color); }
+    .delta-corner.zero { background: #000; }
+    .delta-corner.hidden { opacity: 0; }
 
-    /* Bottom-right quarter-circle delta chip — sign-coloured; 0 = black */
-.delta-corner {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 32px;
-  height: 32px;
-  border-top-left-radius: 100%;
-  background: #000;
-  color: #fff;
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
-  font-weight: 900;
-  font-size: 0.75em;
-  pointer-events: none;
-  padding: 2px 5px;
-  box-sizing: border-box;
-  overflow: hidden;
-  line-height: 1;
-}
+    .scoreboard.playing tbody td, .scoreboard.final tbody td { padding:0; }
+    .scoreboard.playing td .cell, .scoreboard.final td .cell { width:100%; height:100%; }
 
-/* Colour by delta sign */
-.delta-corner.pos  { background: var(--primary-color); }
-.delta-corner.neg  { background: var(--secondary-color); }
-.delta-corner.zero { background: #000; }
+    .homepage-dartboard, .final-standings-img{ display:block; width:auto; height:auto; max-width: min(92vw, 520px); max-height: 48vh; margin:0 auto 20px; object-fit: contain; }
 
-.delta-corner.hidden { opacity: 0; }
-
-
-
-    /* Remove inner padding on score cells so the wedge is truly flush */
-    .scoreboard.playing tbody td,
-    .scoreboard.final   tbody td { padding:0; }
-
-    /* Ensure the .cell fills each td in those tables */
-    .scoreboard.playing td .cell,
-    .scoreboard.final   td .cell { width:100%; height:100%; }
-
-    .homepage-dartboard,
-    .final-standings-img{ display:block; width:auto; height:auto; max-width: min(92vw, 520px); max-height: 48vh; margin:0 auto 20px; object-fit: contain; }
-
-    /* Floating score bubble */
-    .score-bubble{
-      position:fixed; z-index:9999; padding:6px 10px; border-radius:999px; font-weight:800; font-size:0.95em;
-      white-space:nowrap; pointer-events:none; box-shadow:0 6px 16px rgba(0,0,0,0.35);
-      transform:translate(-50%, 0) scale(0.95); opacity:0; animation:floatUp 900ms ease-out forwards;
-      will-change: transform, opacity;
-    }
-    .score-bubble.pos  { background: var(--primary-color);  color:#fff; }
-    .score-bubble.neg  { background: var(--secondary-color);color:#fff; }
-    .score-bubble.zero { background: #000;                  color:#fff; } /* 0 = black */
+    .score-bubble{ position:fixed; z-index:9999; padding:6px 10px; border-radius:999px; font-weight:800; font-size:.95em; white-space:nowrap; pointer-events:none; box-shadow:0 6px 16px rgba(0,0,0,.35); transform:translate(-50%,0) scale(.95); opacity:0; animation:floatUp 900ms ease-out forwards; will-change:transform,opacity; }
+    .score-bubble.pos{ background: var(--primary-color); color:#fff; }
+    .score-bubble.neg{ background: var(--secondary-color); color:#fff; }
+    .score-bubble.zero{ background:#000; color:#fff; }
 
     @keyframes floatUp{
-      0%   { transform:translate(-50%, 8px)  scale(0.95); opacity:0; }
-      15%  { transform:translate(-50%, 0px)  scale(1.00); opacity:1; }
-      100% { transform:translate(-50%, -64px) scale(1.05); opacity:0; }
+      0%{ transform:translate(-50%,8px) scale(.95); opacity:0; }
+      15%{ transform:translate(-50%,0) scale(1); opacity:1; }
+      100%{ transform:translate(-50%,-64px) scale(1.05); opacity:0; }
     }
-
 
     #final-capture{ overflow: visible; }
   </style>
@@ -194,9 +140,12 @@
           <span class="round-total">/ 20</span>
         </div>
         <div class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</div>
+
+        {% if game.end_after_round %}
+          <div class="end-banner">Game will end after this round. Finish all players this round to finalize and run tie-breakers.</div>
+        {% endif %}
       </div>
 
-      <!-- NOTE: 'playing' class -->
       <table class="scoreboard playing" id="scoreboard">
         <thead>
           <tr><th>&nbsp;</th>
@@ -206,7 +155,6 @@
           </tr>
         </thead>
         <tbody>
-          <!-- Totals row stays neutral; no sign colouring -->
           <tr class="total-row"><th>Total</th>
             {% for p in game.players %}
               {% set s = game.scores.get(p,0) %}
@@ -281,7 +229,6 @@
           </tr>
         </thead>
         <tbody>
-          <!-- Base playoff totals neutral -->
           <tr class="total-row"><th>Total</th>
             {% for _ in game.playoff_group %}
               {% set s = game.playoff_base_score %}
@@ -312,7 +259,6 @@
           <img src="{{ url_for('static', filename='images/finalstanding1.png') }}" alt="Final Standings" class="final-standings-img">
         </div>
 
-        <!-- NOTE: 'final' class -->
         <table class="scoreboard final" id="scoreboard">
           <thead>
             <tr><th>&nbsp;</th>
@@ -329,7 +275,6 @@
             </tr>
           </thead>
           <tbody>
-            <!-- Final totals neutral -->
             <tr class="total-row"><th>Final</th>
               {% for st in game.final_standings %}
                 {% set s = st.score %}
@@ -337,7 +282,6 @@
               {% endfor %}
             </tr>
 
-            <!-- TB rows neutral (no sign colouring) -->
             {% for i in range(game.max_playoff_rounds, 0, -1) %}
               <tr><th>TB {{ "%02d"|format(i) }}</th>
                 {% for st in game.final_standings %}
@@ -352,7 +296,8 @@
               </tr>
             {% endfor %}
 
-            {% for i in range(19, -1, -1) %}
+            {% set rp = game.rounds_played or 0 %}
+            {% for i in range(rp - 1, -1, -1) %}
               <tr><th>{{ "%02d"|format(i + 1) }}</th>
                 {% for st in game.final_standings %}
                   {% set v = game.round_history[i].get(st.name) %}
@@ -383,6 +328,7 @@
 
   {% if game.phase in ['playing','playoff'] %}
   <div class="controls">
+    <!-- Score buttons -->
     <div class="button-grid">
       <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
       <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
@@ -391,24 +337,31 @@
       <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
       <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
     </div>
-    <div class="utility-grid">
+
+    <!-- Utility buttons: Undo | End Game | Restart -->
+    <div class="utility-grid playing">
       <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
-      <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Are you sure you want to restart the game?');">
+
+      <button type="button" class="end-btn" onclick="toggleEnd()">
+        End Game
+      </button>
+
+      <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Start a new game?');">
         <button type="submit" class="restart-btn">Restart Game</button>
       </form>
     </div>
   </div>
   {% elif game.phase == 'final_ranking' %}
   <div class="controls">
-  <div class="button-grid single">
-    <a href="{{ url_for('stats') }}">
-      <button type="button" class="export-btn">View Stats</button>
-    </a>
-    <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Start a new game?');">
-      <button type="submit" class="restart-btn">Start New Game</button>
-    </form>
+    <div class="button-grid single">
+      <a href="{{ url_for('stats') }}">
+        <button type="button" class="export-btn">View Stats</button>
+      </a>
+      <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Start a new game?');">
+        <button type="submit" class="restart-btn">Start New Game</button>
+      </form>
+    </div>
   </div>
-</div>
   {% endif %}
 
   {% if game.phase == 'setup' and game.recent_names %}
@@ -441,6 +394,9 @@
   <script>
     function qs(s){return document.querySelector(s);}
 
+    // Track current end state for confirm prompts
+    let END_ACTIVE = {{ 'true' if game.end_after_round else 'false' }};
+
     async function sendScore(val){
       var res = await fetch('{{ url_for("api_score") }}', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -455,26 +411,41 @@
       var data = await res.json(); if(!data.ok) return;
       renderGame(data.game);
     }
+    async function toggleEnd(){
+      // Confirm based on current state
+      if (!END_ACTIVE) {
+        const ok = confirm('End Game: The game will end after ALL players finish THIS round. Continue?');
+        if (!ok) return;
+      } else {
+        const ok = confirm('Cancel End Game: The game will continue normally after this round. Continue?');
+        if (!ok) return;
+      }
+      var res = await fetch('{{ url_for("api_end_after_round") }}',{method:'POST'});
+      var data = await res.json(); if(!data.ok) return;
+      renderGame(data.game);
+    }
+
     function renderGame(g){
       if(g.phase==='playing'){ renderPlaying(g); var u=qs('#undoBtn'); if(u) u.removeAttribute('disabled'); }
       else if(g.phase==='playoff'){ renderPlayoff(g); var u2=qs('#undoBtn'); if(u2) u2.setAttribute('disabled','disabled'); }
+      END_ACTIVE = !!g.end_after_round; // keep in sync
     }
 
     function sign(v){ return v>0?'+':''; }
 
     function renderPlaying(g){
+      var banner = g.end_after_round ? '<div class="end-banner">Game will end after this round. Finish all players this round to finalize and run tie-breakers.</div>' : '';
       qs('#info-bar').innerHTML =
         '<div class="round-count">'+
            '<span class="round-label">ROUND</span>'+
            '<span class="round-number">'+String(g.current_round).padStart(2,'0')+'</span>'+
            '<span class="round-total">/ 20</span>'+
          '</div>'+
-         '<div class="turn-info">'+g.players[g.current_player_index]+"'s Turn</div>";
+         '<div class="turn-info">'+g.players[g.current_player_index]+"'s Turn</div>"+banner;
 
       var headers = g.players.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
       var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
-      // Totals row neutral
       var totals = g.players.map(function(p){
         var s = g.scores[p] || 0;
         return '<td>'+sign(s)+s+'</td>';
@@ -529,7 +500,6 @@
       var headers = g.playoff_group.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
       var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
-      // Base playoff totals neutral
       var totals = g.playoff_group.map(function(){ var s = g.playoff_base_score || 0; return '<td>'+sign(s)+s+'</td>'; }).join('');
 
       var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
@@ -549,7 +519,7 @@
       qs('#scoreboard').innerHTML = thead+tbody;
     }
 
-    var LABELS = { "-3":"Triple Birdie","-2":"Double Birdie","-1":"Birdie","0":"Par","1":"Bogey","2":"Double Bogey" };
+    var LABELS = { "-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double Bogey" };
     function hit(val, el){ showBubbleFor(val, el); sendScore(val); }
     function showBubbleFor(val, el){
       var key = String(val), label = (typeof LABELS[key] !== 'undefined') ? LABELS[key] : key;

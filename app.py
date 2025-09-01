@@ -31,7 +31,7 @@ def _fresh_state() -> dict:
     return {
         'players': [],
         'scores': {},                    # base totals only
-        'round_history': [],             # 20 dicts: round -> {player: delta}
+        'round_history': [],             # list of dicts: round -> {player: delta}
         'current_round': 1,
         'current_player_index': 0,
         'phase': 'setup',
@@ -54,6 +54,12 @@ def _fresh_state() -> dict:
 
         # Per-browser convenience
         'recent_names': [],
+
+        # End game toggle
+        'end_after_round': False,
+
+        # How many rounds actually had any scores (for early end)
+        'rounds_played': 0,
     }
 
 def _get_state() -> dict:
@@ -80,6 +86,10 @@ def _final_order_players(gs: dict) -> list[str]:
         return (base, *tb_seq)
     return sorted(gs['players'], key=key)
 
+def _compute_rounds_played(gs: dict) -> int:
+    """Count non-empty rounds (any player recorded a value)."""
+    return sum(1 for r in gs.get('round_history', []) if r)  # empty dicts are falsy
+
 def _serialize_game(gs: dict) -> dict:
     return {
         'players': list(gs['players']),
@@ -98,6 +108,8 @@ def _serialize_game(gs: dict) -> dict:
         'all_playoff_history': dict(gs['all_playoff_history']),
         'max_playoff_rounds': gs['max_playoff_rounds'],
         'recent_names': list(gs.get('recent_names', [])),
+        'end_after_round': bool(gs.get('end_after_round', False)),
+        'rounds_played': int(gs.get('rounds_played', 0)),
     }
 
 def _merge_recent(existing: list[str], new_names: list[str], cap: int = 24) -> list[str]:
@@ -119,6 +131,7 @@ def index():
     gs = _get_state()
 
     if gs['phase'] == 'final_ranking' and not gs['final_standings']:
+        gs['rounds_played'] = _compute_rounds_played(gs)  # ensure up to date
         ordered = _final_order_players(gs)
         standings = []
         last_key = None
@@ -153,7 +166,6 @@ def start_game():
         flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "error")
         return redirect(url_for('index'))
 
-    # Update recent (persist through reset)
     updated_recent = _merge_recent(gs.get('recent_names', []), players, cap=24)
 
     _reset_state()
@@ -202,6 +214,14 @@ def api_undo():
     gs = _get_state()
     _apply_undo(gs)
     return jsonify({'ok': True, 'game': _serialize_game(gs)})
+
+# Toggle end-after-round
+@app.post('/api/end')
+def api_end_after_round():
+    gs = _get_state()
+    if gs['phase'] == 'playing':
+        gs['end_after_round'] = not bool(gs.get('end_after_round', False))
+    return jsonify({'ok': True, 'game': _serialize_game(gs)})
 # ----------------------------------------------------
 
 # ---------------- Helpers ----------------
@@ -212,11 +232,22 @@ def _apply_score(gs: dict, score_change: int):
         gs['round_history'][gs['current_round'] - 1][player] = score_change
         gs['undo_history'].append({'player_index': gs['current_player_index'], 'score_change': score_change})
 
+        # Is this the last player for this round?
+        last_index = len(gs['players']) - 1
+        was_last_in_round = (gs['current_player_index'] == last_index)
+
+        if was_last_in_round and gs.get('end_after_round'):
+            # End immediately after finishing this round
+            initiate_playoffs(gs)
+            return
+
+        # Otherwise continue normal progression
         gs['current_player_index'] += 1
         if gs['current_player_index'] >= len(gs['players']):
             gs['current_player_index'] = 0
             gs['current_round'] += 1
 
+        # Normal auto-end at 20 rounds
         if gs['current_round'] > 20:
             initiate_playoffs(gs)
 
@@ -246,6 +277,9 @@ def _apply_undo(gs: dict):
     gs['round_history'][gs['current_round'] - 1].pop(player_to_undo, None)
 
 def initiate_playoffs(gs: dict):
+    # Clear the flag once the game actually ends
+    gs['end_after_round'] = False
+
     scores_to_players = defaultdict(list)
     for p, s in gs['scores'].items():
         scores_to_players[int(s)].append(p)
@@ -270,6 +304,7 @@ def start_next_playoff(gs: dict):
         gs['playoff_history'] = []
     else:
         gs['phase'] = 'final_ranking'
+        gs['rounds_played'] = _compute_rounds_played(gs)  # only show rounds actually played
         ordered = _final_order_players(gs)
         gs['winner'] = ordered[0] if ordered else None
 
@@ -319,6 +354,7 @@ def _ensure_final(gs: dict):
         return
     if gs['final_standings']:
         return
+    gs['rounds_played'] = _compute_rounds_played(gs)
     ordered = _final_order_players(gs)
     standings = []
     last_key = None
@@ -336,10 +372,7 @@ def _ensure_final(gs: dict):
 
 def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     """
-    Final standings PNG:
-    - Running total text: BLACK on F9DFBC cell background.
-    - Delta: bottom-right quarter-circle wedge (red for +, green for -, black for 0).
-    - No cell colour-coding by sign (only the wedge conveys sign).
+    Final standings PNG showing only the rounds actually played.
     """
     from PIL import Image, ImageDraw, ImageFont
 
@@ -360,7 +393,9 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
 
     cols = max(1, len(gs['final_standings'])) + 1  # +1 label col
     tb_rows = int(gs.get('max_playoff_rounds', 0))
-    row_count = 2 + 1 + tb_rows + 20  # headers(2) + final(1) + TB + 20 rounds
+    rounds_played = int(gs.get('rounds_played', 0)) or _compute_rounds_played(gs)
+
+    row_count = 2 + 1 + tb_rows + rounds_played  # headers(2) + final(1) + TB + played rounds
 
     inner_w = max(200, width - 2 * PADDING)
     inner_h = max(200, height - 2 * PADDING)
@@ -395,7 +430,7 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     players = [st['name'] for st in gs['final_standings']]
     running_totals = {p: [] for p in players}
     totals_so_far = {p: 0 for p in players}
-    for r in range(20):
+    for r in range(rounds_played):
         for p in players:
             v = int(gs['round_history'][r].get(p, 0))
             totals_so_far[p] += v
@@ -441,7 +476,6 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
     y += cell_h
 
     # Tie-breakers (neutral cells)
-    tb_rows = int(gs.get('max_playoff_rounds', 0))
     for i in range(tb_rows, 0, -1):
         x = PADDING
         for _ in range(cols):
@@ -462,9 +496,8 @@ def render_final_png(gs: dict, width: int, height: int) -> BytesIO:
             x += cell_w
         y += cell_h
 
-    # Base rounds: 20..1
-    ACCENT_BG = (249, 223, 188) # #F9DFBC
-    for r_idx in range(19, -1, -1):
+    # Base rounds: only those played
+    for r_idx in range(rounds_played - 1, -1, -1):
         x = PADDING
         for _ in range(cols):
             rect(x, y, cell_w, cell_h)
@@ -523,7 +556,7 @@ def stats():
     round_history = gs['round_history']
     players = gs['players']
 
-    # Per-player aggregates (existing)
+    # Per-player aggregates
     stats_data = {}
     for p in players:
         streak = {'birdie': 0, 'bogey': 0, 'best_birdie': 0, 'best_bogey': 0}
@@ -543,7 +576,6 @@ def stats():
                     streak['birdie'] = 0
                 streak['best_birdie'] = max(streak['best_birdie'], streak['birdie'])
                 streak['best_bogey'] = max(streak['best_bogey'], streak['bogey'])
-
         total = sum(scores)
         rounds = len(scores)
         avg = total / rounds if rounds else 0
@@ -553,62 +585,109 @@ def stats():
             'bogey_streak': streak['best_bogey']
         }
 
-    # Existing summary stats
-    best_birdie = max(stats_data.items(), key=lambda x: x[1]['birdie_streak'])
-    best_bogey  = max(stats_data.items(), key=lambda x: x[1]['bogey_streak'])
-    best_avg    = min(stats_data.items(), key=lambda x: x[1]['average'])  # lower is better
-    worst_avg   = max(stats_data.items(), key=lambda x: x[1]['average'])  # higher is worse
+    best_birdie = max(stats_data.items(), key=lambda x: x[1]['birdie_streak']) if stats_data else ("—", {'birdie_streak': 0})
+    best_bogey  = max(stats_data.items(), key=lambda x: x[1]['bogey_streak'])  if stats_data else ("—", {'bogey_streak': 0})
+    best_avg    = min(stats_data.items(), key=lambda x: x[1]['average'])       if stats_data else ("—", {'average': 0})
+    worst_avg   = max(stats_data.items(), key=lambda x: x[1]['average'])       if stats_data else ("—", {'average': 0})
 
-    # NEW: Best Single Round (lowest delta in any round)
+    # Best Single Round
     best_round = None
     for i, round_data in enumerate(round_history):
         for player, val in round_data.items():
             if best_round is None or val < best_round['score']:
                 best_round = {'round': i + 1, 'player': player, 'score': val}
 
-    # NEW: Most Birdies / Bogeys (counts across all rounds)
+    # Most Birdies / Bogeys
     birdie_counts = {p: sum(1 for r in round_history if r.get(p, 0) < 0) for p in players}
     bogey_counts  = {p: sum(1 for r in round_history if r.get(p, 0) > 0) for p in players}
-    most_birdies  = max(birdie_counts.items(), key=lambda x: x[1])
-    most_bogeys   = max(bogey_counts.items(),  key=lambda x: x[1])
+    most_birdies  = max(birdie_counts.items(), key=lambda x: x[1]) if birdie_counts else ("—", 0)
+    most_bogeys   = max(bogey_counts.items(),  key=lambda x: x[1]) if bogey_counts else ("—", 0)
 
-    # NEW: Most Consistent Player (lowest stdev); tie-break by better average (more negative is better)
-    consistent_candidates = []
+    # Most Consistent Player (population stdev; tie-breaks: better avg, more rounds, smaller swing, name)
+    consistency_pool = []
     for p in players:
         scores = [r.get(p) for r in round_history if p in r]
-        if len(scores) >= 2:
-            sd = statistics.stdev(scores)
-            avg = sum(scores) / len(scores)  # golf: lower (more negative) is better
-            consistent_candidates.append((p, sd, avg))
+        if len(scores) >= 6:
+            sd = statistics.pstdev(scores)
+            avg = sum(scores) / len(scores)
+            swing = (max(scores) - min(scores)) if scores else 0
+            consistency_pool.append((p, sd, avg, len(scores), swing))
 
-    most_consistent_name = None
-    most_consistent_stdev = None
-    most_consistent_avg = None
-    if consistent_candidates:
-        consistent_candidates.sort(key=lambda t: (t[1], t[2]))  # sort by stdev, then avg
-        most_consistent_name, most_consistent_stdev, most_consistent_avg = consistent_candidates[0]
+    (most_consistent_name,
+     most_consistent_stdev,
+     most_consistent_avg,
+     most_consistent_rounds,
+     most_consistent_swing) = (None, None, None, None, None)
 
-# Comeback Player (strokes saved): first half total - second half total
-candidates = []
-for p in players:
-    first_half  = [r.get(p, 0) for r in round_history[:10] if p in r]
-    second_half = [r.get(p, 0) for r in round_history[10:] if p in r]
-    if first_half and second_half:
-        first_total = sum(first_half)
-        second_total = sum(second_half)
-        strokes_saved = first_total - second_total  # positive = improved (golf)
-        # keep second_total for tie-break (more negative is better)
-        candidates.append((p, strokes_saved, second_total))
+    if consistency_pool:
+        consistency_pool.sort(key=lambda t: (t[1], t[2], -t[3], t[4], t[0].lower()))
+        (most_consistent_name,
+         most_consistent_stdev,
+         most_consistent_avg,
+         most_consistent_rounds,
+         most_consistent_swing) = consistency_pool[0]
 
-if candidates:
-    # Max by strokes_saved; tie-break by smaller (more negative) second_total
-    candidates.sort(key=lambda t: (t[1], -t[2]))
-    winner_name, winner_saved, _ = candidates[0]
-    comeback_player = (winner_name, winner_saved)
-else:
-    comeback_player = ("—", 0)
+    # Comeback Player (worst -> best cumulative swing)
+    comebacks = []
+    for p in players:
+        cum = []
+        total = 0
+        for r in round_history:
+            total += r.get(p, 0)
+            cum.append(total)
+        if not cum:
+            continue
+        prev_worst = cum[0]
+        prev_worst_idx = 0
+        best_improve = 0
+        best_from_val = prev_worst
+        best_from_idx = 0
+        best_to_val = cum[0]
+        best_to_idx = 0
+        for i in range(1, len(cum)):
+            v = cum[i]
+            improvement = prev_worst - v  # positive improvement = moved more negative (better in golf)
+            if (improvement > best_improve or
+                (improvement == best_improve and (v < best_to_val or (v == best_to_val and i < best_to_idx)))):
+                best_improve = improvement
+                best_from_val = prev_worst
+                best_from_idx = prev_worst_idx
+                best_to_val = v
+                best_to_idx = i
+            if v > prev_worst:
+                prev_worst = v
+                prev_worst_idx = i
+        if best_improve > 0:
+            comebacks.append({
+                'player': p,
+                'improvement': int(best_improve),
+                'from_score': int(best_from_val),
+                'from_round': best_from_idx + 1,
+                'to_score': int(best_to_val),
+                'to_round': best_to_idx + 1,
+            })
+    if comebacks:
+        comebacks.sort(key=lambda x: (-x['improvement'], x['to_score'], x['to_round'], x['player'].lower()))
+        comeback_player = comebacks[0]
+    else:
+        comeback_player = None
 
-
+    return render_template(
+        'stats.html',
+        best_birdie=best_birdie,
+        best_bogey=best_bogey,
+        best_avg=best_avg,
+        worst_avg=worst_avg,
+        best_round=best_round,
+        most_birdies=most_birdies,
+        most_bogeys=most_bogeys,
+        most_consistent_name=most_consistent_name,
+        most_consistent_stdev=most_consistent_stdev,
+        most_consistent_avg=most_consistent_avg,
+        most_consistent_rounds=most_consistent_rounds,
+        most_consistent_swing=most_consistent_swing,
+        comeback_player=comeback_player
+    )
 
 @app.get('/export.png')
 def export_png():

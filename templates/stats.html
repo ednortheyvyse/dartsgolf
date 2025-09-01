@@ -205,21 +205,26 @@
           <span class="stat-player">{{ most_consistent_name }}</span>
           {{ "%.2f"|format(most_consistent_stdev) }}
           <span style="font-size:.9em; opacity:.85;">stdev</span>
-          <span style="font-size:.9em; opacity:.85;">(avg {{ "%+.2f"|format(most_consistent_avg) }})</span>
+          <span style="font-size:.9em; opacity:.85;">(avg {{ "%+.2f"|format(most_consistent_avg) }}, {{ most_consistent_rounds }} rds, swing {{ most_consistent_swing }})</span>
         {% else %}
           N/A
         {% endif %}
       </div>
-      <small>Lowest round-to-round variation (standard deviation). Ties favor better average score (more under par).</small>
+      <small>Lowest round-to-round variation (population standard deviation). Ties favor better average (more negative), then more rounds, then smaller worst-to-best swing.</small>
     </div>
 
     <div class="stat-block">
       <div class="stat-title">📊 Comeback Player</div>
       <div class="stat-value">
-        <span class="stat-player">{{ comeback_player[0] }}</span>
-        {% if comeback_player[1] > 0 %}+{% endif %}{{ comeback_player[1] }}
+        {% if comeback_player %}
+          <span class="stat-player">{{ comeback_player.player }}</span>
+          +{{ comeback_player.improvement }}
+          <span style="font-size:.9em; opacity:.85;">(from {{ "%+d"|format(comeback_player.from_score) }} on R{{ comeback_player.from_round }} to {{ "%+d"|format(comeback_player.to_score) }} on R{{ comeback_player.to_round }})</span>
+        {% else %}
+          —
+        {% endif %}
       </div>
-      <small>Biggest improvement between first and second half.</small>
+      <small>Biggest improvement from worst cumulative point to a later better cumulative score (golf scoring: more negative is better).</small>
     </div>
   </div>
 
