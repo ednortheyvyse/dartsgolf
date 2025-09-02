@@ -30,14 +30,15 @@ def _fresh_state() -> dict:
         'winner': None,
         'undo_history': [],
         'pending_playoffs': [],
-        'playoff_group': [],
+        'playoff_group': [],            # CURRENT active tie subgroup playing a TB round
+        'playoff_pool': [],             # All unresolved players for current base-score tie
         'playoff_round': 1,
         'playoff_round_scores': {},
-        'playoff_history': [],
+        'playoff_history': [],          # list[ dict[player]->tb_score ] for this tie only
         'playoff_base_score': 0,
         'final_standings': [],
         'final_playoff_scores': {},
-        'all_playoff_history': {},
+        'all_playoff_history': {},      # player -> list of ALL TB results across ties (in order)
         'max_playoff_rounds': 0,
         'recent_names': [],
         'end_after_round': False,
@@ -61,6 +62,7 @@ def _reset_state():
     _games[sid] = _fresh_state()
 
 def _final_order_players(gs: dict) -> list[str]:
+    # Lower base score is better; for ties, compare the sequence of tie-breaker results lexicographically (lower is better).
     def key(player: str):
         base = int(gs['scores'].get(player, 0))
         tb_seq = gs['all_playoff_history'].get(player, [])
@@ -199,6 +201,7 @@ def _apply_score(gs: dict, score_change: int):
             initiate_playoffs(gs)
 
     elif gs['phase'] == 'playoff':
+        # In playoff mode, current_player_index iterates over the ACTIVE tie subgroup only
         player = gs['playoff_group'][gs['current_player_index']]
         gs['playoff_round_scores'][player] = score_change
         gs['current_player_index'] += 1
@@ -206,6 +209,7 @@ def _apply_score(gs: dict, score_change: int):
             resolve_playoff_round(gs)
 
 def _apply_undo(gs: dict):
+    # Undo applies only during main play (not in playoff phase)
     if gs['phase'] != 'playing' or not gs['undo_history']:
         return
 
@@ -223,6 +227,7 @@ def _apply_undo(gs: dict):
 def initiate_playoffs(gs: dict):
     gs['end_after_round'] = False
 
+    # Group players by base total score; only ties (len > 1) need playoffs
     scores_to_players = defaultdict(list)
     for p, s in gs['scores'].items():
         scores_to_players[int(s)].append(p)
@@ -232,101 +237,162 @@ def initiate_playoffs(gs: dict):
         if len(players) > 1:
             gs['pending_playoffs'].append({'score': base_score, 'players': players})
 
-    gs['pending_playoffs'].sort(key=lambda p: p['score'])
+    # Resolve from worst totals to best totals (higher total is worse)
+    gs['pending_playoffs'].sort(key=lambda p: p['score'], reverse=True)
     start_next_playoff(gs)
 
 def start_next_playoff(gs: dict):
     if gs['pending_playoffs']:
         nxt = gs['pending_playoffs'].pop(0)
         gs['phase'] = 'playoff'
-        gs['playoff_group'] = nxt['players']
+        # Active tie pool = everyone tied at this base score. The active subgroup = everyone initially.
+        gs['playoff_pool'] = list(nxt['players'])
+        gs['playoff_group'] = list(nxt['players'])
         gs['playoff_base_score'] = nxt['score']
         gs['current_player_index'] = 0
         gs['playoff_round'] = 1
         gs['playoff_round_scores'] = {}
         gs['playoff_history'] = []
     else:
+        # No more ties to resolve; produce final ranking
         gs['phase'] = 'final_ranking'
         gs['rounds_played'] = _compute_rounds_played(gs)
         ordered = _final_order_players(gs)
         gs['winner'] = ordered[0] if ordered else None
 
+def _tb_sequence_for_player_in_current_tie(gs: dict, player: str) -> list[int]:
+    """
+    For the CURRENT tie only (gs['playoff_history']), return the list of TB scores
+    that 'player' has recorded so far in this tie.
+    """
+    seq: list[int] = []
+    for rnd in gs['playoff_history']:
+        if player in rnd:
+            seq.append(int(rnd[player]))
+    return seq
+
+def _finalize_player_from_current_tie(gs: dict, player: str):
+    """
+    Mark 'player' as resolved in the current tie. Store their last TB score
+    (if any) for convenience (display not required).
+    """
+    seq = _tb_sequence_for_player_in_current_tie(gs, player)
+    if seq:
+        gs['final_playoff_scores'][player] = seq[-1]
+    else:
+        gs['final_playoff_scores'][player] = 0  # never needed, but keep consistent
+    if player in gs['playoff_pool']:
+        gs['playoff_pool'].remove(player)
+
 def resolve_playoff_round(gs: dict):
+    """
+    Resolve one TB round for the ACTIVE subgroup (gs['playoff_group']).
+    - Append scores to history and all_playoff_history.
+    - Compute worst-first elimination:
+        * If a unique worst sequence exists among the unresolved pool, finalize it (possibly multiple times in one pass).
+        * If the worst is tied, set playoff_group to only those tied-at-worst players for the next round.
+        * Continue until the entire tie is resolved, then move to the next pending tie or final ranking.
+    """
     scores = gs['playoff_round_scores']
+    # Record this round into the tie's history
     gs['playoff_history'].append(scores.copy())
+
+    # Append to global per-player TB history (used for final ordering & display)
     for p, tb in scores.items():
-        gs['all_playoff_history'].setdefault(p, []).append(tb)
+        gs['all_playoff_history'].setdefault(p, []).append(int(tb))
 
-    # If any tie remains (duplicate TB values), continue another TB round
-    if len(set(scores.values())) < len(scores):
-        gs['playoff_round'] += 1
-        gs['current_player_index'] = 0
-        gs['playoff_round_scores'] = {}
-        return
+    # Reset per-round collectors for the next step
+    gs['playoff_round_scores'] = {}
+    gs['current_player_index'] = 0
 
-    for p, tb in scores.items():
-        gs['final_playoff_scores'][p] = tb
+    # Helper to compute worst-at-this-point among the unresolved pool using lexicographic compare of TB sequences
+    def worst_subgroup_in_pool() -> list[str]:
+        pool = list(gs['playoff_pool'])
+        if not pool:
+            return []
 
-    start_next_playoff(gs)
+        # Build sequences for current tie
+        seqs = {p: tuple(_tb_sequence_for_player_in_current_tie(gs, p)) for p in pool}
+        # Worst means lexicographically largest (because higher numbers are worse)
+        worst_seq = max(seqs.values()) if seqs else tuple()
+        worst_players = [p for p, s in seqs.items() if s == worst_seq]
+        return worst_players
 
-# -----------------------------
-# Stats helpers and /stats page
-# -----------------------------
+    # After adding this round, try to resolve as much as possible without forcing new throws
+    while True:
+        worst_players = worst_subgroup_in_pool()
 
-def _extract_per_player_sequences(gs: dict) -> dict[str, list[int]]:
-    """Return per-player list of per-round scores for rounds actually played."""
-    rp = _compute_rounds_played(gs)
-    rh = gs.get('round_history', [])[:rp]
-    per: dict[str, list[int]] = {}
-    for p in gs.get('players', []):
-        per[p] = [ (rh[i].get(p, 0) if i < len(rh) else 0) for i in range(rp) ]
-    return per
+        if not worst_players:
+            # All resolved for this tie
+            start_next_playoff(gs)
+            return
 
-def _longest_streak(seq: list[int], predicate) -> int:
-    best = cur = 0
-    for v in seq:
-        if predicate(v):
-            cur += 1
-            if cur > best:
-                best = cur
+        if len(worst_players) == 1:
+            # Unique worst: finalize immediately and loop again (maybe multiple eliminations per round)
+            loser = worst_players[0]
+            _finalize_player_from_current_tie(gs, loser)
+            # If we just finalized the last remaining, finish this tie
+            if not gs['playoff_pool']:
+                start_next_playoff(gs)
+                return
+            # Continue loop to see if the next worst is also unique (no extra throws needed)
+            continue
         else:
-            cur = 0
-    return best
-
-def _best_comebacks_by_player(per: dict[str, list[int]]):
-    """
-    For each player, compute their single biggest improvement (strokes saved)
-    between any two rounds i<j (seq[i] - seq[j], positive only).
-    Returns dict[player] -> detail dict.
-    """
-    out = {}
-    for p, seq in per.items():
-        n = len(seq)
-        best = None
-        for i in range(n - 1):
-            for j in range(i + 1, n):
-                improvement = seq[i] - seq[j]
-                if improvement > 0:
-                    cand = {
-                        'player': p,
-                        'improvement': improvement,
-                        'from_score': seq[i],
-                        'to_score': seq[j],
-                        'from_round': i + 1,
-                        'to_round': j + 1,
-                    }
-                    if (best is None) or (cand['improvement'] > best['improvement']):
-                        best = cand
-        if best:
-            out[p] = best
-    return out
+            # There is a tie for worst among some players; only they continue to the next TB round
+            gs['playoff_group'] = worst_players
+            gs['playoff_round'] += 1
+            # Next client interactions will collect just these players' scores
+            return
 
 @app.route('/stats')
 def stats():
     gs = _get_state()
+
+    # Build per-player sequence of per-round scores (main game, not TBs)
+    def _extract_per_player_sequences(gs: dict) -> dict[str, list[int]]:
+        rp = _compute_rounds_played(gs)
+        rh = gs.get('round_history', [])[:rp]
+        per: dict[str, list[int]] = {}
+        for p in gs.get('players', []):
+            per[p] = [ (rh[i].get(p, 0) if i < len(rh) else 0) for i in range(rp) ]
+        return per
+
+    def _longest_streak(seq: list[int], predicate) -> int:
+        best = cur = 0
+        for v in seq:
+            if predicate(v):
+                cur += 1
+                if cur > best:
+                    best = cur
+            else:
+                cur = 0
+        return best
+
+    def _best_comebacks_by_player(per: dict[str, list[int]]):
+        out = {}
+        for p, seq in per.items():
+            n = len(seq)
+            best = None
+            for i in range(n - 1):
+                for j in range(i + 1, n):
+                    improvement = seq[i] - seq[j]  # positive if j is lower/better than i
+                    if improvement > 0:
+                        cand = {
+                            'player': p,
+                            'improvement': improvement,
+                            'from_score': seq[i],
+                            'to_score': seq[j],
+                            'from_round': i + 1,
+                            'to_round': j + 1,
+                        }
+                        if (best is None) or (cand['improvement'] > best['improvement']):
+                            best = cand
+            if best:
+                out[p] = best
+        return out
+
     per = _extract_per_player_sequences(gs)
 
-    # Accumulators
     birdie_streaks = {}
     bogey_streaks = {}
     birdie_counts = {}
@@ -346,10 +412,8 @@ def stats():
             avgs[p] = 0.0
             rounds_counts[p] = 0
 
-    # Only rank players who have at least one scored round
     players_with_data = [p for p in gs.get('players', []) if rounds_counts.get(p, 0) > 0]
 
-    # Rankings
     birdie_streak_order = sorted(
         players_with_data,
         key=lambda p: (-birdie_streaks[p], -birdie_counts[p], avgs[p])
@@ -392,7 +456,6 @@ def stats():
         for p in most_bogeys_order
     ]
 
-    # Comeback ranking (biggest stroke savings)
     best_comebacks = _best_comebacks_by_player(per)
     comeback_ranking = sorted(best_comebacks.values(), key=lambda d: d['improvement'], reverse=True)
 
