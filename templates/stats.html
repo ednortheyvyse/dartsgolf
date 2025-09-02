@@ -148,92 +148,122 @@
   <div class="container">
     <h1>Game Stats</h1>
 
-    <!-- Original stats with descriptions -->
+    <!-- Birdie streak rankings -->
     <div class="stat-block">
-      <div class="stat-title">⛳ Best Birdie Streak</div>
-      <div class="stat-value"><span class="stat-player">{{ best_birdie[0] }}</span>{{ best_birdie[1]['birdie_streak'] }}</div>
-      <small>Longest consecutive rounds scoring under par.</small>
+      <div class="stat-title">⛳ Birdie Streaks — Longest → Shortest</div>
+      {% if birdie_streak_ranking %}
+        <ol>
+          {% for row in birdie_streak_ranking %}
+            <li>
+              <span class="stat-player">{{ row.name }}</span>
+              {{ row.streak }}
+            </li>
+          {% endfor %}
+        </ol>
+        <small>Ties broken by total birdies, then better average.</small>
+      {% else %}
+        <div class="stat-value">—</div>
+        <small>No completed rounds yet.</small>
+      {% endif %}
     </div>
 
+    <!-- Bogey streak rankings -->
     <div class="stat-block">
-      <div class="stat-title">🔥 Best Bogey Streak</div>
-      <div class="stat-value"><span class="stat-player">{{ best_bogey[0] }}</span>{{ best_bogey[1]['bogey_streak'] }}</div>
-      <small>Longest consecutive rounds scoring over par.</small>
+      <div class="stat-title">🔥 Bogey Streaks — Longest → Shortest</div>
+      {% if bogey_streak_ranking %}
+        <ol>
+          {% for row in bogey_streak_ranking %}
+            <li>
+              <span class="stat-player">{{ row.name }}</span>
+              {{ row.streak }}
+            </li>
+          {% endfor %}
+        </ol>
+        <small>Ties broken by total bogeys, then worse average.</small>
+      {% else %}
+        <div class="stat-value">—</div>
+        <small>No completed rounds yet.</small>
+      {% endif %}
     </div>
 
+    <!-- Average score rankings -->
     <div class="stat-block">
-      <div class="stat-title">📈 Best Average Score</div>
-      <div class="stat-value"><span class="stat-player">{{ best_avg[0] }}</span>{{ "%.2f"|format(best_avg[1]['average']) }}</div>
-      <small>Lowest average score across all rounds.</small>
+      <div class="stat-title">📊 Average Scores — Lowest → Highest</div>
+      {% if average_ranking %}
+        <ol>
+          {% for row in average_ranking %}
+            <li>
+              <span class="stat-player">{{ row.name }}</span>
+              {{ "%+.2f"|format(row.average) }}
+              <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <div class="stat-value">—</div>
+        <small>No completed rounds yet.</small>
+      {% endif %}
     </div>
 
+    <!-- Most birdies rankings -->
     <div class="stat-block">
-      <div class="stat-title">📉 Worst Average Score</div>
-      <div class="stat-value"><span class="stat-player">{{ worst_avg[0] }}</span>{{ "%.2f"|format(worst_avg[1]['average']) }}</div>
-      <small>Highest average score across all rounds.</small>
+      <div class="stat-title">🕊️ Total Birdies — Most → Least</div>
+      {% if most_birdies_ranking %}
+        <ol>
+          {% for row in most_birdies_ranking %}
+            <li>
+              <span class="stat-player">{{ row.name }}</span>
+              {{ row.count }}
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <div class="stat-value">—</div>
+        <small>No completed rounds yet.</small>
+      {% endif %}
     </div>
 
-    <!-- New blocks -->
+    <!-- Most bogeys rankings -->
     <div class="stat-block">
-      <div class="stat-title">🏅 Best Single Round</div>
-      <div class="stat-value">
-        {% if best_round %}
-          <span class="stat-player">{{ best_round.player }}</span>Round {{ best_round.round }} ({{ best_round.score }})
-        {% else %}
-          —
-        {% endif %}
-      </div>
-      <small>Lowest individual round score in the game.</small>
+      <div class="stat-title">😬 Total Bogeys — Most → Least</div>
+      {% if most_bogeys_ranking %}
+        <ol>
+          {% for row in most_bogeys_ranking %}
+            <li>
+              <span class="stat-player">{{ row.name }}</span>
+              {{ row.count }}
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <div class="stat-value">—</div>
+        <small>No completed rounds yet.</small>
+      {% endif %}
     </div>
 
+    <!-- Comeback rankings -->
     <div class="stat-block">
-      <div class="stat-title">🕊️ Most Birdies</div>
-      <div class="stat-value"><span class="stat-player">{{ most_birdies[0] }}</span>{{ most_birdies[1] }}</div>
-      <small>Most rounds finished under par.</small>
+      <div class="stat-title">↩️ Biggest Comebacks — Strokes Saved</div>
+      {% if comeback_ranking %}
+        <ol>
+          {% for cb in comeback_ranking %}
+            <li>
+              <span class="stat-player">{{ cb.player }}</span>
+              {{ cb.improvement }} saved
+              <small style="display:block; margin-left:6px;">
+                from {{ "%+d"|format(cb.from_score) }} on Round {{ cb.from_round }}
+                to {{ "%+d"|format(cb.to_score) }} on Round {{ cb.to_round }}
+              </small>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <div class="stat-value">—</div>
+        <small>No positive improvements detected.</small>
+      {% endif %}
     </div>
 
-    <div class="stat-block">
-      <div class="stat-title">😬 Most Bogeys</div>
-      <div class="stat-value"><span class="stat-player">{{ most_bogeys[0] }}</span>{{ most_bogeys[1] }}</div>
-      <small>Most rounds finished over par.</small>
-    </div>
-
-    <div class="stat-block">
-  <div class="stat-title">🎯 Most Consistent Player</div>
-  <div class="stat-value">
-    {% if most_consistent_name %}
-      <span class="stat-player">{{ most_consistent_name }}</span>
-      {{ "%.2f"|format(most_consistent_stdev) }} stdev
-      <span style="font-size:.9em; opacity:.85;">over {{ most_consistent_rounds }} rounds</span>
-      <span style="font-size:.9em; opacity:.85;">(avg {{ "%+.2f"|format(most_consistent_avg) }}, swing {{ most_consistent_swing>=0 and '+' or '' }}{{ most_consistent_swing }})</span>
-    {% else %}
-      N/A
-    {% endif %}
   </div>
-  <small>
-    Lower standard deviation = steadier scoring. Tie-breaks favor better average (more under par), then more rounds, then smaller round-to-round swing.
-  </small>
-</div>
-
-    <div class="stat-block">
-  <div class="stat-title">📊 Comeback Player</div>
-  {% if comeback_player %}
-    <div class="stat-value">
-      <span class="stat-player">{{ comeback_player.player }}</span>
-      {{ comeback_player.improvement }} strokes saved
-    </div>
-    <small>
-      From {{ comeback_player.from_score > 0 and '+' or '' }}{{ comeback_player.from_score }}
-      on Round {{ comeback_player.from_round }}
-      to {{ comeback_player.to_score > 0 and '+' or '' }}{{ comeback_player.to_score }}
-      on Round {{ comeback_player.to_round }}.
-    </small>
-  {% else %}
-    <div class="stat-value">—</div>
-    <small>No positive improvement detected.</small>
-  {% endif %}
-</div>
-
 
   <div class="controls">
     <div class="button-grid single">

@@ -532,25 +532,5 @@
     }
   </script>
   {% endif %}
-
-  {% if game.phase == 'final_ranking' %}
-  <script>
-  function exportFinalPNG(){
-    const el = document.getElementById('final-capture');
-    if(!el){ alert('Nothing to export.'); return; }
-
-    const rect = el.getBoundingClientRect();
-    const MAX_W = 1100, MAX_H = 800;
-
-    let w = Math.round(rect.width), h = Math.round(rect.height);
-    const ar = rect.height / rect.width;
-    if (w > MAX_W) { w = MAX_W; h = Math.round(w * ar); }
-    if (h > MAX_H) { h = MAX_H; w = Math.round(h / ar); }
-
-    const url = '{{ url_for("export_png") }}' + '?width=' + w + '&height=' + h;
-    window.location.href = url;
-  }
-  </script>
-  {% endif %}
 </body>
 </html>
