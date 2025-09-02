@@ -338,12 +338,12 @@
       <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
     </div>
 
-    <!-- Utility buttons: Undo | End Game | Restart -->
+    <!-- Utility buttons: Undo | End Game / Cancel | Restart -->
     <div class="utility-grid playing">
       <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
 
-      <button type="button" class="end-btn" onclick="toggleEnd()">
-        End Game
+      <button type="button" id="endBtn" class="end-btn" onclick="toggleEnd()">
+        {{ 'Cancel' if game.end_after_round else 'End Game' }}
       </button>
 
       <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Start a new game?');">
@@ -397,6 +397,11 @@
     // Track current end state for confirm prompts
     let END_ACTIVE = {{ 'true' if game.end_after_round else 'false' }};
 
+    function updateEndButtonLabel(active){
+      var b = document.getElementById('endBtn');
+      if (b) b.textContent = active ? 'Resume' : 'End Game';
+    }
+
     async function sendScore(val){
       var res = await fetch('{{ url_for("api_score") }}', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -429,6 +434,7 @@
       if(g.phase==='playing'){ renderPlaying(g); var u=qs('#undoBtn'); if(u) u.removeAttribute('disabled'); }
       else if(g.phase==='playoff'){ renderPlayoff(g); var u2=qs('#undoBtn'); if(u2) u2.setAttribute('disabled','disabled'); }
       END_ACTIVE = !!g.end_after_round; // keep in sync
+      updateEndButtonLabel(END_ACTIVE);
     }
 
     function sign(v){ return v>0?'+':''; }
@@ -530,6 +536,9 @@
       var remove = function(){ if (bubble && bubble.parentNode) bubble.parentNode.removeChild(bubble); };
       bubble.addEventListener('animationend', remove, { once:true }); setTimeout(remove, 1500);
     }
+
+    // Ensure initial label matches state on load (in case of SSR state)
+    updateEndButtonLabel(END_ACTIVE);
   </script>
   {% endif %}
 </body>
