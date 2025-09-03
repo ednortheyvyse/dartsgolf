@@ -81,7 +81,7 @@
     .info-bar{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; margin-bottom:15px; }
     .round-count{ display:flex; align-items:flex-end; justify-content:center; gap:8px; line-height:1; margin-top:4px; flex-wrap:nowrap; }
     .round-label{ font-size: clamp(28px, 7vw, 56px); font-weight: 900; letter-spacing: 0.06em; }
-    .round-number{ font-size: clamp(44px, 12vw, 96px); font-weight: 900; line-height: .9; color:#bbb; }
+    .round-number{ font size: clamp(44px, 12vw, 96px); font-weight: 900; line-height: .9; color:#bbb; }
     .round-total{ font-size: clamp(10px, 2.8vw, 16px); font-weight: 700; opacity: .85; margin-left: 2px; align-self: flex-start; transform: translateY(-6px); }
     .turn-info{ font-size: clamp(18px, 4.2vw, 28px); font-weight: 700; color: var(--primary-color); text-align:center; }
 
@@ -177,6 +177,40 @@
       font-size: clamp(16px, 4.5vw, 28px);
       padding: clamp(12px, 3.5vw, 20px) 0;
     }
+
+    /* --- Tiny toast notifications --- */
+    .toast-container{
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 10050;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none; /* clicks pass through */
+    }
+    .toast{
+      pointer-events: auto;
+      background: #222;
+      color: #fff;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 800;
+      font-size: 0.95em;
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .toast.show{
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .toast--error{ background:#3b1111; border-color:#6b1d1d; }
+    .toast--success{ background:#113b25; border-color:#1d6b3a; }
+    .toast--info{ background:#11233b; border-color:#1d3b6b; }
   </style>
 </head>
 <body>
@@ -521,8 +555,6 @@
         </div>
       {% endif %}
     {% endif %}
-
-
   </div>
 
   <!-- In-app confirmation modal (always available) -->
@@ -536,6 +568,14 @@
       </div>
     </div>
   </div>
+
+  <!-- Toast host -->
+  <div id="toastHost" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Inject initial game state for optimistic updates -->
+  <script>
+    window.__gameCache = {{ game | tojson | safe }};
+  </script>
 
   <!-- Global confirm helper (replaces window.confirm) -->
   <script>
@@ -576,6 +616,27 @@
     })();
   </script>
 
+  <!-- Toast helper -->
+  <script>
+    function showToast(message, type='info', ms=2200){
+      const host = document.getElementById('toastHost');
+      if(!host) return;
+      const t = document.createElement('div');
+      t.className = 'toast toast--' + type;
+      t.textContent = message;
+      host.appendChild(t);
+      // animate in
+      requestAnimationFrame(()=> t.classList.add('show'));
+      // auto remove
+      const remove = ()=> {
+        t.classList.remove('show');
+        setTimeout(()=> t.remove(), 200);
+      };
+      setTimeout(remove, ms);
+      return remove; // in case you want to dismiss early
+    }
+  </script>
+
   {% if game.phase == 'setup' and game.recent_names and not show_stats %}
   <script>
     var recentNames = {{ game.recent_names | tojson | safe }};
@@ -614,20 +675,143 @@
       if (b) b.textContent = active ? 'Cancel' : 'End';
     }
 
+    // Optimistic sendScore: instant UI + server sync with rollback + toast on error
     async function sendScore(val){
-      var res = await fetch('{{ url_for("api_score") }}', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({score:val})
-      });
-      var data = await res.json(); if(!data.ok) return;
-      var g = data.game; if(g.phase==='final_ranking'){ location.reload(); return; }
-      renderGame(g);
+      const snapshot = window.__gameCache ? JSON.parse(JSON.stringify(window.__gameCache)) : null;
+
+      try{
+        // 1) Optimistic local update
+        if (window.__gameCache){
+          const g = JSON.parse(JSON.stringify(window.__gameCache)); // clone
+
+          if (g.phase === 'playing'){
+            const pIdx   = g.current_player_index;
+            const player = g.players[pIdx];
+            const roundI = g.current_round - 1;
+
+            g.round_history[roundI] = g.round_history[roundI] || {};
+            g.scores[player] = (g.scores[player] || 0) + val;
+            g.round_history[roundI][player] = val;
+
+            // mirror server undo_history push
+            g.undo_history = g.undo_history || [];
+            g.undo_history.push({ player_index: pIdx, score_change: val });
+
+            // advance cursor locally unless server is about to end/transition
+            const lastIndex = g.players.length - 1;
+            const wasLast   = pIdx === lastIndex;
+            if (!(wasLast && g.end_after_round)) {
+              g.current_player_index = wasLast ? 0 : pIdx + 1;
+              if (wasLast) g.current_round += 1;
+            }
+          } else if (g.phase === 'playoff'){
+            // minimal optimistic feedback for TB
+            const pIdx = g.current_player_index;
+            const player = g.playoff_group[pIdx];
+            g.playoff_round_scores = g.playoff_round_scores || {};
+            g.playoff_round_scores[player] = val;
+            g.current_player_index = Math.min(pIdx + 1, g.playoff_group.length - 1);
+          }
+
+          window.__gameCache = g;
+          renderGame(g); // instant paint
+        }
+
+        // 2) Server call
+        const res = await fetch('{{ url_for("api_score") }}', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({score:val})
+        });
+
+        if (!res.ok){
+          if (snapshot){ window.__gameCache = snapshot; renderGame(snapshot); }
+          showToast('Couldn’t save score — connection error', 'error');
+          return;
+        }
+
+        const data = await res.json();
+        if (!data.ok){
+          if (snapshot){ window.__gameCache = snapshot; renderGame(snapshot); }
+          showToast('Couldn’t save score — server rejected', 'error');
+          return;
+        }
+
+        window.__gameCache = data.game;  // authoritative
+        if (data.game.phase === 'final_ranking') { location.reload(); return; }
+        renderGame(data.game);
+        // Optional: showToast('Saved', 'success', 1200);
+      }catch(e){
+        if (snapshot){ window.__gameCache = snapshot; renderGame(snapshot); }
+        showToast('Couldn’t save score — offline?', 'error');
+        console.error('Score sync failed', e);
+      }
     }
+
+    // Optimistic Undo with rollback + toast on error
     async function undo(){
-      var res = await fetch('{{ url_for("api_undo") }}',{method:'POST'});
-      var data = await res.json(); if(!data.ok) return;
-      renderGame(data.game);
+      const g0 = window.__gameCache;
+      if (!g0 || g0.phase !== 'playing'){
+        showToast('Undo not available now', 'info', 1400);
+        return;
+      }
+      if (!g0.undo_history || !g0.undo_history.length){
+        showToast('Nothing to undo', 'info', 1400);
+        return;
+      }
+
+      const snapshot = JSON.parse(JSON.stringify(g0));
+
+      try{
+        // ---- Optimistic revert (mirror server _apply_undo) ----
+        const g = JSON.parse(JSON.stringify(g0));
+        const n = g.players.length;
+
+        const last_move = g.undo_history.pop();
+        const prev_idx = (g.current_player_index - 1 + n) % n;
+        g.current_player_index = prev_idx;
+
+        if (prev_idx === n - 1){
+          g.current_round = Math.max(1, g.current_round - 1);
+        }
+
+        const player_to_undo = g.players[prev_idx];
+        const current_round_index = g.current_round - 1;
+        g.scores[player_to_undo] = (g.scores[player_to_undo] || 0) - (last_move.score_change || 0);
+        g.round_history[current_round_index] = g.round_history[current_round_index] || {};
+        delete g.round_history[current_round_index][player_to_undo];
+
+        window.__gameCache = g;
+        renderGame(g); // instant UI revert
+
+        // ---- Server call ----
+        const res = await fetch('{{ url_for("api_undo") }}', { method:'POST' });
+
+        if (!res.ok){
+          window.__gameCache = snapshot;
+          renderGame(snapshot);
+          showToast('Undo failed — connection error', 'error');
+          return;
+        }
+        const data = await res.json();
+        if (!data.ok){
+          window.__gameCache = snapshot;
+          renderGame(snapshot);
+          showToast('Undo failed — server rejected', 'error');
+          return;
+        }
+
+        window.__gameCache = data.game;
+        renderGame(data.game);
+        // Optional: showToast('Undone', 'success', 1200);
+      }catch(e){
+        window.__gameCache = snapshot;
+        renderGame(snapshot);
+        showToast('Undo failed — offline?', 'error');
+        console.error('Undo sync failed', e);
+      }
     }
+
     async function toggleEnd(){
       // Confirm based on current state using in-app modal
       if (!END_ACTIVE) {
@@ -649,6 +833,7 @@
       }
       var res = await fetch('{{ url_for("api_end_after_round") }}',{method:'POST'});
       var data = await res.json(); if(!data.ok) return;
+      window.__gameCache = data.game;
       renderGame(data.game);
     }
 

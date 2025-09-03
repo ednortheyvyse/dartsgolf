@@ -107,7 +107,8 @@ def index():
         gs['final_standings'] = standings
         gs['max_playoff_rounds'] = max((len(h) for h in gs['all_playoff_history'].values()), default=0)
 
-    return render_template('index.html', game=gs)
+    # explicit show_stats flag for merged template
+    return render_template('index.html', game=gs, show_stats=False)
 
 @app.route('/start', methods=['POST'])
 def start_game():
@@ -459,11 +460,11 @@ def stats():
     best_comebacks = _best_comebacks_by_player(per)
     comeback_ranking = sorted(best_comebacks.values(), key=lambda d: d['improvement'], reverse=True)
 
-    # Render the merged template with the stats section visible
+    # Render merged stats view inside index.html
     return render_template(
         'index.html',
-        game=gs,
         show_stats=True,
+        game=gs,
         birdie_streak_ranking=birdie_streak_ranking,
         bogey_streak_ranking=bogey_streak_ranking,
         average_ranking=average_ranking,
@@ -473,4 +474,6 @@ def stats():
     )
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Render-friendly: disable debug, honor PORT env
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
