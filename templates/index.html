@@ -5,20 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Darts Golf Scorer</title>
 
-  <!-- ===================== Favicon setup =====================
-       Save your downloaded icon assets here:
-       /static/icons/dartboard.svg
-       /static/icons/dartboard-32.png
-       /static/icons/dartboard-180.png
-       /static/icons/dartboard-192.png
-       /static/favicon.ico
-  -->
+  <!-- PWA (1) -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <meta name="theme-color" content="#182634">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+    }
+  </script>
+
+  <!-- Favicon setup -->
   <link rel="icon" href="{{ url_for('static', filename='icons/dartboard.svg') }}" type="image/svg+xml">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/dartboard-32.png') }}">
   <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/dartboard-192.png') }}">
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/dartboard-180.png') }}">
   <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-  <meta name="theme-color" content="#182634">
 
   <style>
 	:root {
@@ -33,14 +34,13 @@
     .container{flex:1;overflow-y:auto;padding:15px 2px;-ms-overflow-style:none;scrollbar-width:none;}
     .container::-webkit-scrollbar{display:none;}
 
-    /* Bottom controls bar */
     .controls{flex-shrink:0;padding:10px;background:#000;border-top:2px solid var(--border-color);}
     .button-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:10px;}
     .button-grid.single{grid-template-columns:1fr;}
     .button-grid.duo{grid-template-columns:repeat(2,1fr);}
     .button-grid.duo form{margin:0;}
 
-    .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;} /* baseline for non-playing variants */
+    .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 
     .button-grid button,.utility-grid button{
       width:100%;padding:20px 0;font-size:1.8em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;touch-action:manipulation;white-space:nowrap;
@@ -52,20 +52,26 @@
     .undo-btn{background:#ff9800;color:#000;}
     .restart-btn{background:#f44336;color:#fff;}
     .export-btn{background:#2196f3;color:#fff;}
-    /* End uses same blue as export/view stats */
     .end-btn{background:#2196f3;color:#fff;}
+    .settings-btn{background:#555;color:#fff;font-size:1.1em;padding:12px 16px;border-radius:8px;border:none;cursor:pointer;}
 
-    .setup-screen { text-align:center; padding-top:4vh; max-width:900px; margin:0 auto; padding-left:8px; padding-right:8px; }
+    .setup-screen { text-align:center; padding-top:4vh; max-width:950px; margin:0 auto; padding-left:8px; padding-right:8px; }
+    .setup-actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px;}
+    .setup-screen button{padding:15px 30px;font-size:1.1em;background:var(--secondary-color);color:#fff;border:none;border-radius:8px;cursor:pointer;}
+
     .flash{margin:0 auto 16px;padding:12px 16px;border-radius:8px;border:1px solid #ff4d4d;background:#2a0000;color:#ffcccc;font-weight:600;}
     .setup-screen input[name="players"]{width:100%;min-height:50px;font-size:clamp(16px,4vw,22px);line-height:1.2;padding:12px 15px;box-sizing:border-box;margin:10px auto;border-radius:8px;border:1px solid var(--border-color);background:#101010;color:var(--text-color);}
     .setup-screen small{display:block;color:#bbb;margin-top:2px;margin-bottom:12px;}
-    .setup-actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px;}
-    .setup-screen button{padding:15px 30px;font-size:1.1em;background:var(--secondary-color);color:#fff;border:none;border-radius:8px;cursor:pointer;}
     .recent-wrap{margin-top:14px;}
     .recent-title{color:#ccc;font-size:.95em;margin-bottom:8px;}
     .chip-list{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
     .chip{background:#2b2b2b;color:#fff;border:1px solid #444;padding:8px 12px;border-radius:16px;cursor:pointer;user-select:none;font-size:.95em;}
     .chip.selected{background:var(--secondary-color);border-color:var(--secondary-color);}
+
+    .selected-wrap{margin:10px 0 6px 0;}
+    .selected-title{color:#ccc;font-size:.95em;margin-bottom:8px;}
+    .chip.draggable{cursor:grab;}
+    .chip.dragging{opacity:.6;transform:scale(.98);}
 
     .scoreboard{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:20px;}
     .scoreboard th,.scoreboard td{border:1px solid var(--border-color);text-align:center;word-wrap:break-word;}
@@ -73,11 +79,10 @@
     .scoreboard tbody th,.scoreboard tbody td{font-size:1.5em;vertical-align:middle;}
     .scoreboard tbody th{background:#2b2b2b;font-size:1.1em;padding:12px 5px;}
     .scoreboard tbody td{background:var(--accent-color);color:var(--accent-text-color);font-weight:bold;padding:12px 5px;}
-    .scoreboard .total-row td{background:#333;color:#fff;} /* totals row stays neutral */
+    .scoreboard .total-row td{background:#333;color:#fff;}
 
     .current-player-header{color:var(--primary-color);font-weight:bold;}
 
-    /* Header / info */
     .info-bar{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; margin-bottom:15px; }
     .round-count{ display:flex; align-items:flex-end; justify-content:center; gap:8px; line-height:1; margin-top:4px; flex-wrap:nowrap; }
     .round-label{ font-size: clamp(28px, 7vw, 56px); font-weight: 900; letter-spacing: 0.06em; }
@@ -85,27 +90,11 @@
     .round-total{ font-size: clamp(10px, 2.8vw, 16px); font-weight: 700; opacity: .85; margin-left: 2px; align-self: flex-start; transform: translateY(-6px); }
     .turn-info{ font-size: clamp(18px, 4.2vw, 28px); font-weight: 700; color: var(--primary-color); text-align:center; }
 
-    /* -------- End banner with outer padding wrapper -------- */
-    .end-banner-wrap {
-      background: #182634;      /* blue background surrounding the dashed box */
-      border-radius: 12px;      /* slightly larger than the inner box radius */
-      padding: 10px;            /* OUTER padding */
-      margin-top: 12px;         /* spacing from surrounding content */
-    }
-    .end-banner{
-      margin: 0;                /* wrapper handles outer spacing */
-      padding: 12px 16px;       /* inner content padding */
-      border: 1px dashed #2196f3;
-      color: #fff;
-      background: transparent;  /* wrapper supplies blue background */
-      border-radius: 8px;
-      font-weight: 700;
-      text-align: center;
-    }
+    .end-banner-wrap { background: #182634; border-radius: 12px; padding: 10px; margin-top: 12px; }
+    .end-banner{ margin:0; padding: 12px 16px; border: 1px dashed #2196f3; color:#fff; background: transparent; border-radius:8px; font-weight:700; text-align:center; }
 
     .scoreboard tr.current-row th { background:#3a3a3a; }
 
-    /* --- Compact layout with true quarter-circle delta --- */
     .cell { position: relative; display: flex; align-items: center; justify-content: center; min-height: 58px; width: 100%; height: 100%; }
     .total-pill { color:#000; background:none; padding:0; border-radius:0; font-weight:900; font-size:1.2em; line-height:1; }
 
@@ -133,15 +122,9 @@
 
     #final-capture{ overflow: visible; }
 
-    /* -------- In-app confirmation modal (replaces browser confirm) -------- */
-    .modal-overlay{
-      position:fixed; inset:0; background:rgba(0,0,0,.55);
-      display:none; align-items:center; justify-content:center; z-index:10000; padding:20px;
-    }
-    .modal{
-      background:#111; border:1px solid var(--border-color); border-radius:12px;
-      max-width:560px; width:100%; padding:18px; box-shadow:0 12px 36px rgba(0,0,0,.6);
-    }
+    /* Modal (confirm) */
+    .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:10000; padding:20px; }
+    .modal{ background:#111; border:1px solid var(--border-color); border-radius:12px; max-width:560px; width:100%; padding:18px; box-shadow:0 12px 36px rgba(0,0,0,.6); }
     .modal h3{ margin:0 0 8px; font-size:1.3em; }
     .modal p{ margin:0 0 16px; color:#ddd; }
     .modal-actions{ display:flex; gap:10px; justify-content:flex-end; }
@@ -149,7 +132,14 @@
     .btn-cancel{ background:#444; color:#fff; }
     .btn-confirm{ background:#2196f3; color:#fff; }
 
-    /* ----------------- Stats section styles (merged) ----------------- */
+    /* Settings modal (7) */
+    .settings-grid{ display:grid; gap:10px; }
+    .settings-row{ display:grid; gap:6px; }
+    .settings-input, .settings-text{ width:100%; padding:10px 12px; background:#101010; color:#fff; border:1px solid var(--border-color); border-radius:8px; }
+    .settings-help{ color:#bbb; font-size:.9em; }
+    .settings-note{ color:#ddd; font-size:.95em; }
+
+    /* Stats */
     h1 { text-align:center; font-size:2em; margin-bottom:24px; }
     .stat-block { background:#2b2b2b; border:1px solid var(--border-color); border-radius:12px; padding:16px; margin:0 12px 20px 12px; }
     .stat-title { font-size:1.2em; color:var(--accent-color); margin-bottom:8px; }
@@ -157,75 +147,46 @@
     .stat-player { color:var(--primary-color); font-weight:bold; margin-right:6px; }
     .stat-block small { display:block; margin-top:6px; color:#bdbdbd; font-size:0.9em; }
 
-    /* --- Force Undo & End to always be horizontal --- */
-    .utility-grid.playing{
-      display:flex !important;  /* override grid for this variant */
-      flex-wrap:nowrap;         /* never stack */
-      gap:10px;
-      align-items:stretch;
-    }
-    .utility-grid.playing > *{
-      flex:1 1 0;               /* two equal columns that can shrink */
-      min-width:0;              /* prevent overflow due to intrinsic width */
-    }
-    .utility-grid.playing button{
-      white-space:nowrap;       /* keep label on one line */
-      font-size: clamp(16px, 4.5vw, 28px);
-      padding: clamp(12px, 3.5vw, 20px) 0;
-    }
+    /* Utility grid playing: keep horizontal */
+    .utility-grid.playing{ display:flex !important; flex-wrap:nowrap; gap:10px; align-items:stretch; }
+    .utility-grid.playing > *{ flex:1 1 0; min-width:0; }
+    .utility-grid.playing button{ white-space:nowrap; font-size: clamp(16px, 4.5vw, 28px); padding: clamp(12px, 3.5vw, 20px) 0; }
 
-    /* --- Tiny toast notifications --- */
-    .toast-container{
-      position: fixed;
-      left: 50%;
-      bottom: 18px;
-      transform: translateX(-50%);
-      z-index: 10050;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      pointer-events: none; /* clicks pass through */
-    }
-    .toast{
-      pointer-events: auto;
-      background: #222;
-      color: #fff;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-weight: 800;
-      font-size: 0.95em;
-      box-shadow: 0 10px 24px rgba(0,0,0,.35);
-      opacity: 0;
-      transform: translateY(6px);
-      transition: opacity .18s ease, transform .18s ease;
-    }
-    .toast.show{
-      opacity: 1;
-      transform: translateY(0);
-    }
+    /* Toasts */
+    .toast-container{ position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 10050; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    .toast{ pointer-events: auto; background: #222; color: #fff; border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 14px; font-weight: 800; font-size: 0.95em; box-shadow: 0 10px 24px rgba(0,0,0,.35); opacity: 0; transform: translateY(6px); transition: opacity .18s ease, transform .18s ease; display:flex; align-items:center; gap:10px; }
+    .toast.show{ opacity: 1; transform: translateY(0); }
     .toast--error{ background:#3b1111; border-color:#6b1d1d; }
     .toast--success{ background:#113b25; border-color:#1d6b3a; }
     .toast--info{ background:#11233b; border-color:#1d3b6b; }
+    .toast button{ background:#2196f3; color:#fff; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:800; }
+
+    /* Playoff clarity dim (9) if needed later */
+    .dim{ opacity:.5; }
+
+    /* Accessibility reduced motion (8) */
+    @media (prefers-reduced-motion: reduce){
+      .score-bubble{ animation: none !important; opacity:1; }
+    }
+
+    /* Confetti canvas */
+    #confettiCanvas{ position:fixed; inset:0; pointer-events:none; z-index:9998; }
   </style>
 </head>
 <body>
+  <canvas id="confettiCanvas"></canvas>
   <div class="container">
 
     {% if show_stats %}
       <!-- ---------- STATS VIEW ---------- -->
       <h1>Game Stats</h1>
 
-      <!-- Birdie streak rankings -->
       <div class="stat-block">
         <div class="stat-title">⛳ Birdie Streaks</div>
         {% if birdie_streak_ranking %}
           <ol>
             {% for row in birdie_streak_ranking %}
-              <li>
-                <span class="stat-player">{{ row.name }}</span>
-                {{ row.streak }}
-              </li>
+              <li><span class="stat-player">{{ row.name }}</span>{{ row.streak }}</li>
             {% endfor %}
           </ol>
         {% else %}
@@ -234,16 +195,12 @@
         {% endif %}
       </div>
 
-      <!-- Bogey streak rankings -->
       <div class="stat-block">
         <div class="stat-title">🔥 Bogey Streaks</div>
         {% if bogey_streak_ranking %}
           <ol>
             {% for row in bogey_streak_ranking %}
-              <li>
-                <span class="stat-player">{{ row.name }}</span>
-                {{ row.streak }}
-              </li>
+              <li><span class="stat-player">{{ row.name }}</span>{{ row.streak }}</li>
             {% endfor %}
           </ol>
         {% else %}
@@ -252,16 +209,12 @@
         {% endif %}
       </div>
 
-      <!-- Most birdies rankings -->
       <div class="stat-block">
         <div class="stat-title">🕊️ Total Birdies</div>
         {% if most_birdies_ranking %}
           <ol>
             {% for row in most_birdies_ranking %}
-              <li>
-                <span class="stat-player">{{ row.name }}</span>
-                {{ row.count }}
-              </li>
+              <li><span class="stat-player">{{ row.name }}</span>{{ row.count }}</li>
             {% endfor %}
           </ol>
         {% else %}
@@ -270,16 +223,12 @@
         {% endif %}
       </div>
 
-      <!-- Most bogeys rankings -->
       <div class="stat-block">
         <div class="stat-title">😬 Total Bogeys</div>
         {% if most_bogeys_ranking %}
           <ol>
             {% for row in most_bogeys_ranking %}
-              <li>
-                <span class="stat-player">{{ row.name }}</span>
-                {{ row.count }}
-              </li>
+              <li><span class="stat-player">{{ row.name }}</span>{{ row.count }}</li>
             {% endfor %}
           </ol>
         {% else %}
@@ -288,17 +237,12 @@
         {% endif %}
       </div>
       
-      <!-- Average score rankings -->
       <div class="stat-block">
         <div class="stat-title">📊 Average Scores</div>
         {% if average_ranking %}
           <ol>
             {% for row in average_ranking %}
-              <li>
-                <span class="stat-player">{{ row.name }}</span>
-                {{ "%+.2f"|format(row.average) }}
-                <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small>
-              </li>
+              <li><span class="stat-player">{{ row.name }}</span>{{ "%+.2f"|format(row.average) }} <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small></li>
             {% endfor %}
           </ol>
         {% else %}
@@ -307,15 +251,13 @@
         {% endif %}
       </div>
 
-      <!-- Comeback rankings -->
       <div class="stat-block">
         <div class="stat-title">↩️ Biggest Comebacks</div>
         {% if comeback_ranking %}
           <ol>
             {% for cb in comeback_ranking %}
               <li>
-                <span class="stat-player">{{ cb.player }}</span>
-                {{ cb.improvement }} saved
+                <span class="stat-player">{{ cb.player }}</span>{{ cb.improvement }} saved
                 <small style="display:block; margin-left:6px;">
                   from {{ "%+d"|format(cb.from_score) }} on Round {{ cb.from_round }}
                   to {{ "%+d"|format(cb.to_score) }} on Round {{ cb.to_round }}
@@ -330,10 +272,11 @@
       </div>
 
     {% else %}
-      <!-- ---------- NORMAL INDEX VIEWS (setup / playing / playoff / final) ---------- -->
+      <!-- ---------- NORMAL VIEWS ---------- -->
       {% if game.phase == 'setup' %}
         <div class="setup-screen">
           <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}" alt="Darts Golf Scorer Dartboard" class="homepage-dartboard">
+
           {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
               {% for category, msg in messages %}
@@ -341,11 +284,22 @@
               {% endfor %}
             {% endif %}
           {% endwith %}
-          <form action="{{ url_for('start_game') }}" method="post">
+
+          <!-- Settings button (7) -->
+          <button type="button" class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
+
+          <!-- Selected players (drag-reorder) -->
+          <div class="selected-wrap" id="selectedWrap" style="display:none;">
+            <div class="selected-title">Selected players (drag to reorder)</div>
+            <div id="selectedChipList" class="chip-list"></div>
+          </div>
+
+          <form action="{{ url_for('start_game') }}" method="post" style="margin-top:10px;">
             <input id="playersInput" type="text" name="players" placeholder="Enter player names, separated by commas" required>
-            <small>Tip: tap chips to add/remove names. Names must be unique (case-insensitive).</small>
+            <small>Tip: tap chips to add/remove names. Drag chips above to reorder. Names must be unique (case-insensitive).</small>
             <div class="setup-actions"><button type="submit">Start Game</button></div>
           </form>
+
           {% if game.recent_names %}
             <div class="recent-wrap">
               <div class="recent-title">Recent players</div>
@@ -355,11 +309,11 @@
         </div>
 
       {% elif game.phase == 'playing' %}
-        <div class="info-bar" id="info-bar">
+        <div class="info-bar" id="info-bar" aria-live="polite" role="status">
           <div class="round-count">
             <span class="round-label">ROUND</span>
             <span class="round-number">{{ "%02d"|format(game.current_round) }}</span>
-            <span class="round-total">/ 20</span>
+            <span class="round-total">/ {{ game.holes }}</span>
           </div>
           <div class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</div>
 
@@ -442,8 +396,11 @@
         </table>
 
       {% elif game.phase == 'playoff' %}
-        <div class="info-bar" id="info-bar">
-          <div class="round-count"><span class="round-label">TIE-BREAKER</span></div>
+        <div class="info-bar" id="info-bar" aria-live="polite" role="status">
+          <div class="round-count">
+            <span class="round-label">TIE-BREAKER</span>
+            <span class="round-number">{{ "%02d"|format(game.playoff_round) }}</span> <!-- Playoff clarity (9) -->
+          </div>
           <div class="turn-info">{{ game.playoff_group[game.current_player_index] }}'s Turn</div>
         </div>
         <table class="scoreboard" id="scoreboard">
@@ -553,7 +510,7 @@
     {% endif %}
   </div>
 
-  <!-- In-app confirmation modal (always available) -->
+  <!-- Confirm Modal -->
   <div id="confirmOverlay" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
       <h3 id="confirmTitle">Confirm</h3>
@@ -565,15 +522,41 @@
     </div>
   </div>
 
+  <!-- Settings Modal (7) -->
+  <div id="settingsOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <h3 id="settingsTitle">Settings</h3>
+      <div class="settings-grid">
+        <div class="settings-row">
+          <label>Holes (only editable before starting)</label>
+          <input id="holesInput" class="settings-input" type="number" min="1" max="50" step="1">
+          <div class="settings-help">Common choices: 9, 18, 20.</div>
+        </div>
+        <div class="settings-row">
+          <label>Score Buttons (comma-separated)</label>
+          <input id="buttonsInput" class="settings-text" type="text" placeholder="-3,-2,-1,0,1,2">
+          <div class="settings-help">Between -10 and +10. Example: -3,-2,-1,0,1,2</div>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:12px;">
+        <button type="button" class="btn btn-cancel" onclick="closeSettings()">Close</button>
+        <button type="button" class="btn btn-confirm" onclick="saveSettings()">Save</button>
+      </div>
+      <div class="settings-note" style="margin-top:8px;">
+        Current: <b id="settingsSummary"></b>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast host -->
   <div id="toastHost" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- Inject initial game state for optimistic updates -->
+  <!-- Inject initial game state -->
   <script>
     window.__gameCache = {{ game | tojson | safe }};
   </script>
 
-  <!-- Global confirm helper (replaces window.confirm) -->
+  <!-- Confirm helper -->
   <script>
     (function(){
       const overlay = document.getElementById('confirmOverlay');
@@ -607,45 +590,56 @@
       overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(false); });
       window.addEventListener('keydown', (e)=>{ if (overlay.style.display === 'flex' && e.key === 'Escape') closeModal(false); });
 
-      // Expose globally
       window.showConfirmModal = openModal;
     })();
   </script>
 
-  <!-- Toast helper -->
+  <!-- Toast helpers -->
   <script>
     function showToast(message, type='info', ms=2200){
       const host = document.getElementById('toastHost');
-      if(!host) return;
+      if(!host) return ()=>{};
       const t = document.createElement('div');
       t.className = 'toast toast--' + type;
       t.textContent = message;
       host.appendChild(t);
-      // animate in
       requestAnimationFrame(()=> t.classList.add('show'));
-      // auto remove
-      const remove = ()=> {
-        t.classList.remove('show');
-        setTimeout(()=> t.remove(), 200);
-      };
+      const remove = ()=> { t.classList.remove('show'); setTimeout(()=> t.remove(), 200); };
       setTimeout(remove, ms);
-      return remove; // in case you want to dismiss early
+      return remove;
+    }
+    function showActionToast(message, actionText, onClick, type='info', ms=6000){
+      const host = document.getElementById('toastHost');
+      if(!host) return ()=>{};
+      const t = document.createElement('div');
+      t.className = 'toast toast--' + type;
+      const span = document.createElement('span');
+      span.textContent = message;
+      const btn = document.createElement('button');
+      btn.textContent = actionText;
+      btn.addEventListener('click', ()=>{ try{ onClick(); }catch(e){} remove(); });
+      t.appendChild(span); t.appendChild(btn);
+      host.appendChild(t);
+      requestAnimationFrame(()=> t.classList.add('show'));
+      const remove = ()=> { t.classList.remove('show'); setTimeout(()=> t.remove(), 200); };
+      setTimeout(remove, ms);
+      return remove;
     }
   </script>
 
   {% if game.phase == 'setup' and game.recent_names and not show_stats %}
+  <!-- Recent players chips & selectable list -->
   <script>
     var recentNames = {{ game.recent_names | tojson | safe }};
     var chipList = document.getElementById('chipList');
     var playersInput = document.getElementById('playersInput');
 
-    function parseInputList(){ return playersInput.value.split(',').map(function(s){return s.trim();}).filter(Boolean); }
-    function writeInputList(arr){ playersInput.value = arr.join(', '); }
+    function parseInputList(){ return playersInput.value.split(',').map(s=>s.trim()).filter(Boolean); }
+    function writeInputList(arr){ playersInput.value = arr.join(', '); updateSelectedChips(); }
     function toggleName(name){
       var list = parseInputList();
-      var idx = -1;
-      for (var i=0;i<list.length;i++){ if (list[i].toLowerCase() === name.toLowerCase()) { idx=i; break; } }
-      if (idx >= 0) { list.splice(idx,1); } else { list.push(name); }
+      var idx = list.findIndex(x=> x.toLowerCase() === name.toLowerCase());
+      if (idx >= 0) list.splice(idx,1); else list.push(name);
       writeInputList(list);
       var chip = document.querySelector('.chip[data-name="'+CSS.escape(name)+'"]');
       if (chip) chip.classList.toggle('selected');
@@ -656,6 +650,52 @@
         return '<div class="chip" data-name="'+n+'" onclick="toggleName(\''+n.replace(/\'/g,"\\'")+'\')">'+n+'</div>';
       }).join('');
     }
+
+    // ----- Drag-to-reorder selected players (bonus) -----
+    const selectedWrap = document.getElementById('selectedWrap');
+    const selectedChipList = document.getElementById('selectedChipList');
+
+    function updateSelectedChips(){
+      const list = parseInputList();
+      selectedWrap.style.display = list.length ? 'block' : 'none';
+      selectedChipList.innerHTML = list.map(n=>(
+        '<div class="chip draggable" draggable="true" data-name="'+n+'">'+n+'</div>'
+      )).join('');
+      initDragAndDrop();
+    }
+
+    function initDragAndDrop(){
+      const chips = selectedChipList.querySelectorAll('.draggable');
+      let dragEl = null;
+      chips.forEach(chip=>{
+        chip.addEventListener('dragstart', (e)=>{ dragEl = chip; chip.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
+        chip.addEventListener('dragend', ()=>{ if(dragEl){ dragEl.classList.remove('dragging'); dragEl=null; } });
+      });
+      selectedChipList.addEventListener('dragover', (e)=>{
+        e.preventDefault();
+        const afterEl = getDragAfterElement(selectedChipList, e.clientX, e.clientY);
+        const dragging = selectedChipList.querySelector('.dragging');
+        if(!dragging) return;
+        if(afterEl == null){ selectedChipList.appendChild(dragging); }
+        else { selectedChipList.insertBefore(dragging, afterEl); }
+      });
+      selectedChipList.addEventListener('drop', ()=>{
+        const newOrder = Array.from(selectedChipList.querySelectorAll('.draggable')).map(el=>el.getAttribute('data-name'));
+        writeInputList(newOrder);
+      });
+    }
+    function getDragAfterElement(container, x, y){
+      const els = [...container.querySelectorAll('.draggable:not(.dragging)')];
+      return els.reduce((closest, child)=>{
+        const rect = child.getBoundingClientRect();
+        const offset = y - rect.top - rect.height/2;
+        if (offset < 0 && offset > closest.offset) return {offset, element: child};
+        else return closest;
+      }, {offset: Number.NEGATIVE_INFINITY}).element;
+    }
+
+    playersInput.addEventListener('input', updateSelectedChips);
+    updateSelectedChips();
   </script>
   {% endif %}
 
@@ -663,7 +703,35 @@
   <script>
     function qs(s){return document.querySelector(s);}
 
-    // Track current end state for confirm prompts
+    // Wake Lock (2)
+    let wakeLock;
+    async function keepAwake(on){
+      try{
+        if(on && 'wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{}); }
+        else { await wakeLock?.release(); wakeLock = null; }
+      }catch(e){}
+    }
+
+    // Keyboard + haptics (3)
+    document.addEventListener('keydown', (e)=>{
+      const map = { '1':-3, '2':-2, '3':-1, '4':0, '5':+1, '6':+2, 'u':'undo', 'U':'undo' };
+      if(!(e.key in map)) return;
+      e.preventDefault();
+      if (map[e.key]==='undo') { undo(); return; }
+      if (navigator.vibrate) navigator.vibrate(15);
+      hit(map[e.key], document.body);
+    });
+
+    // Auto-save (4)
+    const SAVE_KEY='darts-golf-game';
+    function saveLocal(game){
+      try{ localStorage.setItem(SAVE_KEY, JSON.stringify(game||{})); }catch(_){}
+    }
+    function loadLocal(){
+      try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }catch(_){ return null; }
+    }
+
+    // Track end state for confirm prompts
     let END_ACTIVE = {{ 'true' if game.end_after_round else 'false' }};
 
     function updateEndButtonLabel(active){
@@ -672,44 +740,39 @@
     }
 
     // ---- Anti-flicker sequencing + micro-batching ----
-    let __opCounter = 0;        // increases for each local action (score/undo)
-    let __lastCommittedOp = 0;  // last opId we've applied from the server
-    let __applyTimer = null;    // tiny debounce timer for applying server state
+    let __opCounter = 0;
+    let __lastCommittedOp = 0;
+    let __applyTimer = null;
 
     function scheduleApplyFromServer(game, opId, force = false) {
-      // Always allow phase transitions to apply immediately
       if (force) {
         __lastCommittedOp = Math.max(__lastCommittedOp, opId);
         window.__gameCache = game;
+        saveLocal(game);
         renderGame(game);
         return;
       }
-      // If a newer local action has been issued, ignore this echo to prevent flicker
       if (opId !== __opCounter) return;
-
-      // Micro-batch: give ~64ms for newer responses to arrive
       if (__applyTimer) clearTimeout(__applyTimer);
       __applyTimer = setTimeout(() => {
-        // Re-check in case another op was fired during the wait
         if (opId !== __opCounter) return;
         __lastCommittedOp = opId;
         window.__gameCache = game;
+        saveLocal(game);
         renderGame(game);
       }, 64);
     }
 
-    // Optimistic sendScore with op-aware gating to reduce flicker
     async function sendScore(val){
       const snapshot = window.__gameCache ? JSON.parse(JSON.stringify(window.__gameCache)) : null;
-      const opId = ++__opCounter; // tag this action
+      const opId = ++__opCounter;
 
       try{
-        // 1) Optimistic local update
+        // Optimistic
         if (window.__gameCache){
-          const g = JSON.parse(JSON.stringify(window.__gameCache)); // clone
-
+          const g = JSON.parse(JSON.stringify(window.__gameCache));
           if (g.phase === 'playing'){
-            const pIdx   = g.current_player_index;
+            const pIdx = g.current_player_index;
             const player = g.players[pIdx];
             const roundI = g.current_round - 1;
 
@@ -717,11 +780,9 @@
             g.scores[player] = (g.scores[player] || 0) + val;
             g.round_history[roundI][player] = val;
 
-            // mirror server undo_history push
             g.undo_history = g.undo_history || [];
             g.undo_history.push({ player_index: pIdx, score_change: val });
 
-            // advance cursor locally unless server is about to end/transition
             const lastIndex = g.players.length - 1;
             const wasLast   = pIdx === lastIndex;
             if (!(wasLast && g.end_after_round)) {
@@ -729,83 +790,42 @@
               if (wasLast) g.current_round += 1;
             }
           } else if (g.phase === 'playoff'){
-            // minimal optimistic feedback for TB
             const pIdx = g.current_player_index;
             const player = g.playoff_group[pIdx];
             g.playoff_round_scores = g.playoff_round_scores || {};
             g.playoff_round_scores[player] = val;
             g.current_player_index = Math.min(pIdx + 1, g.playoff_group.length - 1);
           }
-
           window.__gameCache = g;
-          renderGame(g); // instant paint
+          saveLocal(g);
+          renderGame(g);
         }
 
-        // 2) Server call
-        const res = await fetch('{{ url_for("api_score") }}', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({score:val})
-        });
-
-        if (!res.ok){
-          // Only roll back if NO newer ops happened since this one
-          if (__opCounter === opId && snapshot){
-            window.__gameCache = snapshot;
-            renderGame(snapshot);
-            __lastCommittedOp = opId;
-          }
-          showToast('Couldn’t save score — connection error', 'error');
-          return;
-        }
-
+        const res = await fetch('{{ url_for("api_score") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({score:val}) });
+        if (!res.ok){ if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Couldn’t save score — connection error', 'error'); return; }
         const data = await res.json();
-        if (!data.ok){
-          if (__opCounter === opId && snapshot){
-            window.__gameCache = snapshot;
-            renderGame(snapshot);
-            __lastCommittedOp = opId;
-          }
-          showToast('Couldn’t save score — server rejected', 'error');
-          return;
-        }
+        if (!data.ok){ if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Couldn’t save score — server rejected', 'error'); return; }
 
-        // If server says final, reload to SSR final view to keep code simple
-        if (data.game.phase === 'final_ranking') {
-          location.reload();
-          return;
-        }
+        if (data.game.phase === 'final_ranking') { location.reload(); return; }
 
         const force = (data.game.phase !== 'playing' || window.__gameCache.phase !== 'playing');
         scheduleApplyFromServer(data.game, opId, force);
       }catch(e){
-        if (__opCounter === opId && snapshot){
-          window.__gameCache = snapshot;
-          renderGame(snapshot);
-          __lastCommittedOp = opId;
-        }
+        if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; }
         showToast('Couldn’t save score — offline?', 'error');
         console.error('Score sync failed', e);
       }
     }
 
-    // Optimistic Undo with op-aware gating to reduce flicker
     async function undo(){
       const g0 = window.__gameCache;
-      if (!g0 || g0.phase !== 'playing'){
-        showToast('Undo not available now', 'info', 1400);
-        return;
-      }
-      if (!g0.undo_history || !g0.undo_history.length){
-        showToast('Nothing to undo', 'info', 1400);
-        return;
-      }
+      if (!g0 || g0.phase !== 'playing'){ showToast('Undo not available now', 'info', 1400); return; }
+      if (!g0.undo_history || !g0.undo_history.length){ showToast('Nothing to undo', 'info', 1400); return; }
 
       const snapshot = JSON.parse(JSON.stringify(g0));
       const opId = ++__opCounter;
 
       try{
-        // ---- Optimistic revert (mirror server _apply_undo) ----
         const g = JSON.parse(JSON.stringify(g0));
         const n = g.players.length;
 
@@ -824,73 +844,46 @@
         delete g.round_history[current_round_index][player_to_undo];
 
         window.__gameCache = g;
-        renderGame(g); // instant UI revert
+        saveLocal(g);
+        renderGame(g);
 
-        // ---- Server call ----
         const res = await fetch('{{ url_for("api_undo") }}', { method:'POST' });
-
-        if (!res.ok){
-          if (__opCounter === opId){
-            window.__gameCache = snapshot;
-            renderGame(snapshot);
-            __lastCommittedOp = opId;
-          }
-          showToast('Undo failed — connection error', 'error');
-          return;
-        }
+        if (!res.ok){ if (__opCounter === opId){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Undo failed — connection error', 'error'); return; }
         const data = await res.json();
-        if (!data.ok){
-          if (__opCounter === opId){
-            window.__gameCache = snapshot;
-            renderGame(snapshot);
-            __lastCommittedOp = opId;
-          }
-          showToast('Undo failed — server rejected', 'error');
-          return;
-        }
+        if (!data.ok){ if (__opCounter === opId){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Undo failed — server rejected', 'error'); return; }
 
         const force = (data.game.phase !== 'playing' || window.__gameCache.phase !== 'playing');
         scheduleApplyFromServer(data.game, opId, force);
       }catch(e){
-        if (__opCounter === opId){
-          window.__gameCache = snapshot;
-          renderGame(snapshot);
-          __lastCommittedOp = opId;
-        }
+        if (__opCounter === opId){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; }
         showToast('Undo failed — offline?', 'error');
         console.error('Undo sync failed', e);
       }
     }
 
     async function toggleEnd(){
-      // Confirm based on current state using in-app modal
       if (!END_ACTIVE) {
-        const ok = await window.showConfirmModal({
-          title: 'End',
-          message: 'The game will end after ALL players finish THIS round. Continue?',
-          okText: 'End',
-          cancelText: 'Cancel'
-        });
+        const ok = await window.showConfirmModal({ title: 'End', message: 'The game will end after ALL players finish THIS round. Continue?', okText: 'End', cancelText: 'Cancel' });
         if (!ok) return;
       } else {
-        const ok = await window.showConfirmModal({
-          title: 'Cancel End',
-          message: 'The game will continue normally after this round. Continue?',
-          okText: 'Cancel End',
-          cancelText: 'Keep Ending'
-        });
+        const ok = await window.showConfirmModal({ title: 'Cancel End', message: 'The game will continue normally after this round. Continue?', okText: 'Cancel End', cancelText: 'Keep Ending' });
         if (!ok) return;
       }
       var res = await fetch('{{ url_for("api_end_after_round") }}',{method:'POST'});
       var data = await res.json(); if(!data.ok) return;
       window.__gameCache = data.game;
+      saveLocal(data.game);
       renderGame(data.game);
     }
 
     function renderGame(g){
+      // WakeLock on during play phases (2)
+      keepAwake(g.phase==='playing' || g.phase==='playoff');
+
       if(g.phase==='playing'){ renderPlaying(g); var u=qs('#undoBtn'); if(u) u.removeAttribute('disabled'); }
       else if(g.phase==='playoff'){ renderPlayoff(g); var u2=qs('#undoBtn'); if(u2) u2.setAttribute('disabled','disabled'); }
-      END_ACTIVE = !!g.end_after_round; // keep in sync
+
+      END_ACTIVE = !!g.end_after_round;
       updateEndButtonLabel(END_ACTIVE);
     }
 
@@ -904,7 +897,7 @@
         '<div class="round-count">'+
            '<span class="round-label">ROUND</span>'+
            '<span class="round-number">'+String(g.current_round).padStart(2,'0')+'</span>'+
-           '<span class="round-total">/ 20</span>'+
+           '<span class="round-total">/ '+g.holes+'</span>'+
          '</div>'+
          '<div class="turn-info">'+g.players[g.current_player_index]+"'s Turn</div>"+banner;
 
@@ -923,18 +916,10 @@
       var currentCells = g.players.map(function(p){
         var v = curRow[p];
         if (typeof v === 'undefined') {
-          return '<td><div class="cell">'+
-                   '<span class="total-pill">0</span>'+
-                   '<span class="delta-corner hidden">0</span>'+
-                 '</div></td>';
+          return '<td><div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div></td>';
         }
         var running = g.round_history.slice(0, g.current_round).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
-        return '<td>'+
-                 '<div class="cell">'+
-                   '<span class="total-pill">'+sign(running)+running+'</span>'+
-                   '<span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+sign(v)+v+'</span>'+
-                 '</div>'+
-               '</td>';
+        return '<td><div class="cell"><span class="total-pill">'+sign(running)+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+sign(v)+v+'</span></div></td>';
       }).join('');
       tbody += '<tr class="current-row"><th>'+String(g.current_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
 
@@ -944,12 +929,7 @@
           var v = row[p];
           if (typeof v === 'undefined') return '<td></td>';
           var running = g.round_history.slice(0, i+1).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
-          return '<td>'+
-                   '<div class="cell">'+
-                     '<span class="total-pill">'+sign(running)+running+'</span>'+
-                     '<span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+sign(v)+v+'</span>'+
-                   '</div>'+
-                 '</td>';
+          return '<td><div class="cell"><span class="total-pill">'+sign(running)+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+sign(v)+v+'</span></div></td>';
         }).join('');
         tbody += '<tr><th>'+String(i+1).padStart(2,'0')+'</th>'+cells+'</tr>';
       }
@@ -960,7 +940,7 @@
 
     function renderPlayoff(g){
       qs('#info-bar').innerHTML =
-        '<div class="round-count"><span class="round-label">TIE-BREAKER</span></div>'+
+        '<div class="round-count"><span class="round-label">TIE-BREAKER</span><span class="round-number">'+String(g.playoff_round).padStart(2,'0')+'</span></div>'+
         '<div class="turn-info">'+g.playoff_group[g.current_player_index]+"'s Turn</div>";
       var headers = g.playoff_group.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
       var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
@@ -984,10 +964,11 @@
       qs('#scoreboard').innerHTML = thead+tbody;
     }
 
+    // Labels for bubbles (unchanged)
     var LABELS = { "-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double Bogey" };
     function hit(val, el){ showBubbleFor(val, el); sendScore(val); }
     function showBubbleFor(val, el){
-      var key = String(val), label = (typeof LABELS[key] !== 'undefined') ? LABELS[key] : key;
+      var key = String(val), label = (typeof LABELS[key] !== 'undefined') ? LABELS[key] : (val>0?('+'+val):String(val));
       var cls = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
       var rect = el.getBoundingClientRect(), x = rect.left + (rect.width/2), y = rect.top - 6;
       var bubble = document.createElement('div'); bubble.className = 'score-bubble '+cls; bubble.textContent = label;
@@ -996,18 +977,147 @@
       bubble.addEventListener('animationend', remove, { once:true }); setTimeout(remove, 1500);
     }
 
-    // Ensure initial label matches state on load (in case of SSR state)
+    // Initial state apply
+    keepAwake(true);
     updateEndButtonLabel(END_ACTIVE);
+
+    // Offer resume if local copy diverges (4)
+    (function(){
+      const saved = loadLocal();
+      // Only offer in play phases; skip if identical (best-effort shallow compare)
+      const g = window.__gameCache;
+      if (!saved || !saved.phase || saved.phase==='setup') return;
+      if (g && g.phase !== 'setup') return; // already in-game on server
+      showActionToast('Resume previous game?', 'Resume', async ()=>{
+        const res = await fetch('{{ url_for("api_load_saved") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(saved) });
+        if (res.ok){ location.reload(); } else { showToast('Could not resume', 'error'); }
+      }, 'info', 10000);
+    })();
   </script>
   {% endif %}
 
-  <!-- --------------- Controls (bottom bar) --------------- -->
+  {% if game.phase == 'final_ranking' and not show_stats %}
+  <!-- Confetti on winner (bonus) -->
+  <script>
+    (function(){
+      const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReduced) return;
+
+      const canvas = document.getElementById('confettiCanvas');
+      const ctx = canvas.getContext('2d');
+      let W, H, raf, t0;
+      const pieces = [];
+      function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+      window.addEventListener('resize', resize); resize();
+
+      function spawn(n){
+        for(let i=0;i<n;i++){
+          pieces.push({
+            x: Math.random()*W, y: -20 - Math.random()*H*0.3,
+            vx: (Math.random()-0.5)*2, vy: 2+Math.random()*3,
+            size: 5+Math.random()*8, rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.2,
+            shape: Math.random()<0.5?'rect':'tri'
+          });
+        }
+      }
+      function step(ts){
+        if(!t0) t0 = ts;
+        const dt = Math.min(32, ts - t0); t0 = ts;
+        ctx.clearRect(0,0,W,H);
+        for (const p of pieces){
+          p.vy += 0.01; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+          if (p.y > H+40) { p.y = -20; p.x = Math.random()*W; p.vy = 2+Math.random()*3; }
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot);
+          ctx.fillStyle = ['#E3292E','#309F6A','#F9DFBC','#ffffff','#ffd54f'][Math.floor(Math.random()*5)];
+          if (p.shape==='rect'){ ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.6); }
+          else {
+            ctx.beginPath();
+            ctx.moveTo(0,-p.size/2); ctx.lineTo(p.size/2,p.size/2); ctx.lineTo(-p.size/2,p.size/2); ctx.closePath(); ctx.fill();
+          }
+          ctx.restore();
+        }
+        raf = requestAnimationFrame(step);
+      }
+      spawn(180);
+      raf = requestAnimationFrame(step);
+      setTimeout(()=>{ cancelAnimationFrame(raf); ctx.clearRect(0,0,W,H); }, 6000);
+    })();
+  </script>
+  {% endif %}
+
+  {% if not show_stats %}
+  <!-- Settings modal logic (7) -->
+  <script>
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    const holesInput = document.getElementById('holesInput');
+    const buttonsInput = document.getElementById('buttonsInput');
+    const settingsSummary = document.getElementById('settingsSummary');
+
+    function openSettings(){
+      const g = window.__gameCache || {};
+      holesInput.value = g.holes || 20;
+      buttonsInput.value = (g.score_buttons || [-3,-2,-1,0,1,2]).join(',');
+      if (g.phase !== 'setup') holesInput.setAttribute('disabled','disabled');
+      else holesInput.removeAttribute('disabled');
+
+      settingsSummary.textContent = `${g.holes || 20} holes; buttons ${(g.score_buttons||[]).join(', ')}`;
+      settingsOverlay.style.display = 'flex';
+      settingsOverlay.setAttribute('aria-hidden','false');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeSettings(){
+      settingsOverlay.style.display = 'none';
+      settingsOverlay.setAttribute('aria-hidden','true');
+      document.body.style.overflow = '';
+    }
+    async function saveSettings(){
+      const holesVal = parseInt(holesInput.value, 10);
+      const btns = buttonsInput.value.split(',').map(s=>s.trim()).filter(s=>s.length).map(Number);
+      const payload = { score_buttons: btns };
+      if (!holesInput.disabled) payload.holes = holesVal;
+
+      const res = await fetch('{{ url_for("api_settings") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (data.ok){
+        window.__gameCache = data.game;
+        showToast('Settings saved', 'success');
+        // Re-render buttons immediately if on playing screen
+        const bar = document.getElementById('dynamicScoreButtons');
+        if (bar) renderScoreButtons();
+        closeSettings();
+        location.reload(); // simplest to ensure SSR & client agree
+      } else {
+        showToast('Failed to save settings', 'error');
+      }
+    }
+  </script>
+  {% endif %}
+
+  {% if (game.phase == 'playing' or game.phase == 'playoff') and not show_stats %}
+  <!-- Controls logic uses dynamic buttons (7) -->
+  <script>
+    function renderScoreButtons(){
+      const g = window.__gameCache || {};
+      const btns = (g.score_buttons && g.score_buttons.length) ? g.score_buttons : [-3,-2,-1,0,1,2];
+      const host = document.getElementById('dynamicScoreButtons');
+      if (!host) return;
+      host.innerHTML = btns.map(b=>{
+        const cls = b<0?'minus':(b===0?'zero':'plus');
+        const label = b>0?('+'+b):String(b);
+        return `<button type="button" class="score-btn ${cls}" onclick="hit(${b}, this)">${label}</button>`;
+      }).join('');
+    }
+    document.addEventListener('DOMContentLoaded', renderScoreButtons);
+  </script>
+  {% endif %}
+
+  <!-- Controls (bottom bar) -->
   {% if show_stats %}
     <div class="controls">
       <div class="button-grid single">
-        <a href="{{ url_for('index') }}">
-          <button type="button" class="export-btn">Back to Final Standings</button>
-        </a>
+        <a href="{{ url_for('index') }}"><button type="button" class="export-btn">Back to Final Standings</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
         </form>
@@ -1015,31 +1125,19 @@
     </div>
   {% elif game.phase in ['playing','playoff'] %}
     <div class="controls">
-      <!-- Score buttons -->
-      <div class="button-grid">
-        <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
-        <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
-        <button type="button" class="score-btn minus" onclick="hit(-1, this)">-1</button>
-        <button type="button" class="score-btn zero"  onclick="hit(0,  this)">0</button>
-        <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
-        <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
-      </div>
+      <!-- Score buttons (dynamic per settings) -->
+      <div class="button-grid" id="dynamicScoreButtons"></div>
 
-      <!-- Utility buttons: Undo | End / Cancel (always horizontal) -->
+      <!-- Undo | End / Cancel -->
       <div class="utility-grid playing">
         <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
-
-        <button type="button" id="endBtn" class="end-btn" onclick="toggleEnd()">
-          {{ 'Cancel' if game.end_after_round else 'End' }}
-        </button>
+        <button type="button" id="endBtn" class="end-btn" onclick="toggleEnd()">{{ 'Cancel' if game.end_after_round else 'End' }}</button>
       </div>
     </div>
   {% elif game.phase == 'final_ranking' %}
     <div class="controls">
       <div class="button-grid single">
-        <a href="{{ url_for('stats') }}">
-          <button type="button" class="export-btn">View Stats</button>
-        </a>
+        <a href="{{ url_for('stats') }}"><button type="button" class="export-btn">View Stats</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
         </form>
@@ -1047,7 +1145,7 @@
     </div>
   {% endif %}
 
-  <!-- Attach in-app confirmation for "Start New Game" wherever the button exists -->
+  <!-- Attach confirm to Start New Game -->
   <script>
     (function(){
       var btn = document.getElementById('restartBtn');
