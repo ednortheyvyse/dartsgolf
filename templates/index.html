@@ -27,8 +27,8 @@
       .button-grid.duo{grid-template-columns:1fr;}
     }
     .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-    /* during playing we have three utility buttons */
-    .utility-grid.playing{grid-template-columns:repeat(3,1fr);}
+    /* during playing we have two utility buttons */
+    .utility-grid.playing{grid-template-columns:repeat(2,1fr);}
     @media (max-width: 420px){
       .utility-grid.playing{grid-template-columns:1fr;}
     }
@@ -41,7 +41,7 @@
     .undo-btn{background:#ff9800;color:#000;}
     .restart-btn{background:#f44336;color:#fff;}
     .export-btn{background:#2196f3;color:#fff;}
-    /* End Game uses same blue as export/view stats */
+    /* End uses same blue as export/view stats */
     .end-btn{background:#2196f3;color:#fff;}
 
     .setup-screen { text-align:center; padding-top:4vh; max-width:900px; margin:0 auto; padding-left:8px; padding-right:8px; }
@@ -74,7 +74,23 @@
     .round-total{ font-size: clamp(10px, 2.8vw, 16px); font-weight: 700; opacity: .85; margin-left: 2px; align-self: flex-start; transform: translateY(-6px); }
     .turn-info{ font-size: clamp(18px, 4.2vw, 28px); font-weight: 700; color: var(--primary-color); text-align:center; }
 
-    .end-banner{ margin-top:6px; padding:8px 12px; border:1px dashed #2196f3; color:#fff; background:#182634; border-radius:8px; font-weight:700; text-align:center; }
+    /* -------- Option A: outer padding wrapper around dashed banner -------- */
+    .end-banner-wrap {
+      background: #182634;      /* blue background surrounding the dashed box */
+      border-radius: 12px;      /* slightly larger than the inner box radius */
+      padding: 10px;            /* OUTER padding you requested */
+      margin-top: 12px;         /* spacing from surrounding content */
+    }
+    .end-banner{
+      margin: 0;                /* wrapper handles outer spacing */
+      padding: 12px 16px;       /* inner content padding */
+      border: 1px dashed #2196f3;
+      color: #fff;
+      background: transparent;  /* wrapper supplies blue background */
+      border-radius: 8px;
+      font-weight: 700;
+      text-align: center;
+    }
 
     .scoreboard tr.current-row th { background:#3a3a3a; }
 
@@ -105,6 +121,22 @@
     }
 
     #final-capture{ overflow: visible; }
+
+    /* -------- In-app confirmation modal (replaces browser confirm) -------- */
+    .modal-overlay{
+      position:fixed; inset:0; background:rgba(0,0,0,.55);
+      display:none; align-items:center; justify-content:center; z-index:10000; padding:20px;
+    }
+    .modal{
+      background:#111; border:1px solid var(--border-color); border-radius:12px;
+      max-width:560px; width:100%; padding:18px; box-shadow:0 12px 36px rgba(0,0,0,.6);
+    }
+    .modal h3{ margin:0 0 8px; font-size:1.3em; }
+    .modal p{ margin:0 0 16px; color:#ddd; }
+    .modal-actions{ display:flex; gap:10px; justify-content:flex-end; }
+    .modal-actions .btn{ padding:10px 16px; font-size:1.05em; font-weight:800; border:none; border-radius:8px; cursor:pointer; }
+    .btn-cancel{ background:#444; color:#fff; }
+    .btn-confirm{ background:#2196f3; color:#fff; }
   </style>
 </head>
 <body>
@@ -142,7 +174,11 @@
         <div class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</div>
 
         {% if game.end_after_round %}
-          <div class="end-banner">Game will end after this round. Finish all players this round to finalize and run tie-breakers.</div>
+          <div class="end-banner-wrap">
+            <div class="end-banner">
+              Game will end after this round. Finish all players this round to finalize and run tie-breakers.
+            </div>
+          </div>
         {% endif %}
       </div>
 
@@ -326,43 +362,56 @@
     {% endif %}
   </div>
 
-  {% if game.phase in ['playing','playoff'] %}
-  <div class="controls">
-    <!-- Score buttons -->
-    <div class="button-grid">
-      <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
-      <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
-      <button type="button" class="score-btn minus" onclick="hit(-1, this)">-1</button>
-      <button type="button" class="score-btn zero"  onclick="hit(0,  this)">0</button>
-      <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
-      <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
-    </div>
-
-    <!-- Utility buttons: Undo | End Game / Cancel | Restart -->
-    <div class="utility-grid playing">
-      <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
-
-      <button type="button" id="endBtn" class="end-btn" onclick="toggleEnd()">
-        {{ 'Cancel' if game.end_after_round else 'End Game' }}
-      </button>
-
-      <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Start a new game?');">
-        <button type="submit" class="restart-btn">Restart Game</button>
-      </form>
+  <!-- In-app confirmation modal (always available) -->
+  <div id="confirmOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+      <h3 id="confirmTitle">Confirm</h3>
+      <p id="confirmMessage">Are you sure?</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" id="confirmCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-confirm" id="confirmOkBtn">OK</button>
+      </div>
     </div>
   </div>
-  {% elif game.phase == 'final_ranking' %}
-  <div class="controls">
-    <div class="button-grid single">
-      <a href="{{ url_for('stats') }}">
-        <button type="button" class="export-btn">View Stats</button>
-      </a>
-      <form action="{{ url_for('restart') }}" method="post" onsubmit="return confirm('Start a new game?');">
-        <button type="submit" class="restart-btn">Start New Game</button>
-      </form>
-    </div>
-  </div>
-  {% endif %}
+
+  <!-- Global confirm helper (replaces window.confirm) -->
+  <script>
+    (function(){
+      const overlay = document.getElementById('confirmOverlay');
+      const titleEl = document.getElementById('confirmTitle');
+      const msgEl = document.getElementById('confirmMessage');
+      const okBtn = document.getElementById('confirmOkBtn');
+      const cancelBtn = document.getElementById('confirmCancelBtn');
+      let resolver = null;
+
+      function openModal(opts){
+        const { title='Confirm', message='Are you sure?', okText='OK', cancelText='Cancel' } = opts || {};
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        okBtn.textContent = okText;
+        cancelBtn.textContent = cancelText;
+        overlay.style.display = 'flex';
+        overlay.setAttribute('aria-hidden','false');
+        document.body.style.overflow = 'hidden';
+        setTimeout(()=> okBtn.focus(), 0);
+        return new Promise(resolve => { resolver = resolve; });
+      }
+      function closeModal(result){
+        overlay.style.display = 'none';
+        overlay.setAttribute('aria-hidden','true');
+        document.body.style.overflow = '';
+        if (resolver){ const r = resolver; resolver = null; r(result); }
+      }
+
+      okBtn.addEventListener('click', ()=> closeModal(true));
+      cancelBtn.addEventListener('click', ()=> closeModal(false));
+      overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(false); });
+      window.addEventListener('keydown', (e)=>{ if (overlay.style.display === 'flex' && e.key === 'Escape') closeModal(false); });
+
+      // Expose globally
+      window.showConfirmModal = openModal;
+    })();
+  </script>
 
   {% if game.phase == 'setup' and game.recent_names %}
   <script>
@@ -399,7 +448,7 @@
 
     function updateEndButtonLabel(active){
       var b = document.getElementById('endBtn');
-      if (b) b.textContent = active ? 'Resume' : 'End Game';
+      if (b) b.textContent = active ? 'Cancel' : 'End';
     }
 
     async function sendScore(val){
@@ -417,12 +466,22 @@
       renderGame(data.game);
     }
     async function toggleEnd(){
-      // Confirm based on current state
+      // Confirm based on current state using in-app modal
       if (!END_ACTIVE) {
-        const ok = confirm('End Game: The game will end after ALL players finish THIS round. Continue?');
+        const ok = await window.showConfirmModal({
+          title: 'End',
+          message: 'The game will end after ALL players finish THIS round. Continue?',
+          okText: 'End',
+          cancelText: 'Cancel'
+        });
         if (!ok) return;
       } else {
-        const ok = confirm('Cancel End Game: The game will continue normally after this round. Continue?');
+        const ok = await window.showConfirmModal({
+          title: 'Cancel End',
+          message: 'The game will continue normally after this round. Continue?',
+          okText: 'Cancel End',
+          cancelText: 'Keep Ending'
+        });
         if (!ok) return;
       }
       var res = await fetch('{{ url_for("api_end_after_round") }}',{method:'POST'});
@@ -440,7 +499,9 @@
     function sign(v){ return v>0?'+':''; }
 
     function renderPlaying(g){
-      var banner = g.end_after_round ? '<div class="end-banner">Game will end after this round. Finish all players this round to finalize and run tie-breakers.</div>' : '';
+      var banner = g.end_after_round
+        ? '<div class="end-banner-wrap"><div class="end-banner">Game will end after this round. Finish all players this round to finalize and run tie-breakers.</div></div>'
+        : '';
       qs('#info-bar').innerHTML =
         '<div class="round-count">'+
            '<span class="round-label">ROUND</span>'+
@@ -539,6 +600,60 @@
 
     // Ensure initial label matches state on load (in case of SSR state)
     updateEndButtonLabel(END_ACTIVE);
+  </script>
+  {% endif %}
+
+  {% if game.phase == 'playing' or game.phase == 'playoff' %}
+  <div class="controls">
+    <!-- Score buttons -->
+    <div class="button-grid">
+      <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
+      <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
+      <button type="button" class="score-btn minus" onclick="hit(-1, this)">-1</button>
+      <button type="button" class="score-btn zero"  onclick="hit(0,  this)">0</button>
+      <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
+      <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
+    </div>
+
+    <!-- Utility buttons: Undo | End / Cancel -->
+    <div class="utility-grid playing">
+      <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
+
+      <button type="button" id="endBtn" class="end-btn" onclick="toggleEnd()">
+        {{ 'Cancel' if game.end_after_round else 'End' }}
+      </button>
+    </div>
+  </div>
+  {% elif game.phase == 'final_ranking' %}
+  <div class="controls">
+    <div class="button-grid single">
+      <a href="{{ url_for('stats') }}">
+        <button type="button" class="export-btn">View Stats</button>
+      </a>
+      <!-- In-app confirmation for "Start New Game" -->
+      <form id="restartForm" action="{{ url_for('restart') }}" method="post">
+        <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Attach in-app confirmation for "Start New Game"
+    (function(){
+      var btn = document.getElementById('restartBtn');
+      var form = document.getElementById('restartForm');
+      if (btn && form) {
+        btn.addEventListener('click', async function(){
+          const ok = await window.showConfirmModal({
+            title: 'Start New Game',
+            message: 'This will clear the current game and return to setup. Continue?',
+            okText: 'Start New Game',
+            cancelText: 'Cancel'
+          });
+          if (ok) form.submit();
+        });
+      }
+    })();
   </script>
   {% endif %}
 </body>
