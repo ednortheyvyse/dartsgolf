@@ -252,6 +252,25 @@
         {% endif %}
       </div>
 
+      <!-- Average score rankings -->
+      <div class="stat-block">
+        <div class="stat-title">📊 Average Scores</div>
+        {% if average_ranking %}
+          <ol>
+            {% for row in average_ranking %}
+              <li>
+                <span class="stat-player">{{ row.name }}</span>
+                {{ "%+.2f"|format(row.average) }}
+                <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No completed rounds yet.</small>
+        {% endif %}
+      </div>
+
       <!-- Most birdies rankings -->
       <div class="stat-block">
         <div class="stat-title">🕊️ Total Birdies</div>
@@ -279,25 +298,6 @@
               <li>
                 <span class="stat-player">{{ row.name }}</span>
                 {{ row.count }}
-              </li>
-            {% endfor %}
-          </ol>
-        {% else %}
-          <div class="stat-value">—</div>
-          <small>No completed rounds yet.</small>
-        {% endif %}
-      </div>
-
-      <!-- Average score rankings -->
-      <div class="stat-block">
-        <div class="stat-title">📊 Average Scores</div>
-        {% if average_ranking %}
-          <ol>
-            {% for row in average_ranking %}
-              <li>
-                <span class="stat-player">{{ row.name }}</span>
-                {{ "%+.2f"|format(row.average) }}
-                <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small>
               </li>
             {% endfor %}
           </ol>
@@ -677,24 +677,25 @@
     let __applyTimer = null;    // tiny debounce timer for applying server state
 
     function scheduleApplyFromServer(game, opId, force = false) {
-      // Force = apply even if stale (e.g., phase transition into playoff/final)
+      // Always allow phase transitions to apply immediately
       if (force) {
         __lastCommittedOp = Math.max(__lastCommittedOp, opId);
         window.__gameCache = game;
         renderGame(game);
         return;
       }
-      // Ignore stale responses
-      if (opId < __lastCommittedOp) return;
+      // If a newer local action has been issued, ignore this echo to prevent flicker
+      if (opId !== __opCounter) return;
 
-      // Micro-batch: give ~40ms for newer responses to arrive
+      // Micro-batch: give ~64ms for newer responses to arrive
       if (__applyTimer) clearTimeout(__applyTimer);
       __applyTimer = setTimeout(() => {
-        if (opId < __lastCommittedOp) return; // a newer op landed during the wait
+        // Re-check in case another op was fired during the wait
+        if (opId !== __opCounter) return;
         __lastCommittedOp = opId;
         window.__gameCache = game;
         renderGame(game);
-      }, 40);
+      }, 64);
     }
 
     // Optimistic sendScore with op-aware gating to reduce flicker
