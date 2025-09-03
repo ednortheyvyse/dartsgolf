@@ -459,8 +459,11 @@ def stats():
     best_comebacks = _best_comebacks_by_player(per)
     comeback_ranking = sorted(best_comebacks.values(), key=lambda d: d['improvement'], reverse=True)
 
+    # Render the merged template with the stats section visible
     return render_template(
-        'stats.html',
+        'index.html',
+        game=gs,
+        show_stats=True,
         birdie_streak_ranking=birdie_streak_ranking,
         bogey_streak_ranking=bogey_streak_ranking,
         average_ranking=average_ranking,
