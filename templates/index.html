@@ -252,25 +252,6 @@
         {% endif %}
       </div>
 
-      <!-- Average score rankings -->
-      <div class="stat-block">
-        <div class="stat-title">📊 Average Scores</div>
-        {% if average_ranking %}
-          <ol>
-            {% for row in average_ranking %}
-              <li>
-                <span class="stat-player">{{ row.name }}</span>
-                {{ "%+.2f"|format(row.average) }}
-                <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small>
-              </li>
-            {% endfor %}
-          </ol>
-        {% else %}
-          <div class="stat-value">—</div>
-          <small>No completed rounds yet.</small>
-        {% endif %}
-      </div>
-
       <!-- Most birdies rankings -->
       <div class="stat-block">
         <div class="stat-title">🕊️ Total Birdies</div>
@@ -298,6 +279,25 @@
               <li>
                 <span class="stat-player">{{ row.name }}</span>
                 {{ row.count }}
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No completed rounds yet.</small>
+        {% endif %}
+      </div>
+      
+      <!-- Average score rankings -->
+      <div class="stat-block">
+        <div class="stat-title">📊 Average Scores</div>
+        {% if average_ranking %}
+          <ol>
+            {% for row in average_ranking %}
+              <li>
+                <span class="stat-player">{{ row.name }}</span>
+                {{ "%+.2f"|format(row.average) }}
+                <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small>
               </li>
             {% endfor %}
           </ol>
