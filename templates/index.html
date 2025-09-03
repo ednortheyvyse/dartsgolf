@@ -157,10 +157,6 @@
     .stat-player { color:var(--primary-color); font-weight:bold; margin-right:6px; }
     .stat-block small { display:block; margin-top:6px; color:#bdbdbd; font-size:0.9em; }
 
-    /* Attribution footer */
-    .attribution { text-align:center; font-size:12px; color:#bdbdbd; opacity:.75; margin:6px 0 0; padding:6px 0; }
-    .attribution a { color:#bdbdbd; }
-
     /* --- Force Undo & End to always be horizontal --- */
     .utility-grid.playing{
       display:flex !important;  /* override grid for this variant */
@@ -256,25 +252,6 @@
         {% endif %}
       </div>
 
-      <!-- Average score rankings -->
-      <div class="stat-block">
-        <div class="stat-title">📊 Average Scores</div>
-        {% if average_ranking %}
-          <ol>
-            {% for row in average_ranking %}
-              <li>
-                <span class="stat-player">{{ row.name }}</span>
-                {{ "%+.2f"|format(row.average) }}
-                <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small>
-              </li>
-            {% endfor %}
-          </ol>
-        {% else %}
-          <div class="stat-value">—</div>
-          <small>No completed rounds yet.</small>
-        {% endif %}
-      </div>
-
       <!-- Most birdies rankings -->
       <div class="stat-block">
         <div class="stat-title">🕊️ Total Birdies</div>
@@ -302,6 +279,25 @@
               <li>
                 <span class="stat-player">{{ row.name }}</span>
                 {{ row.count }}
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No completed rounds yet.</small>
+        {% endif %}
+      </div>
+
+      <!-- Average score rankings -->
+      <div class="stat-block">
+        <div class="stat-title">📊 Average Scores</div>
+        {% if average_ranking %}
+          <ol>
+            {% for row in average_ranking %}
+              <li>
+                <span class="stat-player">{{ row.name }}</span>
+                {{ "%+.2f"|format(row.average) }}
+                <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small>
               </li>
             {% endfor %}
           </ol>
@@ -675,9 +671,36 @@
       if (b) b.textContent = active ? 'Cancel' : 'End';
     }
 
-    // Optimistic sendScore: instant UI + server sync with rollback + toast on error
+    // ---- Anti-flicker sequencing + micro-batching ----
+    let __opCounter = 0;        // increases for each local action (score/undo)
+    let __lastCommittedOp = 0;  // last opId we've applied from the server
+    let __applyTimer = null;    // tiny debounce timer for applying server state
+
+    function scheduleApplyFromServer(game, opId, force = false) {
+      // Force = apply even if stale (e.g., phase transition into playoff/final)
+      if (force) {
+        __lastCommittedOp = Math.max(__lastCommittedOp, opId);
+        window.__gameCache = game;
+        renderGame(game);
+        return;
+      }
+      // Ignore stale responses
+      if (opId < __lastCommittedOp) return;
+
+      // Micro-batch: give ~40ms for newer responses to arrive
+      if (__applyTimer) clearTimeout(__applyTimer);
+      __applyTimer = setTimeout(() => {
+        if (opId < __lastCommittedOp) return; // a newer op landed during the wait
+        __lastCommittedOp = opId;
+        window.__gameCache = game;
+        renderGame(game);
+      }, 40);
+    }
+
+    // Optimistic sendScore with op-aware gating to reduce flicker
     async function sendScore(val){
       const snapshot = window.__gameCache ? JSON.parse(JSON.stringify(window.__gameCache)) : null;
+      const opId = ++__opCounter; // tag this action
 
       try{
         // 1) Optimistic local update
@@ -725,30 +748,47 @@
         });
 
         if (!res.ok){
-          if (snapshot){ window.__gameCache = snapshot; renderGame(snapshot); }
+          // Only roll back if NO newer ops happened since this one
+          if (__opCounter === opId && snapshot){
+            window.__gameCache = snapshot;
+            renderGame(snapshot);
+            __lastCommittedOp = opId;
+          }
           showToast('Couldn’t save score — connection error', 'error');
           return;
         }
 
         const data = await res.json();
         if (!data.ok){
-          if (snapshot){ window.__gameCache = snapshot; renderGame(snapshot); }
+          if (__opCounter === opId && snapshot){
+            window.__gameCache = snapshot;
+            renderGame(snapshot);
+            __lastCommittedOp = opId;
+          }
           showToast('Couldn’t save score — server rejected', 'error');
           return;
         }
 
-        window.__gameCache = data.game;  // authoritative
-        if (data.game.phase === 'final_ranking') { location.reload(); return; }
-        renderGame(data.game);
-        // Optional: showToast('Saved', 'success', 1200);
+        // If server says final, reload to SSR final view to keep code simple
+        if (data.game.phase === 'final_ranking') {
+          location.reload();
+          return;
+        }
+
+        const force = (data.game.phase !== 'playing' || window.__gameCache.phase !== 'playing');
+        scheduleApplyFromServer(data.game, opId, force);
       }catch(e){
-        if (snapshot){ window.__gameCache = snapshot; renderGame(snapshot); }
+        if (__opCounter === opId && snapshot){
+          window.__gameCache = snapshot;
+          renderGame(snapshot);
+          __lastCommittedOp = opId;
+        }
         showToast('Couldn’t save score — offline?', 'error');
         console.error('Score sync failed', e);
       }
     }
 
-    // Optimistic Undo with rollback + toast on error
+    // Optimistic Undo with op-aware gating to reduce flicker
     async function undo(){
       const g0 = window.__gameCache;
       if (!g0 || g0.phase !== 'playing'){
@@ -761,6 +801,7 @@
       }
 
       const snapshot = JSON.parse(JSON.stringify(g0));
+      const opId = ++__opCounter;
 
       try{
         // ---- Optimistic revert (mirror server _apply_undo) ----
@@ -788,25 +829,33 @@
         const res = await fetch('{{ url_for("api_undo") }}', { method:'POST' });
 
         if (!res.ok){
-          window.__gameCache = snapshot;
-          renderGame(snapshot);
+          if (__opCounter === opId){
+            window.__gameCache = snapshot;
+            renderGame(snapshot);
+            __lastCommittedOp = opId;
+          }
           showToast('Undo failed — connection error', 'error');
           return;
         }
         const data = await res.json();
         if (!data.ok){
-          window.__gameCache = snapshot;
-          renderGame(snapshot);
+          if (__opCounter === opId){
+            window.__gameCache = snapshot;
+            renderGame(snapshot);
+            __lastCommittedOp = opId;
+          }
           showToast('Undo failed — server rejected', 'error');
           return;
         }
 
-        window.__gameCache = data.game;
-        renderGame(data.game);
-        // Optional: showToast('Undone', 'success', 1200);
+        const force = (data.game.phase !== 'playing' || window.__gameCache.phase !== 'playing');
+        scheduleApplyFromServer(data.game, opId, force);
       }catch(e){
-        window.__gameCache = snapshot;
-        renderGame(snapshot);
+        if (__opCounter === opId){
+          window.__gameCache = snapshot;
+          renderGame(snapshot);
+          __lastCommittedOp = opId;
+        }
         showToast('Undo failed — offline?', 'error');
         console.error('Undo sync failed', e);
       }
