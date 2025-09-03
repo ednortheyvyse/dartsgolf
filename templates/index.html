@@ -4,6 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Darts Golf Scorer</title>
+
+  <!-- ===================== Favicon setup =====================
+       Save your downloaded icon assets here:
+       /static/icons/dartboard.svg
+       /static/icons/dartboard-32.png
+       /static/icons/dartboard-180.png
+       /static/icons/dartboard-192.png
+       /static/favicon.ico
+  -->
+  <link rel="icon" href="{{ url_for('static', filename='icons/dartboard.svg') }}" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/dartboard-32.png') }}">
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/dartboard-192.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/dartboard-180.png') }}">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <meta name="theme-color" content="#182634">
+
   <style>
 	:root {
   	--bg-color:#1a1a1a; --text-color:#f0f0f0; --border-color:#444;
@@ -23,17 +39,12 @@
     .button-grid.single{grid-template-columns:1fr;}
     .button-grid.duo{grid-template-columns:repeat(2,1fr);}
     .button-grid.duo form{margin:0;}
-    @media (max-width: 420px){
-      .button-grid.duo{grid-template-columns:1fr;}
-    }
-    .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-    /* during playing we have two utility buttons */
-    .utility-grid.playing{grid-template-columns:repeat(2,1fr);}
-    @media (max-width: 420px){
-      .utility-grid.playing{grid-template-columns:1fr;}
-    }
 
-    .button-grid button,.utility-grid button{width:100%;padding:20px 0;font-size:1.8em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;touch-action:manipulation;}
+    .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;} /* baseline for non-playing variants */
+
+    .button-grid button,.utility-grid button{
+      width:100%;padding:20px 0;font-size:1.8em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;touch-action:manipulation;white-space:nowrap;
+    }
 
     .score-btn.minus { background: var(--secondary-color); color:#fff; }
     .score-btn.plus  { background: var(--primary-color);  color:#fff; }
@@ -74,11 +85,11 @@
     .round-total{ font-size: clamp(10px, 2.8vw, 16px); font-weight: 700; opacity: .85; margin-left: 2px; align-self: flex-start; transform: translateY(-6px); }
     .turn-info{ font-size: clamp(18px, 4.2vw, 28px); font-weight: 700; color: var(--primary-color); text-align:center; }
 
-    /* -------- Option A: outer padding wrapper around dashed banner -------- */
+    /* -------- End banner with outer padding wrapper -------- */
     .end-banner-wrap {
       background: #182634;      /* blue background surrounding the dashed box */
       border-radius: 12px;      /* slightly larger than the inner box radius */
-      padding: 10px;            /* OUTER padding you requested */
+      padding: 10px;            /* OUTER padding */
       margin-top: 12px;         /* spacing from surrounding content */
     }
     .end-banner{
@@ -145,18 +156,39 @@
     .stat-value { font-size:1.5em; font-weight:bold; color:#fff; }
     .stat-player { color:var(--primary-color); font-weight:bold; margin-right:6px; }
     .stat-block small { display:block; margin-top:6px; color:#bdbdbd; font-size:0.9em; }
+
+    /* Attribution footer */
+    .attribution { text-align:center; font-size:12px; color:#bdbdbd; opacity:.75; margin:6px 0 0; padding:6px 0; }
+    .attribution a { color:#bdbdbd; }
+
+    /* --- Force Undo & End to always be horizontal --- */
+    .utility-grid.playing{
+      display:flex !important;  /* override grid for this variant */
+      flex-wrap:nowrap;         /* never stack */
+      gap:10px;
+      align-items:stretch;
+    }
+    .utility-grid.playing > *{
+      flex:1 1 0;               /* two equal columns that can shrink */
+      min-width:0;              /* prevent overflow due to intrinsic width */
+    }
+    .utility-grid.playing button{
+      white-space:nowrap;       /* keep label on one line */
+      font-size: clamp(16px, 4.5vw, 28px);
+      padding: clamp(12px, 3.5vw, 20px) 0;
+    }
   </style>
 </head>
 <body>
   <div class="container">
 
     {% if show_stats %}
-      <!-- ---------- STATS VIEW (merged from stats.html) ---------- -->
+      <!-- ---------- STATS VIEW ---------- -->
       <h1>Game Stats</h1>
 
       <!-- Birdie streak rankings -->
       <div class="stat-block">
-        <div class="stat-title">⛳ Birdie Streaks — Longest → Shortest</div>
+        <div class="stat-title">⛳ Birdie Streaks</div>
         {% if birdie_streak_ranking %}
           <ol>
             {% for row in birdie_streak_ranking %}
@@ -166,7 +198,6 @@
               </li>
             {% endfor %}
           </ol>
-          <small>Ties broken by total birdies, then better average.</small>
         {% else %}
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
@@ -175,7 +206,7 @@
 
       <!-- Bogey streak rankings -->
       <div class="stat-block">
-        <div class="stat-title">🔥 Bogey Streaks — Longest → Shortest</div>
+        <div class="stat-title">🔥 Bogey Streaks</div>
         {% if bogey_streak_ranking %}
           <ol>
             {% for row in bogey_streak_ranking %}
@@ -185,7 +216,6 @@
               </li>
             {% endfor %}
           </ol>
-          <small>Ties broken by total bogeys, then worse average.</small>
         {% else %}
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
@@ -194,7 +224,7 @@
 
       <!-- Average score rankings -->
       <div class="stat-block">
-        <div class="stat-title">📊 Average Scores — Lowest → Highest</div>
+        <div class="stat-title">📊 Average Scores</div>
         {% if average_ranking %}
           <ol>
             {% for row in average_ranking %}
@@ -213,7 +243,7 @@
 
       <!-- Most birdies rankings -->
       <div class="stat-block">
-        <div class="stat-title">🕊️ Total Birdies — Most → Least</div>
+        <div class="stat-title">🕊️ Total Birdies</div>
         {% if most_birdies_ranking %}
           <ol>
             {% for row in most_birdies_ranking %}
@@ -231,7 +261,7 @@
 
       <!-- Most bogeys rankings -->
       <div class="stat-block">
-        <div class="stat-title">😬 Total Bogeys — Most → Least</div>
+        <div class="stat-title">😬 Total Bogeys</div>
         {% if most_bogeys_ranking %}
           <ol>
             {% for row in most_bogeys_ranking %}
@@ -249,7 +279,7 @@
 
       <!-- Comeback rankings -->
       <div class="stat-block">
-        <div class="stat-title">↩️ Biggest Comebacks — Strokes Saved</div>
+        <div class="stat-title">↩️ Biggest Comebacks</div>
         {% if comeback_ranking %}
           <ol>
             {% for cb in comeback_ranking %}
@@ -491,6 +521,8 @@
         </div>
       {% endif %}
     {% endif %}
+
+
   </div>
 
   <!-- In-app confirmation modal (always available) -->
@@ -758,7 +790,7 @@
         <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
       </div>
 
-      <!-- Utility buttons: Undo | End / Cancel -->
+      <!-- Utility buttons: Undo | End / Cancel (always horizontal) -->
       <div class="utility-grid playing">
         <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
 
