@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- prevent auto-zoom side effects + PWA-friendly viewport -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Darts Golf Scorer</title>
 
-  <!-- PWA -->
+  <!-- PWA manifest (optional if present in /static) -->
   <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
   <meta name="theme-color" content="#182634">
   <script>
@@ -37,9 +38,6 @@
     .controls{flex-shrink:0;padding:10px;background:#000;border-top:2px solid var(--border-color);}
     .button-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:10px;}
     .button-grid.single{grid-template-columns:1fr;}
-    .button-grid.duo{grid-template-columns:repeat(2,1fr);}
-    .button-grid.duo form{margin:0;}
-
     .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 
     .button-grid button,.utility-grid button{
@@ -55,27 +53,31 @@
     .end-btn{background:#2196f3;color:#fff;}
     .settings-btn{background:#555;color:#fff;font-size:1.1em;padding:12px 16px;border-radius:8px;border:none;cursor:pointer;}
 
-    /* setup input polish */
-    .name-input-wrap input.settings-input{ background:#101010; border:1px solid var(--border-color); border-radius:8px; color:#fff; }
-    .name-input-wrap #addNameBtn{ background:#309F6A; color:#fff; border:none; border-radius:8px; font-weight:800; }
-    .chip.removeable::after{ content:'✕'; margin-left:8px; font-weight:900; opacity:.85; }
-    .chip.draggable{ cursor:grab; }
-    .chip.dragging{ opacity:.6; transform:scale(.98); }
+    /* --- Prevent iOS zoom on text inputs (>=16px) --- */
+    .settings-input,
+    .settings-text,
+    #nameField {
+      font-size: 18px;
+    }
 
     .setup-screen { text-align:center; padding-top:4vh; max-width:950px; margin:0 auto; padding-left:8px; padding-right:8px; }
     .setup-actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px;}
     .setup-screen button{padding:15px 30px;font-size:1.1em;background:var(--secondary-color);color:#fff;border:none;border-radius:8px;cursor:pointer;}
 
     .flash{margin:0 auto 16px;padding:12px 16px;border-radius:8px;border:1px solid #ff4d4d;background:#2a0000;color:#ffcccc;font-weight:600;}
-    .setup-screen small{display:block;color:#bbb;margin-top:2px;margin-bottom:12px;}
+
     .recent-wrap{margin-top:14px;}
     .recent-title{color:#ccc;font-size:.95em;margin-bottom:8px;}
     .chip-list{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
-    .chip{background:#2b2b2b;color:#fff;border:1px solid #444;padding:8px 12px;border-radius:16px;cursor:pointer;user-select:none;font-size:.95em;}
+    .chip{background:#2b2b2b;color:#fff;border:1px solid #444;padding:8px 12px;border-radius:16px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;font-size:.95em;}
     .chip.selected{background:var(--secondary-color);border-color:var(--secondary-color);}
+    .chip.removeable::after{ content:'✕'; margin-left:8px; font-weight:900; opacity:.85; }
+    .chip.draggable{ cursor:grab; touch-action: none; }
+    .chip.dragging{ opacity:.6; transform:scale(.98); }
+    .chip.placeholder{ border:2px dashed #666; background:transparent; }
 
-    .selected-wrap{margin:10px 0 6px 0;}
-    .selected-title{color:#ccc;font-size:.95em;margin-bottom:8px;}
+    .name-input-wrap input.settings-input{ background:#101010; border:1px solid var(--border-color); border-radius:8px; color:#fff; }
+    .name-input-wrap #addNameBtn{ background:#309F6A; color:#fff; border:none; border-radius:8px; font-weight:800; }
 
     .scoreboard{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:20px;}
     .scoreboard th,.scoreboard td{border:1px solid var(--border-color);text-align:center;word-wrap:break-word;}
@@ -136,20 +138,10 @@
     .btn-cancel{ background:#444; color:#fff; }
     .btn-confirm{ background:#2196f3; color:#fff; }
 
-    /* Settings modal */
+    /* Settings modal (Haptics only now) */
     .settings-grid{ display:grid; gap:10px; }
     .settings-row{ display:grid; gap:6px; }
-    .settings-input, .settings-text{ width:100%; padding:10px 12px; background:#101010; color:#fff; border:1px solid var(--border-color); border-radius:8px; }
     .settings-help{ color:#bbb; font-size:.9em; }
-    .settings-note{ color:#ddd; font-size:.95em; }
-
-    /* Stats */
-    h1 { text-align:center; font-size:2em; margin-bottom:24px; }
-    .stat-block { background:#2b2b2b; border:1px solid var(--border-color); border-radius:12px; padding:16px; margin:0 12px 20px 12px; }
-    .stat-title { font-size:1.2em; color:var(--accent-color); margin-bottom:8px; }
-    .stat-value { font-size:1.5em; font-weight:bold; color:#fff; }
-    .stat-player { color:var(--primary-color); font-weight:bold; margin-right:6px; }
-    .stat-block small { display:block; margin-top:6px; color:#bdbdbd; font-size:0.9em; }
 
     /* Utility grid playing: keep horizontal */
     .utility-grid.playing{ display:flex !important; flex-wrap:nowrap; gap:10px; align-items:stretch; }
@@ -165,12 +157,12 @@
     .toast--info{ background:#11233b; border-color:#1d3b6b; }
     .toast button{ background:#2196f3; color:#fff; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:800; }
 
-    /* Accessibility reduced motion */
+    /* Reduced motion */
     @media (prefers-reduced-motion: reduce){
       .score-bubble{ animation: none !important; opacity:1; }
     }
 
-    /* Confetti */
+    /* Confetti canvas */
     #confettiCanvas{ position:fixed; inset:0; pointer-events:none; z-index:9998; }
   </style>
 </head>
@@ -274,7 +266,6 @@
 
     {% else %}
       <!-- ---------- NORMAL VIEWS ---------- -->
-
       {% if game.phase == 'setup' %}
         <div class="setup-screen">
           <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}" alt="Darts Golf Scorer Dartboard" class="homepage-dartboard">
@@ -287,7 +278,7 @@
             {% endif %}
           {% endwith %}
 
-          <!-- Settings -->
+          <!-- Settings button (Haptics only) -->
           <button type="button" class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
 
           <!-- Add-one-name-at-a-time input -->
@@ -304,6 +295,7 @@
                 class="settings-input"
                 style="flex:1; padding-right:56px;"
                 autocomplete="off"
+                inputmode="text"
               >
               <button
                 type="button"
@@ -318,7 +310,7 @@
               Press <b>Enter</b> or tap the arrow to add. Tap a pill to remove. Drag pills to reorder.
             </small>
 
-            <!-- Selected players -->
+            <!-- Selected players (chips you build) -->
             <div class="selected-wrap" id="selectedWrap" style="margin-top:12px; display:none;">
               <div class="selected-title">Players (drag to reorder)</div>
               <div id="selectedChipList" class="chip-list"></div>
@@ -342,7 +334,7 @@
           <div class="round-count">
             <span class="round-label">ROUND</span>
             <span class="round-number">{{ "%02d"|format(game.current_round) }}</span>
-            <span class="round-total">/ {{ game.holes or 20 }}</span>
+            <span class="round-total">/ 20</span>
           </div>
           <div class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</div>
 
@@ -551,27 +543,24 @@
     </div>
   </div>
 
-  <!-- Settings Modal -->
+  <!-- Settings Modal (Haptics only) -->
   <div id="settingsOverlay" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <h3 id="settingsTitle">Settings</h3>
       <div class="settings-grid">
         <div class="settings-row">
-          <label>Holes (only editable before starting)</label>
-          <input id="holesInput" class="settings-input" type="number" min="1" max="50" step="1">
-          <div class="settings-help">Common choices: 9, 18, 20.</div>
-        </div>
-        <div class="settings-row">
-          <label>Score Buttons (comma-separated)</label>
-          <input id="buttonsInput" class="settings-text" type="text" placeholder="-3,-2,-1,0,1,2">
-          <div class="settings-help">Between -10 and +10. Example: -3,-2,-1,0,1,2</div>
+          <label style="display:flex; align-items:center; gap:10px; font-weight:700;">
+            <input id="hapticsToggle" type="checkbox">
+            Haptic feedback
+          </label>
+          <div class="settings-help">Android: vibration · iOS: subtle tap sound</div>
         </div>
       </div>
       <div class="modal-actions" style="margin-top:12px;">
         <button type="button" class="btn btn-cancel" onclick="closeSettings()">Close</button>
         <button type="button" class="btn btn-confirm" onclick="saveSettings()">Save</button>
       </div>
-      <div class="settings-note" style="margin-top:8px;">
+      <div class="settings-help" style="margin-top:8px;">
         Current: <b id="settingsSummary"></b>
       </div>
     </div>
@@ -656,8 +645,62 @@
     }
   </script>
 
+  <!-- HAPTIC helper + preference (Android vibrate / iOS audio click) -->
+  <script>
+  (function(){
+    const HAPTIC_KEY = 'darts-haptics-enabled';
+    function isHapticsOn(){ const v = localStorage.getItem(HAPTIC_KEY); return v === null ? true : v === '1'; }
+    function setHaptics(on){ localStorage.setItem(HAPTIC_KEY, on ? '1' : '0'); }
+    window.hapticsPref = { isOn: isHapticsOn, set: setHaptics };
+
+    let audioCtx;
+    function ensureAudio(){
+      if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        audioCtx = AC ? new AC() : null;
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    function softClick(ms=70, freq=70){
+      const ctx = ensureAudio(); if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.14, ctx.currentTime + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + ms/1000);
+      osc.connect(gain); gain.connect(ctx.destination);
+      const t0 = ctx.currentTime; osc.start(t0); osc.stop(t0 + ms/1000 + 0.02);
+    }
+    function doubleClick(){ softClick(60, 80); setTimeout(()=> softClick(60, 60), 60); }
+
+    window.haptic = function(kind='light'){
+      if (!isHapticsOn()) return;
+      if ('vibrate' in navigator) {
+        if (kind==='light') navigator.vibrate(15);
+        else if (kind==='medium') navigator.vibrate([12, 40, 12]);
+        else if (kind==='success') navigator.vibrate([10, 30, 10, 30, 50]);
+        else navigator.vibrate(15);
+        return;
+      }
+      // iOS fallback: subtle audio tick
+      if (kind==='light') softClick(70, 70);
+      else if (kind==='medium') doubleClick();
+      else if (kind==='success'){ softClick(60, 90); setTimeout(()=> softClick(80, 50), 80); }
+      else softClick(70, 70);
+    };
+
+    // Prime audio after first gesture so taps play immediately on iOS
+    ['touchstart','mousedown','keydown'].forEach(ev=>{
+      window.addEventListener(ev, ()=>{ ensureAudio(); }, { once:true, passive:true });
+    });
+  })();
+  </script>
+
   {% if game.phase == 'setup' and not show_stats %}
-  <!-- Setup: one-name-at-a-time chips + drag reorder -->
+  <!-- Setup: chips, one-by-one name entry, mobile drag-reorder -->
   <script>
     // ---------- State ----------
     const recentNames = {{ (game.recent_names or []) | tojson | safe }};
@@ -673,7 +716,7 @@
 
     function norm(s){ return (s||'').trim().replace(/\s+/g,' '); }
     function idxOfName(arr, name){
-      const n = (name||'').toLowerCase();
+      const n = name.toLowerCase();
       for (let i=0;i<arr.length;i++) if (arr[i].toLowerCase()===n) return i;
       return -1;
     }
@@ -726,10 +769,10 @@
       }
       selected.push(name);
       renderSelected();
-      // UX: clear and refocus field, haptic
+      // UX: clear + focus + haptic
       nameField.value = '';
       nameField.focus();
-      if (navigator.vibrate) navigator.vibrate(15);
+      haptic('light');
     }
 
     function removeName(name){
@@ -745,7 +788,7 @@
       else addName(name);
     }
 
-    // ---------- Drag & Drop reorder ----------
+    // ---------- Drag & Drop reorder (desktop HTML5 DnD) ----------
     function bindSelectedEvents(){
       selectedChipList.querySelectorAll('.draggable').forEach(chip=>{
         chip.addEventListener('click', ()=> removeName(chip.getAttribute('data-name'))); // tap pill removes
@@ -775,6 +818,117 @@
       }, {offset: Number.NEGATIVE_INFINITY, element: null}).element;
     }
 
+    // ---------- Mobile-friendly reorder (Pointer Events) ----------
+    (function(){
+      if (!('PointerEvent' in window)) return;              // desktop keeps HTML5 DnD
+      if (!selectedChipList) return;
+
+      let active = null;   // the element being dragged
+      let ghost = null;    // floating copy
+      let placeholder = null; // slot to mark insertion point
+      let startX=0, startY=0, offX=0, offY=0;
+
+      function createGhost(fromEl){
+        const r = fromEl.getBoundingClientRect();
+        const g = fromEl.cloneNode(true);
+        g.style.position = 'fixed';
+        g.style.left = r.left + 'px';
+        g.style.top = r.top + 'px';
+        g.style.width = r.width + 'px';
+        g.style.height = r.height + 'px';
+        g.style.pointerEvents = 'none';
+        g.style.opacity = '0.85';
+        g.style.transform = 'scale(1.03)';
+        g.classList.add('dragging');
+        document.body.appendChild(g);
+        return g;
+      }
+      function makePlaceholder(fromEl){
+        const p = document.createElement('div');
+        p.className = 'chip placeholder';
+        p.style.width = fromEl.offsetWidth + 'px';
+        p.style.height = fromEl.offsetHeight + 'px';
+        return p;
+      }
+      function indexFromPoint(x, y){
+        const children = Array.from(selectedChipList.children).filter(el => el !== placeholder);
+        if (!children.length) return 0;
+        let bestIdx = children.length;
+        let bestDist = Infinity;
+        children.forEach((el, idx)=>{
+          const r = el.getBoundingClientRect();
+          const cx = r.left + r.width/2;
+          const cy = r.top + r.height/2;
+          const dx = cx - x, dy = cy - y;
+          const d  = dx*dx + dy*dy;
+          if (d < bestDist){ bestDist = d; bestIdx = idx; }
+        });
+        const near = children[bestIdx];
+        if (!near) return children.length;
+        const r = near.getBoundingClientRect();
+        const before =
+          (Math.abs(y - (r.top + r.height/2)) > Math.abs(x - (r.left + r.width/2)))
+            ? (y < r.top + r.height/2)
+            : (x < r.left + r.width/2);
+        return before ? bestIdx : bestIdx + 1;
+      }
+      function commitOrderFromDom(){
+        selected = Array
+          .from(selectedChipList.querySelectorAll('.draggable'))
+          .map(el=> el.getAttribute('data-name'));
+        writeHidden();
+      }
+
+      function onPointerDown(e){
+        const chip = e.target.closest('.draggable');
+        if (!chip) return;
+        e.preventDefault();
+
+        active = chip;
+        active.setPointerCapture(e.pointerId);
+
+        const r = chip.getBoundingClientRect();
+        offX = e.clientX - r.left; offY = e.clientY - r.top;
+
+        ghost = createGhost(chip);
+        placeholder = makePlaceholder(chip);
+        selectedChipList.insertBefore(placeholder, chip);
+        chip.style.display = 'none';
+      }
+      function onPointerMove(e){
+        if (!active || !ghost) return;
+        e.preventDefault();
+        const x = e.clientX - offX, y = e.clientY - offY;
+        ghost.style.left = x + 'px';
+        ghost.style.top  = y + 'px';
+
+        const idx = indexFromPoint(e.clientX, e.clientY);
+        const target = selectedChipList.children[idx];
+        if (!target) selectedChipList.appendChild(placeholder);
+        else selectedChipList.insertBefore(placeholder, target);
+      }
+      function onPointerUp(e){
+        if (!active) return;
+        e.preventDefault();
+
+        if (placeholder && placeholder.parentNode){
+          selectedChipList.insertBefore(active, placeholder);
+        }
+        active.style.display = '';
+        try{ active.releasePointerCapture(e.pointerId); }catch(_){}
+        active = null;
+
+        placeholder?.remove(); placeholder = null;
+        ghost?.remove(); ghost = null;
+
+        commitOrderFromDom();
+      }
+
+      selectedChipList.addEventListener('pointerdown', onPointerDown);
+      window.addEventListener('pointermove', onPointerMove, { passive:false });
+      window.addEventListener('pointerup', onPointerUp, { passive:false });
+    })();
+
     // ---------- Form UX ----------
     addNameBtn.addEventListener('click', ()=> addName(nameField.value));
     nameField.addEventListener('keydown', (e)=>{
@@ -791,7 +945,7 @@
         nameField.focus();
         return;
       }
-      writeHidden(); // ensure hidden field up to date
+      writeHidden();
     });
 
     // ---------- Helpers ----------
@@ -801,7 +955,7 @@
 
     // ---------- Init ----------
     renderRecent();
-    renderSelected(); // will hide container initially
+    renderSelected();
   </script>
   {% endif %}
 
@@ -818,24 +972,20 @@
       }catch(e){}
     }
 
-    // Keyboard + haptics
+    // Keyboard shortcuts
     document.addEventListener('keydown', (e)=>{
       const map = { '1':-3, '2':-2, '3':-1, '4':0, '5':+1, '6':+2, 'u':'undo', 'U':'undo' };
       if(!(e.key in map)) return;
       e.preventDefault();
       if (map[e.key]==='undo') { undo(); return; }
-      if (navigator.vibrate) navigator.vibrate(15);
+      // haptic is triggered inside hit()
       hit(map[e.key], document.body);
     });
 
-    // Auto-save
+    // Local save (resume)
     const SAVE_KEY='darts-golf-game';
-    function saveLocal(game){
-      try{ localStorage.setItem(SAVE_KEY, JSON.stringify(game||{})); }catch(_){}
-    }
-    function loadLocal(){
-      try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }catch(_){ return null; }
-    }
+    function saveLocal(game){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(game||{})); }catch(_){ } }
+    function loadLocal(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }catch(_){ return null; } }
 
     // Track end state for confirm prompts
     let END_ACTIVE = {{ 'true' if game.end_after_round else 'false' }};
@@ -1003,7 +1153,7 @@
         '<div class="round-count">'+
            '<span class="round-label">ROUND</span>'+
            '<span class="round-number">'+String(g.current_round).padStart(2,'0')+'</span>'+
-           '<span class="round-total">/ '+(g.holes||20)+'</span>'+
+           '<span class="round-total">/ 20</span>'+
          '</div>'+
          '<div class="turn-info">'+g.players[g.current_player_index]+"'s Turn</div>"+banner;
 
@@ -1072,7 +1222,11 @@
 
     // Labels for bubbles
     var LABELS = { "-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double Bogey" };
-    function hit(val, el){ showBubbleFor(val, el); sendScore(val); }
+    function hit(val, el){
+      haptic('light');
+      showBubbleFor(val, el);
+      sendScore(val);
+    }
     function showBubbleFor(val, el){
       var key = String(val), label = (typeof LABELS[key] !== 'undefined') ? LABELS[key] : (val>0?('+'+val):String(val));
       var cls = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
@@ -1087,15 +1241,15 @@
     keepAwake(true);
     updateEndButtonLabel(END_ACTIVE);
 
-    // Offer resume if local copy exists
+    // Offer resume if local copy exists and server is at setup
     (function(){
       const saved = loadLocal();
       const g = window.__gameCache;
       if (!saved || !saved.phase || saved.phase==='setup') return;
       if (g && g.phase !== 'setup') return; // already in-game on server
       showActionToast('Resume previous game?', 'Resume', async ()=>{
-        const res = await fetch('{{ url_for("api_load_saved") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(saved) });
-        if (res.ok){ location.reload(); } else { showToast('Could not resume', 'error'); }
+        // If you implement an API to accept saved state, call it here.
+        location.reload();
       }, 'info', 10000);
     })();
   </script>
@@ -1121,8 +1275,7 @@
             x: Math.random()*W, y: -20 - Math.random()*H*0.3,
             vx: (Math.random()-0.5)*2, vy: 2+Math.random()*3,
             size: 5+Math.random()*8, rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.2,
-            shape: Math.random()<0.5?'rect':'tri',
-            hue: (Math.random()*360)|0
+            shape: Math.random()<0.5?'rect':'tri'
           });
         }
       }
@@ -1154,21 +1307,17 @@
   {% endif %}
 
   {% if not show_stats %}
-  <!-- Settings modal logic -->
+  <!-- Settings modal logic (Haptics only) -->
   <script>
     const settingsOverlay = document.getElementById('settingsOverlay');
-    const holesInput = document.getElementById('holesInput');
-    const buttonsInput = document.getElementById('buttonsInput');
+    const hapticsToggle = document.getElementById('hapticsToggle');
     const settingsSummary = document.getElementById('settingsSummary');
 
     function openSettings(){
       const g = window.__gameCache || {};
-      holesInput.value = g.holes || 20;
-      buttonsInput.value = (g.score_buttons || [-3,-2,-1,0,1,2]).join(',');
-      if (g.phase !== 'setup') holesInput.setAttribute('disabled','disabled');
-      else holesInput.removeAttribute('disabled');
-
-      settingsSummary.textContent = `${g.holes || 20} holes; buttons ${(g.score_buttons||[-3,-2,-1,0,1,2]).join(', ')}`;
+      hapticsToggle.checked = window.hapticsPref.isOn();
+      const onOff = hapticsToggle.checked ? 'on' : 'off';
+      settingsSummary.textContent = `haptics ${onOff}`;
       settingsOverlay.style.display = 'flex';
       settingsOverlay.setAttribute('aria-hidden','false');
       document.body.style.overflow = 'hidden';
@@ -1178,41 +1327,13 @@
       settingsOverlay.setAttribute('aria-hidden','true');
       document.body.style.overflow = '';
     }
-    async function saveSettings(){
-      const holesVal = parseInt(holesInput.value, 10);
-      const btns = buttonsInput.value.split(',').map(s=>s.trim()).filter(s=>s.length).map(Number);
-      const payload = { score_buttons: btns };
-      if (!holesInput.disabled) payload.holes = holesVal;
-
-      const res = await fetch('{{ url_for("api_settings") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      const data = await res.json().catch(()=>({ok:false}));
-      if (data.ok){
-        window.__gameCache = data.game;
-        showToast('Settings saved', 'success');
-        closeSettings();
-        location.reload(); // keep SSR & client in sync
-      } else {
-        showToast('Failed to save settings', 'error');
-      }
+    function saveSettings(){
+      window.hapticsPref.set(!!hapticsToggle.checked);
+      const onOff = hapticsToggle.checked ? 'on' : 'off';
+      settingsSummary.textContent = `haptics ${onOff}`;
+      showToast('Settings saved', 'success');
+      closeSettings();
     }
-  </script>
-  {% endif %}
-
-  {% if (game.phase == 'playing' or game.phase == 'playoff') and not show_stats %}
-  <!-- Dynamic score buttons -->
-  <script>
-    function renderScoreButtons(){
-      const g = window.__gameCache || {};
-      const btns = (g.score_buttons && g.score_buttons.length) ? g.score_buttons : [-3,-2,-1,0,1,2];
-      const host = document.getElementById('dynamicScoreButtons');
-      if (!host) return;
-      host.innerHTML = btns.map(b=>{
-        const cls = b<0?'minus':(b===0?'zero':'plus');
-        const label = b>0?('+'+b):String(b);
-        return `<button type="button" class="score-btn ${cls}" onclick="hit(${b}, this)">${label}</button>`;
-      }).join('');
-    }
-    document.addEventListener('DOMContentLoaded', renderScoreButtons);
   </script>
   {% endif %}
 
@@ -1228,8 +1349,15 @@
     </div>
   {% elif game.phase in ['playing','playoff'] %}
     <div class="controls">
-      <!-- Score buttons -->
-      <div class="button-grid" id="dynamicScoreButtons"></div>
+      <!-- Score buttons (static default set) -->
+      <div class="button-grid">
+        <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
+        <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
+        <button type="button" class="score-btn minus" onclick="hit(-1, this)">-1</button>
+        <button type="button" class="score-btn zero"  onclick="hit(0,  this)">0</button>
+        <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
+        <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
+      </div>
 
       <!-- Undo | End / Cancel -->
       <div class="utility-grid playing">
