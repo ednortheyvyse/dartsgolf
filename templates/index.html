@@ -139,15 +139,34 @@
     /* Player "chips" — WHITE text by default */
     .chip{
       background:#2b2b2b; color:#fff;
-      border:1px solid #444; padding:8px 12px; border-radius:16px; cursor:pointer;
+      border:1px solid #444; padding:8px 12px; border-radius:16px; cursor:grab;
       user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
-      font-size:.95em;
+      font-size:.95em; touch-action:none;
+      display:inline-flex; align-items:center; gap:8px;
+      box-sizing:border-box;
     }
     .chip.selected{ background:var(--secondary-color); border-color:var(--secondary-color); }
-    .chip.removeable::after{ content:'✕'; margin-left:8px; font-weight:900; opacity:.85; }
-    .chip.draggable{ cursor:grab; touch-action:none; }
-    .chip.dragging{ opacity:.6; transform:scale(.98); }
+    .chip.draggable{ cursor:grab; }
+    .chip.dragging{ opacity:.85; } /* no scaling to keep exact size */
     .chip.placeholder{ border:2px dashed #666; background:transparent; }
+
+    /* Number badge on selected chips */
+    .chip .chip-index{
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:1.4em; height:1.4em;
+      padding:0 .25em; margin-right:2px;
+      border-radius:999px; background:#444; color:#fff;
+      font-weight:900; font-size:.85em; line-height:1;
+    }
+
+    /* ✕ remove button inside the chip */
+    .chip .chip-remove{
+      margin-left:2px;
+      background:transparent; border:none; color:#fff;
+      font-weight:900; font-size:1em; line-height:1;
+      cursor:pointer; padding:0 .3em; border-radius:6px;
+    }
+    .chip .chip-remove:focus-visible{ outline:2px solid #888; }
 
     .name-input-wrap input.settings-input{
       background:#101010; border:1px solid var(--border-color);
@@ -178,16 +197,16 @@
     }
     .scoreboard .total-row td{ background:#333; color:#fff; }
 
-    /* === Player name colors per request ===
-       - Default player name headers: WHITE
+    /* Player name colors:
+       - Default headers: WHITE
        - Current player's header: RED
-       - Stats page names handled separately below (.stat-player) */
-    .scoreboard thead th:not(:first-child){ color:#fff; } /* default white */
-    .scoreboard.final thead tr:nth-child(2) th:not(:first-child){ color:#fff; } /* final names row white */
-    .current-player-header{ color:var(--primary-color); font-weight:bold; } /* highlight current turn */
+       - Stats page names: RED via .stat-player */
+    .scoreboard thead th:not(:first-child){ color:#fff; }
+    .scoreboard.final thead tr:nth-child(2) th:not(:first-child){ color:#fff; }
+    .current-player-header{ color:var(--primary-color); font-weight:bold; }
 
     /* ------------------------------
-       Info Bar (Round/Tie-breaker)
+       Info Bar
        ------------------------------ */
     .info-bar{
       display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -289,8 +308,8 @@
     .settings-help{ color:#bbb; font-size:.9em; }
 
     /* ------------------------------
-       Utility: Playing-page control row
-       ------------------------------ */
+      Playing-page utility row
+      ------------------------------ */
     .utility-grid.playing{
       display:flex !important; flex-wrap:nowrap; gap:10px; align-items:stretch;
     }
@@ -348,7 +367,7 @@
     }
     .stat-block ol{ margin:0; padding-left:1.1em; list-style:decimal; }
     .stat-block ol li{
-      display:flex; justify-content:space-between; align-items:flex-start; /* top-align */
+      display:flex; justify-content:space-between; align-items:flex-start;
       padding:8px 0; border-bottom:1px dashed #333;
       gap:12px;
     }
@@ -498,9 +517,6 @@
             {% endif %}
           {% endwith %}
 
-          <!-- Settings button (Haptics + Install button inside modal) -->
-          <button type="button" class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
-
           <!-- Add-one-name-at-a-time input -->
           <form id="startForm" action="{{ url_for('start_game') }}" method="post" style="margin-top:12px;">
             <input id="playersInput" type="hidden" name="players" required>
@@ -526,17 +542,13 @@
               >➜</button>
             </div>
             <small style="display:block; color:#bbb; margin-top:6px;">
-              Press <b>Enter</b> or tap the arrow to add. Tap a pill to remove. Drag pills to reorder.
+              Press <b>Enter</b> or tap the arrow to add. Tap <b>✕</b> to remove. Drag pills to reorder.
             </small>
 
             <!-- Selected players (chips you build) -->
             <div class="selected-wrap" id="selectedWrap" style="margin-top:12px; display:none;">
               <div class="selected-title">Players (drag to reorder)</div>
               <div id="selectedChipList" class="chip-list"></div>
-            </div>
-
-            <div class="setup-actions" style="margin-top:14px;">
-              <button type="submit">Start Game</button>
             </div>
           </form>
 
@@ -780,7 +792,7 @@
     </div>
   </div>
 
-  <!-- Settings Modal (now contains Add to Home Screen button) -->
+  <!-- Settings Modal (with Add to Home Screen button) -->
   <div id="settingsOverlay" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <h3 id="settingsTitle">Settings</h3>
@@ -793,7 +805,7 @@
           <div class="settings-help">Android: vibration · iOS: subtle tap sound</div>
         </div>
 
-        <!-- New: Add to Home Screen button (shown when eligible) -->
+        <!-- Add to Home Screen button (shown when eligible) -->
         <div class="settings-row">
           <button type="button" id="installBtnSettings" class="btn btn-confirm" style="display:none;">
             ➕ Add to Home Screen
@@ -818,7 +830,7 @@
       <p style="margin-top:6px;">
         On iPhone/iPad (Safari): tap the <b>Share</b> button, then choose <b>Add to Home Screen</b>.
       </p>
-      <div class="modal-actions" style="margin-top:12px;">
+      <div class="modal-actions" style="margin-top:12px%;">
         <button type="button" class="btn btn-confirm" onclick="closeIosInstall()">OK</button>
       </div>
     </div>
@@ -910,90 +922,63 @@
   <!-- =========================================================
        SCRIPT: HAPTIC FEEDBACK
        ========================================================= -->
- <script>
-(function(){
-  const HAPTIC_KEY = 'darts-haptics-enabled';
-  function isHapticsOn(){ const v = localStorage.getItem(HAPTIC_KEY); return v === null ? true : v === '1'; }
-  function setHaptics(on){ localStorage.setItem(HAPTIC_KEY, on ? '1' : '0'); }
-  window.hapticsPref = { isOn: isHapticsOn, set: setHaptics };
+  <script>
+  (function(){
+    const HAPTIC_KEY = 'darts-haptics-enabled';
+    function isHapticsOn(){ const v = localStorage.getItem(HAPTIC_KEY); return v === null ? true : v === '1'; }
+    function setHaptics(on){ localStorage.setItem(HAPTIC_KEY, on ? '1' : '0'); }
+    window.hapticsPref = { isOn: isHapticsOn, set: setHaptics };
 
-  // ---- Audio fallback (used on iOS and when Android blocks vibrate) ----
-  let audioCtx;
-  function ensureAudio(){
-    if (!audioCtx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      audioCtx = AC ? new AC() : null;
+    let audioCtx;
+    function ensureAudio(){
+      if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        audioCtx = AC ? new AC() : null;
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
     }
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-    return audioCtx;
-  }
-  function softClick(ms=70, freq=70){
-    const ctx = ensureAudio(); if (!ctx) return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = freq;
-    const t0 = ctx.currentTime;
-    gain.gain.setValueAtTime(0, t0);
-    gain.gain.linearRampToValueAtTime(0.16, t0 + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.001, t0 + ms/1000);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(t0); osc.stop(t0 + ms/1000 + 0.03);
-  }
-  function doubleClick(){ softClick(60, 85); setTimeout(()=> softClick(70, 60), 70); }
-
-  // Some Android devices ignore very short single pulses.
-  // Use slightly longer / patterned pulses for better reliability.
-  const PATTERNS = {
-    light:   30,                 // single ~30ms pulse (short taps get ignored on some phones)
-    medium:  [24, 40, 24],       // vib, pause, vib
-    success: [20, 40, 20, 50, 70]// "🎉" feeling
-  };
-
-  // Returns true if a vibration was scheduled, false if blocked/unsupported.
-  function tryVibrate(kind){
-    if (!('vibrate' in navigator)) return false;
-    const pattern = kind === 'medium' ? PATTERNS.medium
-                   : kind === 'success' ? PATTERNS.success
-                   : PATTERNS.light;
-    try {
-      // navigator.vibrate returns boolean (was it accepted?)
-      return !!navigator.vibrate(pattern);
-    } catch {
-      return false;
+    function softClick(ms=70, freq=70){
+      const ctx = ensureAudio(); if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      const t0 = ctx.currentTime;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.16, t0 + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + ms/1000);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t0); osc.stop(t0 + ms/1000 + 0.03);
     }
-  }
+    function doubleClick(){ softClick(60, 85); setTimeout(()=> softClick(70, 60), 70); }
 
-  // Public API (unchanged)
-  window.haptic = function(kind='light'){
-    if (!isHapticsOn()) return;
+    const PATTERNS = { light:30, medium:[24,40,24], success:[20,40,20,50,70] };
+    function tryVibrate(kind){
+      if (!('vibrate' in navigator)) return false;
+      const pattern = kind==='medium' ? PATTERNS.medium : (kind==='success' ? PATTERNS.success : PATTERNS.light);
+      try{ return !!navigator.vibrate(pattern); }catch{ return false; }
+    }
 
-    // Attempt vibration first (Android/Chrome, installed PWA, etc.)
-    const ok = tryVibrate(kind);
-    if (ok) return;
+    window.haptic = function(kind='light'){
+      if (!isHapticsOn()) return;
+      const ok = tryVibrate(kind);
+      if (ok) return;
+      if (kind==='light') softClick(70, 70);
+      else if (kind==='medium') doubleClick();
+      else if (kind==='success'){ softClick(60, 90); setTimeout(()=> softClick(80, 50), 90); }
+      else softClick(70, 70);
+    };
+    ['touchstart','mousedown','keydown'].forEach(ev=>{
+      window.addEventListener(ev, ()=>{ ensureAudio(); }, { once:true, passive:true });
+    });
+    window.testHaptics = function(){
+      const ok = tryVibrate('medium');
+      if (!ok) doubleClick();
+    };
+  })();
+  </script>
 
-    // Fallbacks: iOS (no vibrate for web) or when Android blocks/ignores the call.
-    if (kind==='light') softClick(70, 70);
-    else if (kind==='medium') doubleClick();
-    else if (kind==='success'){ softClick(60, 90); setTimeout(()=> softClick(80, 50), 90); }
-    else softClick(70, 70);
-  };
-
-  // Prime the audio context as soon as the user interacts,
-  // so audio fallback fires instantly on iOS/blocked Android.
-  ['touchstart','mousedown','keydown'].forEach(ev=>{
-    window.addEventListener(ev, ()=>{ ensureAudio(); }, { once:true, passive:true });
-  });
-
-  // Optional: quick console test helper
-  window.testHaptics = function(){
-    console.log('[Haptics] vibrate in navigator:', 'vibrate' in navigator);
-    const ok = tryVibrate('medium');
-    console.log('[Haptics] vibrate() accepted:', ok);
-    if (!ok){ console.log('[Haptics] falling back to audio'); doubleClick(); }
-  };
-})();
-</script>
   <!-- =========================================================
        SCRIPT: PWA INSTALL (global, button lives in Settings)
        ========================================================= -->
@@ -1025,7 +1010,6 @@
         document.body.style.overflow = '';
       };
 
-      // Exported so openSettings() can refresh visibility on demand
       window.updateInstallVisibility = function(){
         if (isStandalone()){ hideInstallBtn(); return; }
         if (deferredPrompt || isSafari()) showInstallBtn();
@@ -1055,7 +1039,6 @@
             }
           } finally {
             deferredPrompt = null;
-            // On some browsers, button should hide until event fires again
             setTimeout(window.updateInstallVisibility, 0);
           }
         } else if (isSafari()) {
@@ -1065,26 +1048,26 @@
         }
       });
 
-      // Initial state
       document.addEventListener('DOMContentLoaded', window.updateInstallVisibility);
     })();
   </script>
 
   {% if game.phase == 'setup' and not show_stats %}
   <!-- =========================================================
-       SCRIPT: SETUP PAGE (chips, drag-reorder, form)
+       SCRIPT: SETUP PAGE — Pills with Pointer Events drag
        ========================================================= -->
   <script>
+    // ---------- State ----------
     const recentNames      = {{ (game.recent_names or []) | tojson | safe }};
-    const chipList         = document.getElementById('chipList');
-    const selectedWrap     = document.getElementById('selectedWrap');
+    const chipList         = document.getElementById('chipList');           // recent chips (if any)
+    const selectedWrap     = document.getElementById('selectedWrap');       // container for selected chips
     const selectedChipList = document.getElementById('selectedChipList');
-    const playersHidden    = document.getElementById('playersInput');
+    const playersHidden    = document.getElementById('playersInput');       // hidden CSV posted to /start
     const nameField        = document.getElementById('nameField');
     const addNameBtn       = document.getElementById('addNameBtn');
     const startForm        = document.getElementById('startForm');
 
-    let selected = [];
+    let selected = []; // array of names in order (case-preserving)
 
     function norm(s){ return (s||'').trim().replace(/\s+/g,' '); }
     function idxOfName(arr, name){
@@ -1093,15 +1076,22 @@
       return -1;
     }
 
+    // ---------- Rendering ----------
     function renderSelected(){
       selectedWrap.style.display = selected.length ? 'block' : 'none';
-      selectedChipList.innerHTML = selected.map(n => (
-        `<div class="chip draggable removeable" draggable="true" data-name="${escapeHtml(n)}" title="Tap to remove">${escapeHtml(n)}</div>`
+      // Render without HTML5 draggable attr; JS adds it only for fallback mode.
+      selectedChipList.innerHTML = selected.map((n, i) => (
+        `<div class="chip draggable" data-name="${escapeHtml(n)}" title="Drag to reorder">
+           <span class="chip-index">${i+1}</span>
+           <span class="chip-name">${escapeHtml(n)}</span>
+           <button type="button" class="chip-remove" aria-label="Remove ${escapeHtml(n)}" title="Remove">✕</button>
+         </div>`
       )).join('');
       bindSelectedEvents();
       writeHidden();
       reflectRecentSelection();
     }
+
     function renderRecent(){
       if (!chipList) return;
       chipList.innerHTML = recentNames.map(n =>
@@ -1115,6 +1105,7 @@
       });
       reflectRecentSelection();
     }
+
     function reflectRecentSelection(){
       if (!chipList) return;
       chipList.querySelectorAll('.chip').forEach(el=>{
@@ -1123,8 +1114,12 @@
         el.classList.toggle('selected', sel);
       });
     }
-    function writeHidden(){ playersHidden.value = selected.join(', '); }
 
+    function writeHidden(){
+      playersHidden.value = selected.join(', ');
+    }
+
+    // ---------- Add / Remove ----------
     function addName(raw){
       const name = norm(raw);
       if (!name) return;
@@ -1138,31 +1133,60 @@
       nameField.focus();
       haptic('light');
     }
+
     function removeName(name){
       const i = idxOfName(selected, name);
-      if (i >= 0){ selected.splice(i,1); renderSelected(); }
+      if (i >= 0){
+        selected.splice(i,1);
+        renderSelected(); // re-number pills
+      }
     }
-    function toggleName(name){ if (idxOfName(selected, name) >= 0) removeName(name); else addName(name); }
 
-    function bindSelectedEvents(){
-      selectedChipList.querySelectorAll('.draggable').forEach(chip=>{
-        chip.addEventListener('click', ()=> removeName(chip.getAttribute('data-name')));
-        chip.addEventListener('dragstart', (e)=>{ chip.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
-        chip.addEventListener('dragend',   ()=>{ chip.classList.remove('dragging'); });
-      });
-      selectedChipList.addEventListener('dragover', (e)=>{
-        e.preventDefault();
-        const after = getAfter(selectedChipList, e.clientY);
-        const dragging = selectedChipList.querySelector('.dragging');
-        if (!dragging) return;
-        if (!after) selectedChipList.appendChild(dragging);
-        else selectedChipList.insertBefore(dragging, after);
-      });
-      selectedChipList.addEventListener('drop', ()=>{
-        selected = Array.from(selectedChipList.querySelectorAll('.draggable')).map(el=>el.getAttribute('data-name'));
-        writeHidden();
-      });
+    function toggleName(name){
+      if (idxOfName(selected, name) >= 0) removeName(name);
+      else addName(name);
     }
+
+    // Delegated click for ✕ remove
+    selectedChipList.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.chip-remove');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const chip = btn.closest('.draggable');
+      if (!chip) return;
+      const name = chip.getAttribute('data-name');
+      removeName(name);
+    });
+
+    // ---------- Desktop HTML5 DnD fallback (only if no Pointer Events) ----------
+    function bindSelectedEvents(){
+      const hasPointer = 'PointerEvent' in window;
+      selectedChipList.querySelectorAll('.draggable').forEach(chip=>{
+        if (!hasPointer){
+          chip.setAttribute('draggable','true');
+          chip.addEventListener('dragstart', (e)=>{ chip.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
+          chip.addEventListener('dragend',   ()=> chip.classList.remove('dragging'));
+        } else {
+          chip.removeAttribute('draggable'); // prevent native DnD when using Pointer Events
+        }
+      });
+
+      if (!hasPointer) {
+        selectedChipList.addEventListener('dragover', (e)=>{
+          e.preventDefault();
+          const after = getAfter(selectedChipList, e.clientY);
+          const dragging = selectedChipList.querySelector('.dragging');
+          if (!dragging) return;
+          if (!after) selectedChipList.appendChild(dragging);
+          else selectedChipList.insertBefore(dragging, after);
+        });
+        selectedChipList.addEventListener('drop', ()=>{
+          commitOrderFromDom(); // re-render to update numbering
+        });
+      }
+    }
+
     function getAfter(container, y){
       const els = [...container.querySelectorAll('.draggable:not(.dragging)')];
       return els.reduce((closest, child)=>{
@@ -1172,11 +1196,21 @@
       }, {offset: Number.NEGATIVE_INFINITY, element: null}).element;
     }
 
-    (function(){
+    // ---------- Pointer Events drag (modern browsers) ----------
+    ;(function(){
       if (!('PointerEvent' in window)) return;
       if (!selectedChipList) return;
 
-      let active = null, ghost = null, placeholder = null, offX=0, offY=0;
+      let active = null;        // element being dragged (original)
+      let ghost = null;         // floating clone
+      let placeholder = null;   // insertion marker
+      let startX=0, startY=0;   // pointer down pos
+      let offX=0, offY=0;       // offset within chip
+      let dragging = false;
+      let pointerId=null;
+
+      const TOUCH_SLOP_SQ = 25; // 5px^2 — threshold for touch
+      function setBodyCursor(grabbing){ document.body.style.cursor = grabbing ? 'grabbing' : ''; }
 
       function createGhost(fromEl){
         const r = fromEl.getBoundingClientRect();
@@ -1188,7 +1222,7 @@
         g.style.height = r.height + 'px';
         g.style.pointerEvents = 'none';
         g.style.opacity = '0.85';
-        g.style.transform = 'scale(1.03)';
+        g.style.boxSizing = 'border-box';
         g.classList.add('dragging');
         document.body.appendChild(g);
         return g;
@@ -1203,73 +1237,122 @@
       function indexFromPoint(x, y){
         const children = Array.from(selectedChipList.children).filter(el => el !== placeholder);
         if (!children.length) return 0;
-        let bestIdx = children.length, bestDist = Infinity;
+        let bestIdx = children.length;
+        let bestDist = Infinity;
         children.forEach((el, idx)=>{
           const r = el.getBoundingClientRect();
-          const cx = r.left + r.width/2, cy = r.top + r.height/2;
-          const dx = cx - x, dy = cy - y; const d  = dx*dx + dy*dy;
+          const cx = r.left + r.width/2;
+          const cy = r.top + r.height/2;
+          const dx = cx - x, dy = cy - y;
+          const d  = dx*dx + dy*dy;
           if (d < bestDist){ bestDist = d; bestIdx = idx; }
         });
         const near = children[bestIdx];
         if (!near) return children.length;
         const r = near.getBoundingClientRect();
-        const before = (Math.abs(y - (r.top + r.height/2)) > Math.abs(x - (r.left + r.width/2)))
+        const before =
+          (Math.abs(y - (r.top + r.height/2)) > Math.abs(x - (r.left + r.width/2)))
             ? (y < r.top + r.height/2)
             : (x < r.left + r.width/2);
         return before ? bestIdx : bestIdx + 1;
       }
       function commitOrderFromDom(){
-        selected = Array.from(selectedChipList.querySelectorAll('.draggable')).map(el=> el.getAttribute('data-name'));
+        selected = Array
+          .from(selectedChipList.querySelectorAll('.draggable'))
+          .map(el=> el.getAttribute('data-name'));
         writeHidden();
+        renderSelected(); // re-number after reorder
+      }
+
+      function startDrag(){
+        if (!active || dragging) return;
+        ghost = createGhost(active);
+        placeholder = makePlaceholder(active);
+        selectedChipList.insertBefore(placeholder, active);
+        active.style.visibility = 'hidden'; // keep layout size; avoids jump
+        dragging = true;
+        setBodyCursor(true);
       }
 
       function onPointerDown(e){
+        // Prevent text selection / native DnD from starting
+        e.preventDefault();
+
+        const rmBtn = e.target.closest('.chip-remove');
+        if (rmBtn) return;
+
         const chip = e.target.closest('.draggable');
         if (!chip) return;
-        e.preventDefault();
 
         active = chip;
-        active.setPointerCapture(e.pointerId);
+        pointerId = e.pointerId;
+        try { active.setPointerCapture(pointerId); } catch(_){}
 
         const r = chip.getBoundingClientRect();
-        offX = e.clientX - r.left; offY = e.clientY - r.top;
+        startX = e.clientX; startY = e.clientY;
+        offX = startX - r.left; offY = startY - r.top;
+        dragging = false;
 
-        ghost = createGhost(chip);
-        placeholder = makePlaceholder(chip);
-        selectedChipList.insertBefore(placeholder, chip);
-        chip.style.display = 'none';
+        // On desktop mouse, start drag immediately for responsiveness
+        if (e.pointerType === 'mouse') {
+          startDrag();
+        }
       }
+
       function onPointerMove(e){
-        if (!active || !ghost) return;
+        if (!active) return;
+
+        if (!dragging){
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          const dist2 = dx*dx + dy*dy;
+          // For touch/pen, wait for a small threshold to avoid accidental drags
+          if (e.pointerType !== 'mouse' && dist2 <= TOUCH_SLOP_SQ) return;
+          startDrag();
+        }
+
+        // We are dragging
         e.preventDefault();
         const x = e.clientX - offX, y = e.clientY - offY;
-        ghost.style.left = x + 'px';
-        ghost.style.top  = y + 'px';
+        if (ghost){
+          ghost.style.left = x + 'px';
+          ghost.style.top  = y + 'px';
+        }
+
         const idx = indexFromPoint(e.clientX, e.clientY);
         const target = selectedChipList.children[idx];
         if (!target) selectedChipList.appendChild(placeholder);
         else selectedChipList.insertBefore(placeholder, target);
       }
+
       function onPointerUp(e){
         if (!active) return;
-        e.preventDefault();
 
-        if (placeholder && placeholder.parentNode){
-          selectedChipList.insertBefore(active, placeholder);
+        if (dragging){
+          if (placeholder && placeholder.parentNode){
+            selectedChipList.insertBefore(active, placeholder);
+          }
+          active.style.visibility = '';
+          placeholder?.remove(); placeholder = null;
+          ghost?.remove(); ghost = null;
+          commitOrderFromDom();
         }
-        active.style.display = '';
-        try{ active.releasePointerCapture(e.pointerId); }catch(_){}
+
+        try { active.releasePointerCapture(pointerId); } catch(_){}
         active = null;
-        placeholder?.remove(); placeholder = null;
-        ghost?.remove(); ghost = null;
-        commitOrderFromDom();
+        dragging = false;
+        pointerId = null;
+        setBodyCursor(false);
       }
 
-      selectedChipList.addEventListener('pointerdown', onPointerDown);
+      selectedChipList.addEventListener('pointerdown', onPointerDown, { passive:false });
       window.addEventListener('pointermove', onPointerMove, { passive:false });
       window.addEventListener('pointerup', onPointerUp, { passive:false });
+      window.addEventListener('pointercancel', onPointerUp, { passive:false });
+      window.addEventListener('blur', onPointerUp, { passive:false }); // safety: end drag if window loses focus
     })();
 
+    // ---------- Form UX ----------
     addNameBtn.addEventListener('click', ()=> addName(nameField.value));
     nameField.addEventListener('keydown', (e)=>{
       if (e.key === 'Enter'){
@@ -1277,6 +1360,7 @@
         addName(nameField.value);
       }
     });
+
     startForm.addEventListener('submit', (e)=>{
       if (!selected.length){
         e.preventDefault();
@@ -1286,9 +1370,13 @@
       }
       writeHidden();
     });
+
+    // ---------- Helpers ----------
     function escapeHtml(s){
       return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
+
+    // ---------- Init ----------
     renderRecent();
     renderSelected();
   </script>
@@ -1538,7 +1626,7 @@
     function renderPlayoff(g){
       qs('#info-bar').innerHTML =
         '<div class="round-count"><span class="round-label">TIE-BREAKER</span><span class="round-number">'+String(g.playoff_round).padStart(2,'0')+'</span></div>'+
-        '<div class="turn-info">'+g.playoff_group[g.current_player_index]+"'s Turn</div>";
+        '<div class="turn-info">'+g.playoff_group[g.current_player_index] + "'s Turn</div>";
       var headers = g.playoff_group.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
       var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
@@ -1656,7 +1744,6 @@
       hapticsToggle.checked = window.hapticsPref.isOn();
       const onOff = hapticsToggle.checked ? 'on' : 'off';
       settingsSummary.textContent = `haptics ${onOff}`;
-      // Update visibility of the install button based on current capability
       if (typeof window.updateInstallVisibility === 'function') {
         window.updateInstallVisibility();
       }
@@ -1689,6 +1776,15 @@
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
         </form>
+      </div>
+    </div>
+  {% elif game.phase == 'setup' %}
+    <!-- Bottom controls for SETUP — Settings (left) and Start Game (right) -->
+    <div class="controls">
+      <div class="utility-grid">
+        <button type="button" class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
+        <!-- Submit the existing #startForm from here -->
+        <button type="submit" class="export-btn" form="startForm">Start Game</button>
       </div>
     </div>
   {% elif game.phase in ['playing','playoff'] %}
