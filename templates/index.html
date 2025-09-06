@@ -147,7 +147,7 @@
     }
     .chip.selected{ background:var(--secondary-color); border-color:var(--secondary-color); }
     .chip.draggable{ cursor:grab; }
-    .chip.dragging{ opacity:.85; } /* no scaling to keep exact size */
+    .chip.dragging{ opacity:.85; }
     .chip.placeholder{ border:2px dashed #666; background:transparent; }
 
     /* Number badge on selected chips */
@@ -377,6 +377,12 @@
     .stat-left{ display:flex; flex-direction:column; gap:2px; min-width:170px; }
     .stat-sub{ color:#ccc; opacity:0.95; margin-left:0; }
     .stat-right{ font-weight:900; white-space:nowrap; color:#fff; }
+
+    /* ------------------------------
+       Scroll-control utilities (NEW)
+       ------------------------------ */
+    .no-overscroll{ overscroll-behavior: contain; }
+    .scroll-lock{ overflow:hidden !important; }
   </style>
 </head>
 
@@ -1079,7 +1085,6 @@
     // ---------- Rendering ----------
     function renderSelected(){
       selectedWrap.style.display = selected.length ? 'block' : 'none';
-      // Render without HTML5 draggable attr; JS adds it only for fallback mode.
       selectedChipList.innerHTML = selected.map((n, i) => (
         `<div class="chip draggable" data-name="${escapeHtml(n)}" title="Drag to reorder">
            <span class="chip-index">${i+1}</span>
@@ -1275,9 +1280,7 @@
       }
 
       function onPointerDown(e){
-        // Prevent text selection / native DnD from starting
         e.preventDefault();
-
         const rmBtn = e.target.closest('.chip-remove');
         if (rmBtn) return;
 
@@ -1293,7 +1296,6 @@
         offX = startX - r.left; offY = startY - r.top;
         dragging = false;
 
-        // On desktop mouse, start drag immediately for responsiveness
         if (e.pointerType === 'mouse') {
           startDrag();
         }
@@ -1306,12 +1308,10 @@
           const dx = e.clientX - startX;
           const dy = e.clientY - startY;
           const dist2 = dx*dx + dy*dy;
-          // For touch/pen, wait for a small threshold to avoid accidental drags
           if (e.pointerType !== 'mouse' && dist2 <= TOUCH_SLOP_SQ) return;
           startDrag();
         }
 
-        // We are dragging
         e.preventDefault();
         const x = e.clientX - offX, y = e.clientY - offY;
         if (ghost){
@@ -1349,7 +1349,7 @@
       window.addEventListener('pointermove', onPointerMove, { passive:false });
       window.addEventListener('pointerup', onPointerUp, { passive:false });
       window.addEventListener('pointercancel', onPointerUp, { passive:false });
-      window.addEventListener('blur', onPointerUp, { passive:false }); // safety: end drag if window loses focus
+      window.addEventListener('blur', onPointerUp, { passive:false });
     })();
 
     // ---------- Form UX ----------
@@ -1767,11 +1767,32 @@
   {% endif %}
 
   <!-- =========================================================
+       SCROLL LOCK HELPERS (NEW)
+       Prevents touch scroll/wheel inside marked regions.
+       Add data-lock-scroll to any element to lock scrolling.
+       ========================================================= -->
+  <script>
+    (function(){
+      function lockScrollWithin(el){
+        // Prevent any scrolling gestures inside this element
+        const stop = (e)=>{ e.preventDefault(); };
+        // Passive must be false to allow preventDefault on touchmove
+        el.addEventListener('touchmove', stop, { passive:false });
+        el.addEventListener('wheel', stop, { passive:false });
+      }
+      document.addEventListener('DOMContentLoaded', ()=>{
+        document.querySelectorAll('[data-lock-scroll]').forEach(lockScrollWithin);
+      });
+    })();
+  </script>
+
+  <!-- =========================================================
        CONTROLS (BOTTOM BAR)
+       (Now marked with data-lock-scroll + no-overscroll)
        ========================================================= -->
   {% if show_stats %}
-    <div class="controls">
-      <div class="button-grid single">
+    <div class="controls no-overscroll" data-lock-scroll>
+      <div class="button-grid single" data-lock-scroll>
         <a href="{{ url_for('index') }}"><button type="button" class="export-btn">Back to Final Standings</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
@@ -1780,16 +1801,16 @@
     </div>
   {% elif game.phase == 'setup' %}
     <!-- Bottom controls for SETUP — Settings (left) and Start Game (right) -->
-    <div class="controls">
-      <div class="utility-grid">
+    <div class="controls no-overscroll" data-lock-scroll>
+      <div class="utility-grid" data-lock-scroll>
         <button type="button" class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
         <!-- Submit the existing #startForm from here -->
         <button type="submit" class="export-btn" form="startForm">Start Game</button>
       </div>
     </div>
   {% elif game.phase in ['playing','playoff'] %}
-    <div class="controls">
-      <div class="button-grid">
+    <div class="controls no-overscroll" data-lock-scroll>
+      <div class="button-grid" data-lock-scroll>
         <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
         <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
         <button type="button" class="score-btn minus" onclick="hit(-1, this)">-1</button>
@@ -1797,14 +1818,14 @@
         <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
         <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
       </div>
-      <div class="utility-grid playing">
+      <div class="utility-grid playing" data-lock-scroll>
         <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
         <button type="button" id="endBtn" class="end-btn" onclick="toggleEnd()">{{ 'Cancel' if game.end_after_round else 'End' }}</button>
       </div>
     </div>
   {% elif game.phase == 'final_ranking' %}
-    <div class="controls">
-      <div class="button-grid single">
+    <div class="controls no-overscroll" data-lock-scroll>
+      <div class="button-grid single" data-lock-scroll>
         <a href="{{ url_for('stats') }}"><button type="button" class="export-btn">View Stats</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
