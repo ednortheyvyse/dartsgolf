@@ -53,7 +53,7 @@
 
       /* Live-tuned by JS to ensure content isn't hidden under controls */
       --controls-h: 96px;             /* fallback */
-      --controls-extra-bottom: 0px;   /* extra for iOS Safari browser chrome */
+      --controls-extra-bottom: 0px;   /* dynamic iOS Safari toolbar padding */
     }
 
     /* ------------------------------
@@ -82,17 +82,19 @@
       -webkit-overflow-scrolling:touch;   /* momentum on iOS */
       overscroll-behavior:contain;        /* stop bounce from bubbling */
       padding:15px 2px;
-      padding-bottom: calc(15px + var(--controls-h)); /* ensure last rows aren't under the controls */
+      /* Keep last rows clear of the bottom controls + iOS toolbars + safe area */
+      padding-bottom: calc(15px + var(--controls-h) + env(safe-area-inset-bottom) + var(--controls-extra-bottom));
       -ms-overflow-style:none; scrollbar-width:none;
     }
     .container::-webkit-scrollbar{ display:none; }
 
     /* ------------------------------
-       Controls (Bottom Bar) — now raised for iPhone
+       Controls (Bottom Bar) — raised for iPhone
        ------------------------------ */
     .controls{
       flex-shrink:0;
       padding:10px;
+      /* Lift above home indicator and Safari toolbars */
       padding-bottom: calc(12px + env(safe-area-inset-bottom) + var(--controls-extra-bottom));
       background:#000;
       border-top:2px solid var(--border-color);
@@ -1840,6 +1842,7 @@
 
   <!-- =========================================================
        SCRIPT: RAISE CONTROLS FOR IPHONE + SET CONTAINER BOTTOM INSET
+       (uses visualViewport to add dynamic padding for Safari toolbars)
        ========================================================= -->
   <script>
     (function(){
@@ -1854,9 +1857,17 @@
         return iOS && isSafari && !isStandalone;
       }
 
+      function calcBottomChromePx(){
+        const vv = window.visualViewport;
+        if (!vv) return isiOSSafariBrowser() ? 44 : 0; // heuristic fallback
+        // Overlap between layout viewport and visual viewport at the bottom.
+        const overlap = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
+        return Math.ceil(overlap);
+      }
+
       function updateIosExtraBottom() {
-        // Give extra bottom padding when Safari toolbars are present (not installed)
-        root.style.setProperty('--controls-extra-bottom', isiOSSafariBrowser() ? '28px' : '0px');
+        const extra = isiOSSafariBrowser() ? Math.min(96, calcBottomChromePx() + 18) : 0;
+        root.style.setProperty('--controls-extra-bottom', extra + 'px');
       }
 
       function updateControlsHeightVar() {
@@ -1865,14 +1876,17 @@
         root.style.setProperty('--controls-h', h + 'px');
       }
 
-      // Watch controls size changes and window changes
-      if (controls && 'ResizeObserver' in window) {
-        const ro = new ResizeObserver(updateControlsHeightVar);
-        ro.observe(controls);
+      function hookVisualViewport(){
+        const vv = window.visualViewport;
+        if (!vv) return;
+        vv.addEventListener('resize', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
+        vv.addEventListener('scroll', ()  => { updateIosExtraBottom(); updateControlsHeightVar(); });
       }
-      window.addEventListener('load', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
+
+      window.addEventListener('load', () => { updateIosExtraBottom(); updateControlsHeightVar(); hookVisualViewport(); });
       window.addEventListener('resize', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
       window.addEventListener('orientationchange', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden){ updateIosExtraBottom(); updateControlsHeightVar(); }});
     })();
   </script>
 
