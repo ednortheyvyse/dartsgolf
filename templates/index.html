@@ -50,6 +50,10 @@
 
       --accent-color:#F9DFBC;    /* SCORE CELL BACKGROUND */
       --accent-text-color:#000;  /* Running total text in cells */
+
+      /* Live-tuned by JS to ensure content isn't hidden under controls */
+      --controls-h: 96px;             /* fallback */
+      --controls-extra-bottom: 0px;   /* extra for iOS Safari browser chrome */
     }
 
     /* ------------------------------
@@ -78,16 +82,21 @@
       -webkit-overflow-scrolling:touch;   /* momentum on iOS */
       overscroll-behavior:contain;        /* stop bounce from bubbling */
       padding:15px 2px;
+      padding-bottom: calc(15px + var(--controls-h)); /* ensure last rows aren't under the controls */
       -ms-overflow-style:none; scrollbar-width:none;
     }
     .container::-webkit-scrollbar{ display:none; }
 
     /* ------------------------------
-       Controls (Bottom Bar)
+       Controls (Bottom Bar) — now raised for iPhone
        ------------------------------ */
     .controls{
-      flex-shrink:0; padding:10px; background:#000;
+      flex-shrink:0;
+      padding:10px;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom) + var(--controls-extra-bottom));
+      background:#000;
       border-top:2px solid var(--border-color);
+      z-index: 20; /* above content */
     }
     .button-grid{
       display:grid; grid-template-columns:repeat(6,1fr);
@@ -1826,6 +1835,44 @@
         el.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
         el.addEventListener('wheel',     e => e.preventDefault(), { passive:false });
       });
+    })();
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: RAISE CONTROLS FOR IPHONE + SET CONTAINER BOTTOM INSET
+       ========================================================= -->
+  <script>
+    (function(){
+      const root = document.documentElement;
+      const controls = document.querySelector('.controls');
+
+      function isiOSSafariBrowser() {
+        const ua = navigator.userAgent || '';
+        const iOS = /iPhone|iPad|iPod/i.test(ua);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const isSafari = iOS && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua);
+        return iOS && isSafari && !isStandalone;
+      }
+
+      function updateIosExtraBottom() {
+        // Give extra bottom padding when Safari toolbars are present (not installed)
+        root.style.setProperty('--controls-extra-bottom', isiOSSafariBrowser() ? '28px' : '0px');
+      }
+
+      function updateControlsHeightVar() {
+        if (!controls) return;
+        const h = controls.offsetHeight;
+        root.style.setProperty('--controls-h', h + 'px');
+      }
+
+      // Watch controls size changes and window changes
+      if (controls && 'ResizeObserver' in window) {
+        const ro = new ResizeObserver(updateControlsHeightVar);
+        ro.observe(controls);
+      }
+      window.addEventListener('load', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
+      window.addEventListener('resize', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
+      window.addEventListener('orientationchange', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
     })();
   </script>
 
