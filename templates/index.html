@@ -1,238 +1,381 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- =========================================================
+       PAGE META / PWA BASICS
+       ========================================================= -->
   <meta charset="UTF-8">
-  <!-- prevent auto-zoom side effects + PWA-friendly viewport -->
+  <!-- Prevent auto zoom on mobile + enable iOS safe areas -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Darts Golf Scorer</title>
 
-  <!-- PWA manifest -->
+  <!-- Manifest + theme-color for PWA -->
   <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
   <meta name="theme-color" content="#182634">
 
-  <!-- iOS full-screen -->
+  <!-- iOS/Android standalone capability -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Darts Golf">
   <meta name="mobile-web-app-capable" content="yes">
 
+  <!-- Service Worker registration (kept tiny and early) -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}));
     }
   </script>
 
-  <!-- Favicons -->
+  <!-- Favicons / Touch icons -->
   <link rel="icon" href="{{ url_for('static', filename='icons/dartboard.svg') }}" type="image/svg+xml">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/dartboard-32.png') }}">
   <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/dartboard-192.png') }}">
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/dartboard-180.png') }}">
   <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 
+  <!-- =========================================================
+       GLOBAL STYLES (CSS)
+       ========================================================= -->
   <style>
-	:root {
-  	--bg-color:#1a1a1a; --text-color:#f0f0f0; --border-color:#444;
-  	--primary-color:#E3292E;  /* RED (positive deltas) */
- 	 --secondary-color:#309F6A; /* GREEN (negative deltas) */
- 	 --accent-color:#F9DFBC;   /* SCORE CELL BACKGROUND */
- 	 --accent-text-color:#000; /* running total text */
-	}
-    html,body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg-color);color:var(--text-color);height:100svh;display:flex;flex-direction:column;}
-    body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
-    .container{flex:1;overflow-y:auto;padding:15px 2px;-ms-overflow-style:none;scrollbar-width:none;}
-    .container::-webkit-scrollbar{display:none;}
+    /* ------------------------------
+       CSS Variables / Color System
+       ------------------------------ */
+    :root {
+      --bg-color:#1a1a1a;
+      --text-color:#f0f0f0;
+      --border-color:#444;
 
-    .controls{flex-shrink:0;padding:10px;background:#000;border-top:2px solid var(--border-color);}
-    .button-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:10px;}
-    .button-grid.single{grid-template-columns:1fr;}
-    .utility-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+      --primary-color:#E3292E;   /* RED (current turn & stats) */
+      --secondary-color:#309F6A; /* GREEN (negative deltas) */
 
-    .button-grid button,.utility-grid button{
-      width:100%;padding:20px 0;font-size:1.8em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;touch-action:manipulation;white-space:nowrap;
+      --accent-color:#F9DFBC;    /* SCORE CELL BACKGROUND */
+      --accent-text-color:#000;  /* Running total text in cells */
     }
 
-    .score-btn.minus { background: var(--secondary-color); color:#fff; }
-    .score-btn.plus  { background: var(--primary-color);  color:#fff; }
-    .score-btn.zero  { background: #616161; color:#fff; }
-    .undo-btn{background:#ff9800;color:#000;}
-    .restart-btn{background:#f44336;color:#fff;}
-    .export-btn{background:#2196f3;color:#fff;}
-    .end-btn{background:#2196f3;color:#fff;}
-    .settings-btn{background:#555;color:#fff;font-size:1.1em;padding:12px 16px;border-radius:8px;border:none;cursor:pointer;}
+    /* ------------------------------
+       Baseline Layout / Shell
+       ------------------------------ */
+    html,body{
+      margin:0; padding:0;
+      height:100svh;
+      display:flex; flex-direction:column;
+      background:var(--bg-color); color:var(--text-color);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    }
+    body{
+      padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .container{
+      flex:1; overflow-y:auto; padding:15px 2px;
+      -ms-overflow-style:none; scrollbar-width:none;
+    }
+    .container::-webkit-scrollbar{ display:none; }
 
-    /* --- Prevent iOS zoom on text inputs (>=16px) --- */
+    /* ------------------------------
+       Controls (Bottom Bar)
+       ------------------------------ */
+    .controls{
+      flex-shrink:0; padding:10px; background:#000;
+      border-top:2px solid var(--border-color);
+    }
+    .button-grid{
+      display:grid; grid-template-columns:repeat(6,1fr);
+      gap:10px; margin-bottom:10px;
+    }
+    .button-grid.single{ grid-template-columns:1fr; }
+    .utility-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .button-grid button,
+    .utility-grid button{
+      width:100%; padding:20px 0; font-size:1.8em; font-weight:bold;
+      border:none; border-radius:8px; cursor:pointer; touch-action:manipulation; white-space:nowrap;
+    }
+
+    /* Score buttons */
+    .score-btn.minus{ background:var(--secondary-color); color:#fff; }
+    .score-btn.plus{  background:var(--primary-color);  color:#fff; }
+    .score-btn.zero{  background:#616161; color:#fff; }
+
+    /* Utility buttons */
+    .undo-btn{ background:#ff9800; color:#000; }
+    .restart-btn{ background:#f44336; color:#fff; }
+    .export-btn{ background:#2196f3; color:#fff; }
+    .end-btn{ background:#2196f3; color:#fff; }
+    .settings-btn{
+      background:#555; color:#fff;
+      font-size:1.1em; padding:12px 16px; border-radius:8px; border:none; cursor:pointer;
+    }
+
+    /* ------------------------------
+       Forms / Input ergonomics
+       ------------------------------ */
     .settings-input,
     .settings-text,
-    #nameField {
-      font-size: 18px;
+    #nameField { font-size:18px; }
+
+    /* ------------------------------
+       Setup Screen
+       ------------------------------ */
+    .setup-screen{
+      text-align:center;
+      padding-top:4vh;
+      max-width:950px; margin:0 auto;
+      padding-left:8px; padding-right:8px;
+    }
+    .setup-actions{ display:grid; grid-template-columns:1fr; gap:10px; margin-top:8px; }
+    .setup-screen button{
+      padding:15px 30px; font-size:1.1em;
+      background:var(--secondary-color); color:#fff; border:none; border-radius:8px; cursor:pointer;
     }
 
-    .setup-screen { text-align:center; padding-top:4vh; max-width:950px; margin:0 auto; padding-left:8px; padding-right:8px; }
-    .setup-actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px;}
-    .setup-screen button{padding:15px 30px;font-size:1.1em;background:var(--secondary-color);color:#fff;border:none;border-radius:8px;cursor:pointer;}
+    .flash{
+      margin:0 auto 16px; padding:12px 16px; border-radius:8px;
+      border:1px solid #ff4d4d; background:#2a0000; color:#ffcccc; font-weight:600;
+    }
 
-    .flash{margin:0 auto 16px;padding:12px 16px;border-radius:8px;border:1px solid #ff4d4d;background:#2a0000;color:#ffcccc;font-weight:600;}
+    .recent-wrap{ margin-top:14px; }
+    .recent-title{ color:#ccc; font-size:.95em; margin-bottom:8px; }
+    .chip-list{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
 
-    .recent-wrap{margin-top:14px;}
-    .recent-title{color:#ccc;font-size:.95em;margin-bottom:8px;}
-    .chip-list{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
-    .chip{background:#2b2b2b;color:#fff;border:1px solid #444;padding:8px 12px;border-radius:16px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;font-size:.95em;}
-    .chip.selected{background:var(--secondary-color);border-color:var(--secondary-color);}
+    /* Player "chips" — WHITE text by default */
+    .chip{
+      background:#2b2b2b; color:#fff;
+      border:1px solid #444; padding:8px 12px; border-radius:16px; cursor:pointer;
+      user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
+      font-size:.95em;
+    }
+    .chip.selected{ background:var(--secondary-color); border-color:var(--secondary-color); }
     .chip.removeable::after{ content:'✕'; margin-left:8px; font-weight:900; opacity:.85; }
-    .chip.draggable{ cursor:grab; touch-action: none; }
+    .chip.draggable{ cursor:grab; touch-action:none; }
     .chip.dragging{ opacity:.6; transform:scale(.98); }
     .chip.placeholder{ border:2px dashed #666; background:transparent; }
 
-    .name-input-wrap input.settings-input{ background:#101010; border:1px solid var(--border-color); border-radius:8px; color:#fff; }
-    .name-input-wrap #addNameBtn{ background:#309F6A; color:#fff; border:none; border-radius:8px; font-weight:800; }
+    .name-input-wrap input.settings-input{
+      background:#101010; border:1px solid var(--border-color);
+      border-radius:8px; color:#fff;
+    }
+    .name-input-wrap #addNameBtn{
+      background:#309F6A; color:#fff; border:none; border-radius:8px; font-weight:800;
+    }
 
-    .scoreboard{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:20px;}
-    .scoreboard th,.scoreboard td{border:1px solid var(--border-color);text-align:center;word-wrap:break-word;}
-    .scoreboard thead th{font-size:1.2em;padding:8px 5px;line-height:1.4;vertical-align:middle;background:#333;}
-    .scoreboard tbody th,.scoreboard tbody td{font-size:1.5em;vertical-align:middle;}
-    .scoreboard tbody th{background:#2b2b2b;font-size:1.1em;padding:12px 5px;}
-    .scoreboard tbody td{background:var(--accent-color);color:var(--accent-text-color);font-weight:bold;padding:12px 5px;}
-    .scoreboard .total-row td{background:#333;color:#fff;}
+    /* ------------------------------
+       Scoreboard Table (all phases)
+       ------------------------------ */
+    .scoreboard{
+      width:100%; border-collapse:collapse; table-layout:fixed;
+      margin-bottom:20px;
+    }
+    .scoreboard th,.scoreboard td{
+      border:1px solid var(--border-color); text-align:center; word-wrap:break-word;
+    }
+    .scoreboard thead th{
+      font-size:1.2em; padding:8px 5px; line-height:1.4; vertical-align:middle; background:#333;
+    }
+    .scoreboard tbody th,.scoreboard tbody td{ font-size:1.5em; vertical-align:middle; }
+    .scoreboard tbody th{ background:#2b2b2b; font-size:1.1em; padding:12px 5px; }
+    .scoreboard tbody td{
+      background:var(--accent-color); color:var(--accent-text-color);
+      font-weight:bold; padding:12px 5px;
+    }
+    .scoreboard .total-row td{ background:#333; color:#fff; }
 
-    .current-player-header{color:var(--primary-color);font-weight:bold;}
+    /* === Player name colors per request ===
+       - Default player name headers: WHITE
+       - Current player's header: RED
+       - Stats page names handled separately below (.stat-player) */
+    .scoreboard thead th:not(:first-child){ color:#fff; } /* default white */
+    .scoreboard.final thead tr:nth-child(2) th:not(:first-child){ color:#fff; } /* final names row white */
+    .current-player-header{ color:var(--primary-color); font-weight:bold; } /* highlight current turn */
 
-    .info-bar{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; margin-bottom:15px; }
+    /* ------------------------------
+       Info Bar (Round/Tie-breaker)
+       ------------------------------ */
+    .info-bar{
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:6px; margin-bottom:15px;
+    }
     .round-count{ display:flex; align-items:flex-end; justify-content:center; gap:8px; line-height:1; margin-top:4px; flex-wrap:nowrap; }
-    .round-label{ font-size: clamp(28px, 7vw, 56px); font-weight: 900; letter-spacing: 0.06em; }
-    .round-number{ font-size: clamp(44px, 12vw, 96px); font-weight: 900; line-height: .9; color:#bbb; }
-    .round-total{ font-size: clamp(10px, 2.8vw, 16px); font-weight: 700; opacity: .85; margin-left: 2px; align-self: flex-start; transform: translateY(-6px); }
-    .turn-info{ font-size: clamp(18px, 4.2vw, 28px); font-weight: 700; color: var(--primary-color); text-align:center; }
+    .round-label{ font-size:clamp(28px, 7vw, 56px); font-weight:900; letter-spacing:.06em; }
+    .round-number{ font-size:clamp(44px, 12vw, 96px); font-weight:900; line-height:.9; color:#bbb; }
+    .round-total{ font-size:clamp(10px, 2.8vw, 16px); font-weight:700; opacity:.85; margin-left:2px; align-self:flex-start; transform:translateY(-6px); }
+    .turn-info{ font-size:clamp(18px, 4.2vw, 28px); font-weight:700; color:var(--primary-color); text-align:center; }
 
-    .end-banner-wrap { background: #182634; border-radius: 12px; padding: 10px; margin-top: 12px; }
-    .end-banner{ margin:0; padding: 12px 16px; border: 1px dashed #2196f3; color:#fff; background: transparent; border-radius:8px; font-weight:700; text-align:center; }
+    .end-banner-wrap{ background:#182634; border-radius:12px; padding:10px; margin-top:12px; }
+    .end-banner{
+      margin:0; padding:12px 16px; border:1px dashed #2196f3; color:#fff; background:transparent; border-radius:8px;
+      font-weight:700; text-align:center;
+    }
 
-    .scoreboard tr.current-row th { background:#3a3a3a; }
+    .scoreboard tr.current-row th{ background:#3a3a3a; }
 
-    .cell { position: relative; display: flex; align-items: center; justify-content: center; min-height: 58px; width: 100%; height: 100%; }
-    .total-pill { color:#000; background:none; padding:0; border-radius:0; font-weight:900; font-size:1.2em; line-height:1; }
+    /* Cell internals (running total + delta chip) */
+    .cell{ position:relative; display:flex; align-items:center; justify-content:center; min-height:58px; width:100%; height:100%; }
+    .total-pill{ color:#000; background:none; padding:0; border-radius:0; font-weight:900; font-size:1.2em; line-height:1; }
 
-    .delta-corner { position:absolute; right:0; bottom:0; width:32px; height:32px; border-top-left-radius:100%; background:#000; color:#fff; display:flex; align-items:flex-end; justify-content:flex-end; font-weight:900; font-size:.75em; pointer-events:none; padding:2px 5px; box-sizing:border-box; overflow:hidden; line-height:1; }
-    .delta-corner.pos  { background: var(--primary-color); }
-    .delta-corner.neg  { background: var(--secondary-color); }
-    .delta-corner.zero { background: #000; }
-    .delta-corner.hidden { opacity: 0; }
+    .delta-corner{
+      position:absolute; right:0; bottom:0; width:32px; height:32px; border-top-left-radius:100%;
+      background:#000; color:#fff; display:flex; align-items:flex-end; justify-content:flex-end; font-weight:900; font-size:.75em;
+      pointer-events:none; padding:2px 5px; box-sizing:border-box; overflow:hidden; line-height:1;
+    }
+    .delta-corner.pos{  background:var(--primary-color); }
+    .delta-corner.neg{  background:var(--secondary-color); }
+    .delta-corner.zero{ background:#000; }
+    .delta-corner.hidden{ opacity:0; }
 
-    .scoreboard.playing tbody td, .scoreboard.final tbody td { padding:0; }
-    .scoreboard.playing td .cell, .scoreboard.final td .cell { width:100%; height:100%; }
+    .scoreboard.playing tbody td,
+    .scoreboard.final tbody td{ padding:0; }
+    .scoreboard.playing td .cell,
+    .scoreboard.final   td .cell{ width:100%; height:100%; }
 
-    .homepage-dartboard, .final-standings-img{ display:block; width:auto; height:auto; max-width: min(92vw, 520px); max-height: 48vh; margin:0 auto 20px; object-fit: contain; }
+    /* Hero images */
+    .homepage-dartboard,
+    .final-standings-img{
+      display:block; width:auto; height:auto; max-width:min(92vw, 520px); max-height:48vh;
+      margin:0 auto 20px; object-fit:contain;
+    }
 
-    .score-bubble{ position:fixed; z-index:9999; padding:6px 10px; border-radius:999px; font-weight:800; font-size:.95em; white-space:nowrap; pointer-events:none; box-shadow:0 6px 16px rgba(0,0,0,.35); transform:translate(-50%,0) scale(.95); opacity:0; animation:floatUp 900ms ease-out forwards; will-change:transform,opacity; }
-    .score-bubble.pos{ background: var(--primary-color); color:#fff; }
-    .score-bubble.neg{ background: var(--secondary-color); color:#fff; }
+    /* ------------------------------
+       UI Effects (score bubble)
+       ------------------------------ */
+    .score-bubble{
+      position:fixed; z-index:9999; padding:6px 10px; border-radius:999px;
+      font-weight:800; font-size:.95em; white-space:nowrap; pointer-events:none;
+      box-shadow:0 6px 16px rgba(0,0,0,.35);
+      transform:translate(-50%,0) scale(.95); opacity:0;
+      animation:floatUp 900ms ease-out forwards;
+      will-change:transform,opacity;
+    }
+    .score-bubble.pos{  background:var(--primary-color); color:#fff; }
+    .score-bubble.neg{  background:var(--secondary-color); color:#fff; }
     .score-bubble.zero{ background:#000; color:#fff; }
 
     @keyframes floatUp{
-      0%{ transform:translate(-50%,8px) scale(.95); opacity:0; }
-      15%{ transform:translate(-50%,0) scale(1); opacity:1; }
+      0%{   transform:translate(-50%,8px)  scale(.95); opacity:0; }
+      15%{  transform:translate(-50%,0px) scale(1);   opacity:1; }
       100%{ transform:translate(-50%,-64px) scale(1.05); opacity:0; }
     }
 
-    #final-capture{ overflow: visible; }
+    /* Winner banner (final page) */
+    .winner-banner{
+      color:var(--primary-color); font-weight:900; text-align:center;
+      font-size:clamp(32px, 8.5vw, 64px);
+      margin:8px auto 14px; letter-spacing:.02em;
+    }
 
-    /* Modal (confirm) */
-    .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:10000; padding:20px; }
-    .modal{ background:#111; border:1px solid var(--border-color); border-radius:12px; max-width:560px; width:100%; padding:18px; box-shadow:0 12px 36px rgba(0,0,0,.6); }
+    #final-capture{ overflow:visible; }
+
+    /* ------------------------------
+       Modals (Confirm / Settings / iOS Install hint)
+       ------------------------------ */
+    .modal-overlay{
+      position:fixed; inset:0; background:rgba(0,0,0,.55);
+      display:none; align-items:center; justify-content:center; z-index:10000; padding:20px;
+    }
+    .modal{
+      background:#111; border:1px solid var(--border-color); border-radius:12px;
+      max-width:560px; width:100%; padding:18px; box-shadow:0 12px 36px rgba(0,0,0,.6);
+    }
     .modal h3{ margin:0 0 8px; font-size:1.3em; }
     .modal p{ margin:0 0 16px; color:#ddd; }
     .modal-actions{ display:flex; gap:10px; justify-content:flex-end; }
-    .modal-actions .btn{ padding:10px 16px; font-size:1.05em; font-weight:800; border:none; border-radius:8px; cursor:pointer; }
+    .modal-actions .btn{
+      padding:10px 16px; font-size:1.05em; font-weight:800; border:none; border-radius:8px; cursor:pointer;
+    }
     .btn-cancel{ background:#444; color:#fff; }
     .btn-confirm{ background:#2196f3; color:#fff; }
 
-    /* Settings modal (Haptics only now) */
+    /* Settings modal (rows) */
     .settings-grid{ display:grid; gap:10px; }
     .settings-row{ display:grid; gap:6px; }
     .settings-help{ color:#bbb; font-size:.9em; }
 
-    /* Utility grid playing: keep horizontal */
-    .utility-grid.playing{ display:flex !important; flex-wrap:nowrap; gap:10px; align-items:stretch; }
+    /* ------------------------------
+       Utility: Playing-page control row
+       ------------------------------ */
+    .utility-grid.playing{
+      display:flex !important; flex-wrap:nowrap; gap:10px; align-items:stretch;
+    }
     .utility-grid.playing > *{ flex:1 1 0; min-width:0; }
-    .utility-grid.playing button{ white-space:nowrap; font-size: clamp(16px, 4.5vw, 28px); padding: clamp(12px, 3.5vw, 20px) 0; }
+    .utility-grid.playing button{
+      white-space:nowrap; font-size:clamp(16px, 4.5vw, 28px); padding:clamp(12px, 3.5vw, 20px) 0;
+    }
 
-    /* Toasts */
-    .toast-container{ position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 10050; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-    .toast{ pointer-events: auto; background: #222; color: #fff; border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 14px; font-weight: 800; font-size: 0.95em; box-shadow: 0 10px 24px rgba(0,0,0,.35); opacity: 0; transform: translateY(6px); transition: opacity .18s ease, transform .18s ease; display:flex; align-items:center; gap:10px; }
-    .toast.show{ opacity: 1; transform: translateY(0); }
+    /* ------------------------------
+      Toasts
+      ------------------------------ */
+    .toast-container{
+      position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+      z-index:10050; display:flex; flex-direction:column; gap:8px; pointer-events:none;
+    }
+    .toast{
+      pointer-events:auto; background:#222; color:#fff; border:1px solid var(--border-color);
+      border-radius:10px; padding:10px 14px; font-weight:800; font-size:.95em;
+      box-shadow:0 10px 24px rgba(0,0,0,.35);
+      opacity:0; transform:translateY(6px);
+      transition:opacity .18s ease, transform .18s ease;
+      display:flex; align-items:center; gap:10px;
+    }
+    .toast.show{ opacity:1; transform:translateY(0); }
     .toast--error{ background:#3b1111; border-color:#6b1d1d; }
     .toast--success{ background:#113b25; border-color:#1d6b3a; }
     .toast--info{ background:#11233b; border-color:#1d3b6b; }
     .toast button{ background:#2196f3; color:#fff; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:800; }
 
-    /* Reduced motion */
+    /* ------------------------------
+       Reduced Motion
+       ------------------------------ */
     @media (prefers-reduced-motion: reduce){
-      .score-bubble{ animation: none !important; opacity:1; }
+      .score-bubble{ animation:none !important; opacity:1; }
     }
 
-    /* Confetti canvas */
+    /* Confetti canvas (winner) */
     #confettiCanvas{ position:fixed; inset:0; pointer-events:none; z-index:9998; }
 
-    /* Winner banner */
-    .winner-banner{
-      color: var(--primary-color);
-      font-weight: 900;
-      text-align: center;
-      font-size: clamp(32px, 8.5vw, 64px);
-      margin: 8px auto 14px;
-      letter-spacing: .02em;
-    }
-
-    /* --- Stats page styles (restore look & spacing) --- */
+    /* ------------------------------
+       STATS PAGE STYLES (names stay RED here)
+       ------------------------------ */
     .stat-block{
-      background:#111;
-      border:1px solid var(--border-color);
-      border-radius:12px;
-      padding:14px 16px;
-      margin:12px auto;
-      max-width:900px;
+      background:#111; border:1px solid var(--border-color); border-radius:12px;
+      padding:14px 16px; margin:12px auto; max-width:900px;
     }
     .stat-title{
-      font-weight:900;
-      font-size:1.2em;
-      color:#e5e5e5;
-      margin:0 0 10px;
-      letter-spacing:.02em;
+      font-weight:900; font-size:1.2em; color:#e5e5e5;
+      margin:0 0 10px; letter-spacing:.02em;
     }
-    .stat-value{
-      font-size:1.3em;
-      font-weight:900;
-      color:#fff;
-    }
+    .stat-value{ font-size:1.3em; font-weight:900; color:#fff; }
     .stat-player{
-      font-weight:800;
-      color:#fff;
+      font-weight:800; color:var(--primary-color); /* keep red on stats page */
       display:inline-block;
-      min-width:170px;
-      margin-right:10px;
     }
-    .stat-block ol{
-      margin:0;
-      padding-left:1.1em;
-      list-style:decimal;
-    }
+    .stat-block ol{ margin:0; padding-left:1.1em; list-style:decimal; }
     .stat-block ol li{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding:8px 0;
-      border-bottom:1px dashed #333;
+      display:flex; justify-content:space-between; align-items:flex-start; /* top-align */
+      padding:8px 0; border-bottom:1px dashed #333;
+      gap:12px;
     }
-    .stat-block ol li:last-child{
-      border-bottom:none;
-    }
+    .stat-block ol li:last-child{ border-bottom:none; }
+
+    /* Helpers for “from…to…” under name */
+    .stat-left{ display:flex; flex-direction:column; gap:2px; min-width:170px; }
+    .stat-sub{ color:#ccc; opacity:0.95; margin-left:0; }
+    .stat-right{ font-weight:900; white-space:nowrap; color:#fff; }
   </style>
 </head>
+
 <body>
+  <!-- =========================================================
+       GLOBAL CANVAS FOR CONFETTI
+       ========================================================= -->
   <canvas id="confettiCanvas"></canvas>
+
+  <!-- =========================================================
+       MAIN CONTENT CONTAINER
+       ========================================================= -->
   <div class="container">
 
     {% if show_stats %}
-      <!-- ---------- STATS VIEW ---------- -->
+      <!-- =====================================================
+           STATS VIEW
+           ===================================================== -->
       <h1>Game Stats</h1>
 
       <div class="stat-block">
@@ -240,7 +383,12 @@
         {% if birdie_streak_ranking %}
           <ol>
             {% for row in birdie_streak_ranking %}
-              <li><span class="stat-player">{{ row.name }}</span>{{ row.streak }}</li>
+              <li>
+                <div class="stat-left">
+                  <span class="stat-player">{{ row.name }}</span>
+                </div>
+                <div class="stat-right">{{ row.streak }}</div>
+              </li>
             {% endfor %}
           </ol>
         {% else %}
@@ -254,7 +402,12 @@
         {% if bogey_streak_ranking %}
           <ol>
             {% for row in bogey_streak_ranking %}
-              <li><span class="stat-player">{{ row.name }}</span>{{ row.streak }}</li>
+              <li>
+                <div class="stat-left">
+                  <span class="stat-player">{{ row.name }}</span>
+                </div>
+                <div class="stat-right">{{ row.streak }}</div>
+              </li>
             {% endfor %}
           </ol>
         {% else %}
@@ -268,21 +421,12 @@
         {% if most_birdies_ranking %}
           <ol>
             {% for row in most_birdies_ranking %}
-              <li><span class="stat-player">{{ row.name }}</span>{{ row.count }}</li>
-            {% endfor %}
-          </ol>
-        {% else %}
-          <div class="stat-value">—</div>
-          <small>No completed rounds yet.</small>
-        {% endif %}
-      </div>
-      
-      <div class="stat-block">
-        <div class="stat-title">😬 Total Bogeys</div>
-        {% if most_bogeys_ranking %}
-          <ol>
-            {% for row in most_bogeys_ranking %}
-              <li><span class="stat-player">{{ row.name }}</span>{{ row.count }}</li>
+              <li>
+                <div class="stat-left">
+                  <span class="stat-player">{{ row.name }}</span>
+                </div>
+                <div class="stat-right">{{ row.count }}</div>
+              </li>
             {% endfor %}
           </ol>
         {% else %}
@@ -296,7 +440,13 @@
         {% if average_ranking %}
           <ol>
             {% for row in average_ranking %}
-              <li><span class="stat-player">{{ row.name }}</span>{{ "%+.2f"|format(row.average) }} <small style="display:inline; opacity:.8;">(over {{ row.rounds }} rounds)</small></li>
+              <li>
+                <div class="stat-left">
+                  <span class="stat-player">{{ row.name }}</span>
+                  <small class="stat-sub">(over {{ row.rounds }} rounds)</small>
+                </div>
+                <div class="stat-right">{{ "%+.2f"|format(row.average) }}</div>
+              </li>
             {% endfor %}
           </ol>
         {% else %}
@@ -311,11 +461,14 @@
           <ol>
             {% for cb in comeback_ranking %}
               <li>
-                <span class="stat-player">{{ cb.player }}</span>{{ cb.improvement }} saved
-                <small style="display:block; margin-left:6px;">
-                  from {{ "%+d"|format(cb.from_score) }} on Round {{ cb.from_round }}
-                  to {{ "%+d"|format(cb.to_score) }} on Round {{ cb.to_round }}
-                </small>
+                <div class="stat-left">
+                  <span class="stat-player">{{ cb.player }}</span>
+                  <small class="stat-sub">
+                    from {{ "%+d"|format(cb.from_score) }} on Round {{ cb.from_round }}
+                    to {{ "%+d"|format(cb.to_score) }} on Round {{ cb.to_round }}
+                  </small>
+                </div>
+                <div class="stat-right">{{ cb.improvement }} saved</div>
               </li>
             {% endfor %}
           </ol>
@@ -326,8 +479,14 @@
       </div>
 
     {% else %}
-      <!-- ---------- NORMAL VIEWS ---------- -->
+      <!-- =====================================================
+           NORMAL GAME VIEWS
+           ===================================================== -->
+
       {% if game.phase == 'setup' %}
+        <!-- =========================
+             SETUP PHASE
+             ========================= -->
         <div class="setup-screen">
           <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}" alt="Darts Golf Scorer Dartboard" class="homepage-dartboard">
 
@@ -339,17 +498,11 @@
             {% endif %}
           {% endwith %}
 
-          <!-- Settings button (Haptics only) -->
+          <!-- Settings button (Haptics + Install button inside modal) -->
           <button type="button" class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
-
-          <!-- Add-to-Home (PWA install) -->
-          <button type="button" id="installBtn" class="settings-btn" style="margin-top:8px; display:none;">
-            ➕ Add to Home Screen
-          </button>
 
           <!-- Add-one-name-at-a-time input -->
           <form id="startForm" action="{{ url_for('start_game') }}" method="post" style="margin-top:12px;">
-            <!-- Hidden field posted to /start as CSV -->
             <input id="playersInput" type="hidden" name="players" required>
 
             <div class="name-input-wrap" style="position:relative; display:flex; gap:8px; align-items:center; margin-top:8px;">
@@ -396,6 +549,9 @@
         </div>
 
       {% elif game.phase == 'playing' %}
+        <!-- =========================
+             PLAYING PHASE
+             ========================= -->
         <div class="info-bar" id="info-bar" aria-live="polite" role="status">
           <div class="round-count">
             <span class="round-label">ROUND</span>
@@ -483,6 +639,9 @@
         </table>
 
       {% elif game.phase == 'playoff' %}
+        <!-- =========================
+             PLAYOFF (TIE-BREAKER) PHASE
+             ========================= -->
         <div class="info-bar" id="info-bar" aria-live="polite" role="status">
           <div class="round-count">
             <span class="round-label">TIE-BREAKER</span>
@@ -524,6 +683,9 @@
         </table>
 
       {% elif game.phase == 'final_ranking' %}
+        <!-- =========================
+             FINAL RANKING PHASE
+             ========================= -->
         <div id="final-capture">
           <div class="status-box">
             <img src="{{ url_for('static', filename='images/finalstanding1.png') }}" alt="Final Standings" class="final-standings-img">
@@ -604,7 +766,9 @@
     {% endif %}
   </div>
 
-  <!-- Confirm Modal -->
+  <!-- =========================================================
+       MODALS
+       ========================================================= -->
   <div id="confirmOverlay" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
       <h3 id="confirmTitle">Confirm</h3>
@@ -616,7 +780,7 @@
     </div>
   </div>
 
-  <!-- Settings Modal (Haptics only) -->
+  <!-- Settings Modal (now contains Add to Home Screen button) -->
   <div id="settingsOverlay" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <h3 id="settingsTitle">Settings</h3>
@@ -627,6 +791,14 @@
             Haptic feedback
           </label>
           <div class="settings-help">Android: vibration · iOS: subtle tap sound</div>
+        </div>
+
+        <!-- New: Add to Home Screen button (shown when eligible) -->
+        <div class="settings-row">
+          <button type="button" id="installBtnSettings" class="btn btn-confirm" style="display:none;">
+            ➕ Add to Home Screen
+          </button>
+          <div class="settings-help">Install this app as a shortcut on your device.</div>
         </div>
       </div>
       <div class="modal-actions" style="margin-top:12px;">
@@ -655,26 +827,30 @@
   <!-- Toast host -->
   <div id="toastHost" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- Inject initial game state -->
+  <!-- =========================================================
+       SCRIPT: INITIAL SERVER STATE INJECTION
+       ========================================================= -->
   <script>
     window.__gameCache = {{ game | tojson | safe }};
   </script>
 
-  <!-- Confirm helper -->
+  <!-- =========================================================
+       SCRIPT: CONFIRM HELPER
+       ========================================================= -->
   <script>
     (function(){
       const overlay = document.getElementById('confirmOverlay');
       const titleEl = document.getElementById('confirmTitle');
-      const msgEl = document.getElementById('confirmMessage');
-      const okBtn = document.getElementById('confirmOkBtn');
+      const msgEl   = document.getElementById('confirmMessage');
+      const okBtn   = document.getElementById('confirmOkBtn');
       const cancelBtn = document.getElementById('confirmCancelBtn');
       let resolver = null;
 
       function openModal(opts){
         const { title='Confirm', message='Are you sure?', okText='OK', cancelText='Cancel' } = opts || {};
         titleEl.textContent = title;
-        msgEl.textContent = message;
-        okBtn.textContent = okText;
+        msgEl.textContent   = message;
+        okBtn.textContent   = okText;
         cancelBtn.textContent = cancelText;
         overlay.style.display = 'flex';
         overlay.setAttribute('aria-hidden','false');
@@ -688,17 +864,17 @@
         document.body.style.overflow = '';
         if (resolver){ const r = resolver; resolver = null; r(result); }
       }
-
       okBtn.addEventListener('click', ()=> closeModal(true));
       cancelBtn.addEventListener('click', ()=> closeModal(false));
       overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(false); });
       window.addEventListener('keydown', (e)=>{ if (overlay.style.display === 'flex' && e.key === 'Escape') closeModal(false); });
-
       window.showConfirmModal = openModal;
     })();
   </script>
 
-  <!-- Toast helpers -->
+  <!-- =========================================================
+       SCRIPT: TOAST HELPERS
+       ========================================================= -->
   <script>
     function showToast(message, type='info', ms=2200){
       const host = document.getElementById('toastHost');
@@ -731,7 +907,9 @@
     }
   </script>
 
-  <!-- HAPTIC helper + preference (Android vibrate / iOS audio click) -->
+  <!-- =========================================================
+       SCRIPT: HAPTIC FEEDBACK
+       ========================================================= -->
   <script>
   (function(){
     const HAPTIC_KEY = 'darts-haptics-enabled';
@@ -771,34 +949,108 @@
         else navigator.vibrate(15);
         return;
       }
-      // iOS fallback: subtle audio tick
       if (kind==='light') softClick(70, 70);
       else if (kind==='medium') doubleClick();
       else if (kind==='success'){ softClick(60, 90); setTimeout(()=> softClick(80, 50), 80); }
       else softClick(70, 70);
     };
-
-    // Prime audio after first gesture so taps play immediately on iOS
     ['touchstart','mousedown','keydown'].forEach(ev=>{
       window.addEventListener(ev, ()=>{ ensureAudio(); }, { once:true, passive:true });
     });
   })();
   </script>
 
-  {% if game.phase == 'setup' and not show_stats %}
-  <!-- Setup: chips, one-by-one name entry, mobile drag-reorder -->
+  <!-- =========================================================
+       SCRIPT: PWA INSTALL (global, button lives in Settings)
+       ========================================================= -->
   <script>
-    // ---------- State ----------
-    const recentNames = {{ (game.recent_names or []) | tojson | safe }};
-    const chipList = document.getElementById('chipList');           // recent chips (if any)
-    const selectedWrap = document.getElementById('selectedWrap');   // container for selected chips
-    const selectedChipList = document.getElementById('selectedChipList');
-    const playersHidden = document.getElementById('playersInput');  // hidden CSV posted to /start
-    const nameField = document.getElementById('nameField');
-    const addNameBtn = document.getElementById('addNameBtn');
-    const startForm = document.getElementById('startForm');
+    (function(){
+      const installBtn  = document.getElementById('installBtnSettings');
+      const iosOverlay  = document.getElementById('iosInstallOverlay');
+      let deferredPrompt = null;
 
-    let selected = []; // array of names in order (case-preserving)
+      function isStandalone(){
+        return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      }
+      function isIOS(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent); }
+      function isSafari(){ return isIOS() && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent); }
+
+      function showInstallBtn(){ if (installBtn) installBtn.style.display = 'inline-block'; }
+      function hideInstallBtn(){ if (installBtn) installBtn.style.display = 'none'; }
+
+      function openIosInstall(){
+        if (!iosOverlay) return;
+        iosOverlay.style.display = 'flex';
+        iosOverlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+      }
+      window.closeIosInstall = function(){
+        if (!iosOverlay) return;
+        iosOverlay.style.display = 'none';
+        iosOverlay.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+      };
+
+      // Exported so openSettings() can refresh visibility on demand
+      window.updateInstallVisibility = function(){
+        if (isStandalone()){ hideInstallBtn(); return; }
+        if (deferredPrompt || isSafari()) showInstallBtn();
+        else hideInstallBtn();
+      };
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        window.updateInstallVisibility();
+      });
+
+      window.addEventListener('appinstalled', () => {
+        hideInstallBtn();
+        showToast('App installed! 🎉', 'success');
+        deferredPrompt = null;
+      });
+
+      installBtn?.addEventListener('click', async () => {
+        if (isStandalone()) { showToast('Already installed', 'info'); hideInstallBtn(); return; }
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          try {
+            const choice = await deferredPrompt.userChoice;
+            if (choice && choice.outcome === 'accepted') {
+              showToast('Installing…', 'info');
+            }
+          } finally {
+            deferredPrompt = null;
+            // On some browsers, button should hide until event fires again
+            setTimeout(window.updateInstallVisibility, 0);
+          }
+        } else if (isSafari()) {
+          openIosInstall();
+        } else {
+          showToast('Install not supported in this browser', 'info');
+        }
+      });
+
+      // Initial state
+      document.addEventListener('DOMContentLoaded', window.updateInstallVisibility);
+    })();
+  </script>
+
+  {% if game.phase == 'setup' and not show_stats %}
+  <!-- =========================================================
+       SCRIPT: SETUP PAGE (chips, drag-reorder, form)
+       ========================================================= -->
+  <script>
+    const recentNames      = {{ (game.recent_names or []) | tojson | safe }};
+    const chipList         = document.getElementById('chipList');
+    const selectedWrap     = document.getElementById('selectedWrap');
+    const selectedChipList = document.getElementById('selectedChipList');
+    const playersHidden    = document.getElementById('playersInput');
+    const nameField        = document.getElementById('nameField');
+    const addNameBtn       = document.getElementById('addNameBtn');
+    const startForm        = document.getElementById('startForm');
+
+    let selected = [];
 
     function norm(s){ return (s||'').trim().replace(/\s+/g,' '); }
     function idxOfName(arr, name){
@@ -807,7 +1059,6 @@
       return -1;
     }
 
-    // ---------- Rendering ----------
     function renderSelected(){
       selectedWrap.style.display = selected.length ? 'block' : 'none';
       selectedChipList.innerHTML = selected.map(n => (
@@ -817,7 +1068,6 @@
       writeHidden();
       reflectRecentSelection();
     }
-
     function renderRecent(){
       if (!chipList) return;
       chipList.innerHTML = recentNames.map(n =>
@@ -831,7 +1081,6 @@
       });
       reflectRecentSelection();
     }
-
     function reflectRecentSelection(){
       if (!chipList) return;
       chipList.querySelectorAll('.chip').forEach(el=>{
@@ -840,12 +1089,8 @@
         el.classList.toggle('selected', sel);
       });
     }
+    function writeHidden(){ playersHidden.value = selected.join(', '); }
 
-    function writeHidden(){
-      playersHidden.value = selected.join(', ');
-    }
-
-    // ---------- Add / Remove ----------
     function addName(raw){
       const name = norm(raw);
       if (!name) return;
@@ -855,31 +1100,21 @@
       }
       selected.push(name);
       renderSelected();
-      // UX: clear + focus + haptic
       nameField.value = '';
       nameField.focus();
       haptic('light');
     }
-
     function removeName(name){
       const i = idxOfName(selected, name);
-      if (i >= 0){
-        selected.splice(i,1);
-        renderSelected();
-      }
+      if (i >= 0){ selected.splice(i,1); renderSelected(); }
     }
+    function toggleName(name){ if (idxOfName(selected, name) >= 0) removeName(name); else addName(name); }
 
-    function toggleName(name){
-      if (idxOfName(selected, name) >= 0) removeName(name);
-      else addName(name);
-    }
-
-    // ---------- Drag & Drop reorder (desktop HTML5 DnD) ----------
     function bindSelectedEvents(){
       selectedChipList.querySelectorAll('.draggable').forEach(chip=>{
-        chip.addEventListener('click', ()=> removeName(chip.getAttribute('data-name'))); // tap pill removes
+        chip.addEventListener('click', ()=> removeName(chip.getAttribute('data-name')));
         chip.addEventListener('dragstart', (e)=>{ chip.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
-        chip.addEventListener('dragend', ()=> chip.classList.remove('dragging'));
+        chip.addEventListener('dragend',   ()=>{ chip.classList.remove('dragging'); });
       });
       selectedChipList.addEventListener('dragover', (e)=>{
         e.preventDefault();
@@ -890,7 +1125,6 @@
         else selectedChipList.insertBefore(dragging, after);
       });
       selectedChipList.addEventListener('drop', ()=>{
-        // read back order into selected[]
         selected = Array.from(selectedChipList.querySelectorAll('.draggable')).map(el=>el.getAttribute('data-name'));
         writeHidden();
       });
@@ -904,22 +1138,18 @@
       }, {offset: Number.NEGATIVE_INFINITY, element: null}).element;
     }
 
-    // ---------- Mobile-friendly reorder (Pointer Events) ----------
     (function(){
-      if (!('PointerEvent' in window)) return;              // desktop keeps HTML5 DnD
+      if (!('PointerEvent' in window)) return;
       if (!selectedChipList) return;
 
-      let active = null;   // the element being dragged
-      let ghost = null;    // floating copy
-      let placeholder = null; // slot to mark insertion point
-      let startX=0, startY=0, offX=0, offY=0;
+      let active = null, ghost = null, placeholder = null, offX=0, offY=0;
 
       function createGhost(fromEl){
         const r = fromEl.getBoundingClientRect();
         const g = fromEl.cloneNode(true);
         g.style.position = 'fixed';
         g.style.left = r.left + 'px';
-        g.style.top = r.top + 'px';
+        g.style.top  = r.top  + 'px';
         g.style.width = r.width + 'px';
         g.style.height = r.height + 'px';
         g.style.pointerEvents = 'none';
@@ -932,36 +1162,30 @@
       function makePlaceholder(fromEl){
         const p = document.createElement('div');
         p.className = 'chip placeholder';
-        p.style.width = fromEl.offsetWidth + 'px';
+        p.style.width  = fromEl.offsetWidth + 'px';
         p.style.height = fromEl.offsetHeight + 'px';
         return p;
       }
       function indexFromPoint(x, y){
         const children = Array.from(selectedChipList.children).filter(el => el !== placeholder);
         if (!children.length) return 0;
-        let bestIdx = children.length;
-        let bestDist = Infinity;
+        let bestIdx = children.length, bestDist = Infinity;
         children.forEach((el, idx)=>{
           const r = el.getBoundingClientRect();
-          const cx = r.left + r.width/2;
-          const cy = r.top + r.height/2;
-          const dx = cx - x, dy = cy - y;
-          const d  = dx*dx + dy*dy;
+          const cx = r.left + r.width/2, cy = r.top + r.height/2;
+          const dx = cx - x, dy = cy - y; const d  = dx*dx + dy*dy;
           if (d < bestDist){ bestDist = d; bestIdx = idx; }
         });
         const near = children[bestIdx];
         if (!near) return children.length;
         const r = near.getBoundingClientRect();
-        const before =
-          (Math.abs(y - (r.top + r.height/2)) > Math.abs(x - (r.left + r.width/2)))
+        const before = (Math.abs(y - (r.top + r.height/2)) > Math.abs(x - (r.left + r.width/2)))
             ? (y < r.top + r.height/2)
             : (x < r.left + r.width/2);
         return before ? bestIdx : bestIdx + 1;
       }
       function commitOrderFromDom(){
-        selected = Array
-          .from(selectedChipList.querySelectorAll('.draggable'))
-          .map(el=> el.getAttribute('data-name'));
+        selected = Array.from(selectedChipList.querySelectorAll('.draggable')).map(el=> el.getAttribute('data-name'));
         writeHidden();
       }
 
@@ -987,7 +1211,6 @@
         const x = e.clientX - offX, y = e.clientY - offY;
         ghost.style.left = x + 'px';
         ghost.style.top  = y + 'px';
-
         const idx = indexFromPoint(e.clientX, e.clientY);
         const target = selectedChipList.children[idx];
         if (!target) selectedChipList.appendChild(placeholder);
@@ -1003,10 +1226,8 @@
         active.style.display = '';
         try{ active.releasePointerCapture(e.pointerId); }catch(_){}
         active = null;
-
         placeholder?.remove(); placeholder = null;
         ghost?.remove(); ghost = null;
-
         commitOrderFromDom();
       }
 
@@ -1015,7 +1236,6 @@
       window.addEventListener('pointerup', onPointerUp, { passive:false });
     })();
 
-    // ---------- Form UX ----------
     addNameBtn.addEventListener('click', ()=> addName(nameField.value));
     nameField.addEventListener('keydown', (e)=>{
       if (e.key === 'Enter'){
@@ -1023,7 +1243,6 @@
         addName(nameField.value);
       }
     });
-
     startForm.addEventListener('submit', (e)=>{
       if (!selected.length){
         e.preventDefault();
@@ -1033,95 +1252,32 @@
       }
       writeHidden();
     });
-
-    // ---------- Helpers ----------
     function escapeHtml(s){
       return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
-
-    // ---------- Init ----------
     renderRecent();
     renderSelected();
-  </script>
-
-  <!-- PWA Install / Add-to-Home handling (setup page only) -->
-  <script>
-    (function(){
-      const installBtn = document.getElementById('installBtn');
-      const iosOverlay = document.getElementById('iosInstallOverlay');
-      let deferredPrompt = null;
-
-      function isStandalone(){
-        return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-      }
-      function isIOS(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent); }
-      function isSafari(){ return isIOS() && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent); }
-
-      function showInstallBtn(){ if (installBtn) installBtn.style.display = 'inline-block'; }
-      function hideInstallBtn(){ if (installBtn) installBtn.style.display = 'none'; }
-
-      function openIosInstall(){
-        if (!iosOverlay) return;
-        iosOverlay.style.display = 'flex';
-        iosOverlay.setAttribute('aria-hidden', 'false');
-        document.body.style.overflow = 'hidden';
-      }
-      window.closeIosInstall = function(){
-        if (!iosOverlay) return;
-        iosOverlay.style.display = 'none';
-        iosOverlay.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
-      };
-
-      // Capture Android/Chrome install event
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        if (!isStandalone()) showInstallBtn();
-      });
-
-      window.addEventListener('appinstalled', () => {
-        hideInstallBtn();
-        showToast('App installed! 🎉', 'success');
-      });
-
-      document.addEventListener('DOMContentLoaded', () => {
-        if (isStandalone()) { hideInstallBtn(); return; }
-        if (deferredPrompt || isSafari()) showInstallBtn();
-      });
-
-      installBtn?.addEventListener('click', async () => {
-        if (isStandalone()) { showToast('Already installed', 'info'); hideInstallBtn(); return; }
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          try {
-            const choice = await deferredPrompt.userChoice;
-            if (choice && choice.outcome === 'accepted') {
-              showToast('Installing…', 'info');
-            }
-          } finally {
-            deferredPrompt = null;
-          }
-        } else if (isSafari()) {
-          openIosInstall();
-        } else {
-          showToast('Install not supported in this browser', 'info');
-        }
-      });
-    })();
   </script>
   {% endif %}
 
   {% if (game.phase == 'playing' or game.phase == 'playoff') and not show_stats %}
+  <!-- =========================================================
+       SCRIPT: PLAYING / PLAYOFF CLIENT RENDER & ACTIONS
+       ========================================================= -->
   <script>
-    function qs(s){return document.querySelector(s);}
+    function qs(s){ return document.querySelector(s); }
 
     // Wake Lock
     let wakeLock;
     async function keepAwake(on){
       try{
-        if(on && 'wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{}); }
-        else { await wakeLock?.release(); wakeLock = null; }
+        if(on && 'wakeLock' in navigator){
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release',()=>{});
+        } else {
+          await wakeLock?.release();
+          wakeLock = null;
+        }
       }catch(e){}
     }
 
@@ -1131,7 +1287,6 @@
       if(!(e.key in map)) return;
       e.preventDefault();
       if (map[e.key]==='undo') { undo(); return; }
-      // haptic is triggered inside hit()
       hit(map[e.key], document.body);
     });
 
@@ -1286,7 +1441,6 @@
     }
 
     function renderGame(g){
-      // WakeLock on during play phases
       keepAwake(g.phase==='playing' || g.phase==='playoff');
 
       if(g.phase==='playing'){ renderPlaying(g); var u=qs('#undoBtn'); if(u) u.removeAttribute('disabled'); }
@@ -1328,7 +1482,7 @@
           return '<td><div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div></td>';
         }
         var running = g.round_history.slice(0, g.current_round).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
-        return '<td><div class="cell"><span class="total-pill">'+sign(running)+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+sign(v)+v+'</span></div></td>';
+        return '<td><div class="cell"><span class="total-pill">'+(running>0?'+':'')+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
       }).join('');
       tbody += '<tr class="current-row"><th>'+String(g.current_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
 
@@ -1338,7 +1492,7 @@
           var v = row[p];
           if (typeof v === 'undefined') return '<td></td>';
           var running = g.round_history.slice(0, i+1).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
-          return '<td><div class="cell"><span class="total-pill">'+sign(running)+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+sign(v)+v+'</span></div></td>';
+          return '<td><div class="cell"><span class="total-pill">'+(running>0?'+':'')+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
         }).join('');
         tbody += '<tr><th>'+String(i+1).padStart(2,'0')+'</th>'+cells+'</tr>';
       }
@@ -1354,7 +1508,7 @@
       var headers = g.playoff_group.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
       var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
 
-      var totals = g.playoff_group.map(function(){ var s = g.playoff_base_score || 0; return '<td>'+sign(s)+s+'</td>'; }).join('');
+      var totals = g.playoff_group.map(function(){ var s = g.playoff_base_score || 0; return '<td>'+(s>0?'+':'')+s+'</td>'; }).join('');
 
       var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
@@ -1364,7 +1518,7 @@
         var cells = g.playoff_group.map(function(p){
           var v = round_scores[p];
           if (typeof v === 'undefined') return '<td></td>';
-          return '<td>'+sign(v)+v+'</td>';
+          return '<td>'+(v>0?'+':'')+v+'</td>';
         }).join('');
         tbody += '<tr><th>TB '+String(tbNum).padStart(2,'0')+'</th>'+cells+'</tr>';
       }
@@ -1373,7 +1527,6 @@
       qs('#scoreboard').innerHTML = thead+tbody;
     }
 
-    // Labels for bubbles
     var LABELS = { "-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double Bogey" };
     function hit(val, el){
       haptic('light');
@@ -1390,26 +1543,23 @@
       bubble.addEventListener('animationend', remove, { once:true }); setTimeout(remove, 1500);
     }
 
-    // Initial state apply
     keepAwake(true);
     updateEndButtonLabel(END_ACTIVE);
 
-    // Offer resume if local copy exists and server is at setup
     (function(){
       const saved = loadLocal();
       const g = window.__gameCache;
       if (!saved || !saved.phase || saved.phase==='setup') return;
-      if (g && g.phase !== 'setup') return; // already in-game on server
-      showActionToast('Resume previous game?', 'Resume', async ()=>{
-        // If you implement an API to accept saved state, call it here.
-        location.reload();
-      }, 'info', 10000);
+      if (g && g.phase !== 'setup') return;
+      showActionToast('Resume previous game?', 'Resume', async ()=>{ location.reload(); }, 'info', 10000);
     })();
   </script>
   {% endif %}
 
   {% if game.phase == 'final_ranking' and not show_stats %}
-  <!-- Confetti on winner -->
+  <!-- =========================================================
+       SCRIPT: CONFETTI ON WINNER
+       ========================================================= -->
   <script>
     (function(){
       const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1460,17 +1610,22 @@
   {% endif %}
 
   {% if not show_stats %}
-  <!-- Settings modal logic (Haptics only) -->
+  <!-- =========================================================
+       SCRIPT: SETTINGS MODAL LOGIC
+       ========================================================= -->
   <script>
     const settingsOverlay = document.getElementById('settingsOverlay');
-    const hapticsToggle = document.getElementById('hapticsToggle');
+    const hapticsToggle   = document.getElementById('hapticsToggle');
     const settingsSummary = document.getElementById('settingsSummary');
 
     function openSettings(){
-      const g = window.__gameCache || {};
       hapticsToggle.checked = window.hapticsPref.isOn();
       const onOff = hapticsToggle.checked ? 'on' : 'off';
       settingsSummary.textContent = `haptics ${onOff}`;
+      // Update visibility of the install button based on current capability
+      if (typeof window.updateInstallVisibility === 'function') {
+        window.updateInstallVisibility();
+      }
       settingsOverlay.style.display = 'flex';
       settingsOverlay.setAttribute('aria-hidden','false');
       document.body.style.overflow = 'hidden';
@@ -1490,7 +1645,9 @@
   </script>
   {% endif %}
 
-  <!-- Controls (bottom bar) -->
+  <!-- =========================================================
+       CONTROLS (BOTTOM BAR)
+       ========================================================= -->
   {% if show_stats %}
     <div class="controls">
       <div class="button-grid single">
@@ -1502,7 +1659,6 @@
     </div>
   {% elif game.phase in ['playing','playoff'] %}
     <div class="controls">
-      <!-- Score buttons (static default set) -->
       <div class="button-grid">
         <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
         <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
@@ -1511,8 +1667,6 @@
         <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
         <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
       </div>
-
-      <!-- Undo | End / Cancel -->
       <div class="utility-grid playing">
         <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
         <button type="button" id="endBtn" class="end-btn" onclick="toggleEnd()">{{ 'Cancel' if game.end_after_round else 'End' }}</button>
