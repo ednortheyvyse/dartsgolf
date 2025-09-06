@@ -53,7 +53,7 @@
 
       /* Live-tuned by JS to ensure content isn't hidden under controls */
       --controls-h: 96px;             /* fallback */
-      --controls-extra-bottom: 0px;   /* dynamic iOS Safari toolbar padding */
+      --controls-extra-bottom: 0px;   /* kept for compatibility; forced to 0 via JS */
     }
 
     /* ------------------------------
@@ -62,16 +62,26 @@
        ------------------------------ */
     html, body { height: 100%; }
     html { overflow: hidden; }            /* never allow page scroll */
-    body {
-      position: fixed;                    /* pin body to viewport */
+
+    body{
+      margin:0; /* ensure no default margin creates gaps */
+      position: fixed;
       inset: 0;
-      overflow: hidden;                   /* no body scroll */
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      background:var(--bg-color); color:var(--text-color);
+      background:var(--bg-color);
+      color:var(--text-color);
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-      padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+
+      /* Keep top/side safe areas, but REMOVE bottom padding.
+         The controls & container already handle bottom insets. */
+      padding-top: env(safe-area-inset-top);
+      padding-right: env(safe-area-inset-right);
+      padding-bottom: 0; /* ← was env(safe-area-inset-bottom) */
+      padding-left: env(safe-area-inset-left);
     }
+
 
     /* ------------------------------
        Main scroll area
@@ -82,30 +92,35 @@
       -webkit-overflow-scrolling:touch;   /* momentum on iOS */
       overscroll-behavior:contain;        /* stop bounce from bubbling */
       padding:15px 2px;
-      /* Keep last rows clear of the bottom controls + iOS toolbars + safe area */
-      padding-bottom: calc(15px + var(--controls-h) + env(safe-area-inset-bottom) + var(--controls-extra-bottom));
+      /* Keep last rows clear of the bottom controls + iOS safe area */
+      padding-bottom: calc(15px + var(--controls-h) + env(safe-area-inset-bottom));
       -ms-overflow-style:none; scrollbar-width:none;
     }
     .container::-webkit-scrollbar{ display:none; }
 
     /* ------------------------------
-       Controls (Bottom Bar) — raised for iPhone
+       Controls (Bottom Bar) — fixed & flush to bottom
        ------------------------------ */
     .controls{
-      flex-shrink:0;
-      padding:10px;
-      /* Lift above home indicator and Safari toolbars */
-      padding-bottom: calc(12px + env(safe-area-inset-bottom) + var(--controls-extra-bottom));
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 10px env(safe-area-inset-bottom); /* touch padding + safe area only */
       background:#000;
       border-top:2px solid var(--border-color);
       z-index: 20; /* above content */
     }
+
     .button-grid{
       display:grid; grid-template-columns:repeat(6,1fr);
       gap:10px; margin-bottom:10px;
     }
     .button-grid.single{ grid-template-columns:1fr; }
+    .button-grid.two{ grid-template-columns:repeat(2,1fr); }
+
     .utility-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
     .button-grid button,
     .utility-grid button{
       width:100%; padding:20px 0; font-size:1.8em; font-weight:bold;
@@ -330,13 +345,10 @@
     .settings-help{ color:#bbb; font-size:.9em; }
 
     /* ------------------------------
-      Playing-page utility row
+      Playing-page utility row (now using button-grid two)
       ------------------------------ */
-    .utility-grid.playing{
-      display:flex !important; flex-wrap:nowrap; gap:10px; align-items:stretch;
-    }
-    .utility-grid.playing > *{ flex:1 1 0; min-width:0; }
-    .utility-grid.playing button{
+    .button-grid.two.playing{ grid-template-columns:1fr 1fr; }
+    .button-grid.two.playing button{
       white-space:nowrap; font-size:clamp(16px, 4.5vw, 28px); padding:clamp(12px, 3.5vw, 20px) 0;
     }
 
@@ -857,7 +869,7 @@
       <p style="margin-top:6px;">
         On iPhone/iPad (Safari): tap the <b>Share</b> button, then choose <b>Add to Home Screen</b>.
       </p>
-      <div class="modal-actions" style="margin-top:12px%;">
+      <div class="modal-actions" style="margin-top:12px;%;">
         <button type="button" class="btn btn-confirm" onclick="closeIosInstall()">OK</button>
       </div>
     </div>
@@ -1310,7 +1322,7 @@
 
         active = chip;
         pointerId = e.pointerId;
-        try { active.setPointerCapture(pointerId); } catch(_){}
+        try { active.setPointerCapture(pointerId); } catch(_){ }
 
         const r = chip.getBoundingClientRect();
         startX = e.clientX; startY = e.clientY;
@@ -1359,7 +1371,7 @@
           commitOrderFromDom();
         }
 
-        try { active.releasePointerCapture(pointerId); } catch(_){}
+        try { active.releasePointerCapture(pointerId); } catch(_){ }
         active = null;
         dragging = false;
         pointerId = null;
@@ -1576,7 +1588,7 @@
         const ok = await window.showConfirmModal({ title: 'Cancel End', message: 'The game will continue normally after this round. Continue?', okText: 'Cancel End', cancelText: 'Keep Ending' });
         if (!ok) return;
       }
-      var res = await fetch('{{ url_for("api_end_after_round") }}',{method:'POST'});
+      var res = await fetch('{{ url_for('api_end_after_round') }}',{method:'POST'});
       var data = await res.json(); if(!data.ok) return;
       window.__gameCache = data.game;
       saveLocal(data.game);
@@ -1681,7 +1693,7 @@
       var cls = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
       var rect = el.getBoundingClientRect(), x = rect.left + (rect.width/2), y = rect.top - 6;
       var bubble = document.createElement('div'); bubble.className = 'score-bubble '+cls; bubble.textContent = label;
-      bubble.style.left = x + 'px'; bubble.style.top = y + 'px'; document.body.appendChild(bubble);
+      bubble.style.left = x + 'px'; bubble.style.top  = y + 'px'; document.body.appendChild(bubble);
       var remove = function(){ if (bubble && bubble.parentNode) bubble.parentNode.removeChild(bubble); };
       bubble.addEventListener('animationend', remove, { once:true }); setTimeout(remove, 1500);
     }
@@ -1842,32 +1854,16 @@
 
   <!-- =========================================================
        SCRIPT: RAISE CONTROLS FOR IPHONE + SET CONTAINER BOTTOM INSET
-       (uses visualViewport to add dynamic padding for Safari toolbars)
+       (fixed controls; only compute height; no extra spacer)
        ========================================================= -->
   <script>
     (function(){
       const root = document.documentElement;
       const controls = document.querySelector('.controls');
 
-      function isiOSSafariBrowser() {
-        const ua = navigator.userAgent || '';
-        const iOS = /iPhone|iPad|iPod/i.test(ua);
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-        const isSafari = iOS && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua);
-        return iOS && isSafari && !isStandalone;
-      }
-
-      function calcBottomChromePx(){
-        const vv = window.visualViewport;
-        if (!vv) return isiOSSafariBrowser() ? 44 : 0; // heuristic fallback
-        // Overlap between layout viewport and visual viewport at the bottom.
-        const overlap = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
-        return Math.ceil(overlap);
-      }
-
       function updateIosExtraBottom() {
-        const extra = isiOSSafariBrowser() ? Math.min(96, calcBottomChromePx() + 50) : 0;
-        root.style.setProperty('--controls-extra-bottom', extra + 'px');
+        // Force no extra spacer; we rely on env(safe-area-inset-bottom) only
+        root.style.setProperty('--controls-extra-bottom', '0px');
       }
 
       function updateControlsHeightVar() {
@@ -1880,7 +1876,7 @@
         const vv = window.visualViewport;
         if (!vv) return;
         vv.addEventListener('resize', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
-        vv.addEventListener('scroll', ()  => { updateIosExtraBottom(); updateControlsHeightVar(); });
+        vv.addEventListener('scroll',  () => { updateIosExtraBottom(); updateControlsHeightVar(); });
       }
 
       window.addEventListener('load', () => { updateIosExtraBottom(); updateControlsHeightVar(); hookVisualViewport(); });
@@ -1895,17 +1891,17 @@
        ========================================================= -->
   {% if show_stats %}
     <div class="controls no-overscroll" data-lock-scroll>
-      <div class="button-grid single" data-lock-scroll>
-        <a href="{{ url_for('index') }}"><button type="button" class="export-btn">Back to Final Standings</button></a>
+      <div class="button-grid two" data-lock-scroll>
+        <a href="{{ url_for('index') }}"><button type="button" class="export-btn">Back</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
         </form>
       </div>
     </div>
   {% elif game.phase == 'setup' %}
-    <!-- Bottom controls for SETUP — Settings (left) and Start Game (right) -->
+    <!-- Bottom controls for SETUP — unified button-grid two -->
     <div class="controls no-overscroll" data-lock-scroll>
-      <div class="utility-grid" data-lock-scroll>
+      <div class="button-grid two" data-lock-scroll>
         <button type="button" class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
         <!-- Submit the existing #startForm from here -->
         <button type="submit" class="export-btn" form="startForm">Start Game</button>
@@ -1921,14 +1917,14 @@
         <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
         <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
       </div>
-      <div class="utility-grid playing" data-lock-scroll>
+      <div class="button-grid two playing" data-lock-scroll>
         <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
         <button type="button" id="endBtn" class="end-btn" onclick="toggleEnd()">{{ 'Cancel' if game.end_after_round else 'End' }}</button>
       </div>
     </div>
   {% elif game.phase == 'final_ranking' %}
     <div class="controls no-overscroll" data-lock-scroll>
-      <div class="button-grid single" data-lock-scroll>
+      <div class="button-grid two" data-lock-scroll>
         <a href="{{ url_for('stats') }}"><button type="button" class="export-btn">View Stats</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
