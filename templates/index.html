@@ -910,56 +910,90 @@
   <!-- =========================================================
        SCRIPT: HAPTIC FEEDBACK
        ========================================================= -->
-  <script>
-  (function(){
-    const HAPTIC_KEY = 'darts-haptics-enabled';
-    function isHapticsOn(){ const v = localStorage.getItem(HAPTIC_KEY); return v === null ? true : v === '1'; }
-    function setHaptics(on){ localStorage.setItem(HAPTIC_KEY, on ? '1' : '0'); }
-    window.hapticsPref = { isOn: isHapticsOn, set: setHaptics };
+ <script>
+(function(){
+  const HAPTIC_KEY = 'darts-haptics-enabled';
+  function isHapticsOn(){ const v = localStorage.getItem(HAPTIC_KEY); return v === null ? true : v === '1'; }
+  function setHaptics(on){ localStorage.setItem(HAPTIC_KEY, on ? '1' : '0'); }
+  window.hapticsPref = { isOn: isHapticsOn, set: setHaptics };
 
-    let audioCtx;
-    function ensureAudio(){
-      if (!audioCtx) {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        audioCtx = AC ? new AC() : null;
-      }
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-      return audioCtx;
+  // ---- Audio fallback (used on iOS and when Android blocks vibrate) ----
+  let audioCtx;
+  function ensureAudio(){
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = AC ? new AC() : null;
     }
-    function softClick(ms=70, freq=70){
-      const ctx = ensureAudio(); if (!ctx) return;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'square';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.14, ctx.currentTime + 0.005);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + ms/1000);
-      osc.connect(gain); gain.connect(ctx.destination);
-      const t0 = ctx.currentTime; osc.start(t0); osc.stop(t0 + ms/1000 + 0.02);
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function softClick(ms=70, freq=70){
+    const ctx = ensureAudio(); if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    const t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(0.16, t0 + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + ms/1000);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0 + ms/1000 + 0.03);
+  }
+  function doubleClick(){ softClick(60, 85); setTimeout(()=> softClick(70, 60), 70); }
+
+  // Some Android devices ignore very short single pulses.
+  // Use slightly longer / patterned pulses for better reliability.
+  const PATTERNS = {
+    light:   30,                 // single ~30ms pulse (short taps get ignored on some phones)
+    medium:  [24, 40, 24],       // vib, pause, vib
+    success: [20, 40, 20, 50, 70]// "🎉" feeling
+  };
+
+  // Returns true if a vibration was scheduled, false if blocked/unsupported.
+  function tryVibrate(kind){
+    if (!('vibrate' in navigator)) return false;
+    const pattern = kind === 'medium' ? PATTERNS.medium
+                   : kind === 'success' ? PATTERNS.success
+                   : PATTERNS.light;
+    try {
+      // navigator.vibrate returns boolean (was it accepted?)
+      return !!navigator.vibrate(pattern);
+    } catch {
+      return false;
     }
-    function doubleClick(){ softClick(60, 80); setTimeout(()=> softClick(60, 60), 60); }
+  }
 
-    window.haptic = function(kind='light'){
-      if (!isHapticsOn()) return;
-      if ('vibrate' in navigator) {
-        if (kind==='light') navigator.vibrate(15);
-        else if (kind==='medium') navigator.vibrate([12, 40, 12]);
-        else if (kind==='success') navigator.vibrate([10, 30, 10, 30, 50]);
-        else navigator.vibrate(15);
-        return;
-      }
-      if (kind==='light') softClick(70, 70);
-      else if (kind==='medium') doubleClick();
-      else if (kind==='success'){ softClick(60, 90); setTimeout(()=> softClick(80, 50), 80); }
-      else softClick(70, 70);
-    };
-    ['touchstart','mousedown','keydown'].forEach(ev=>{
-      window.addEventListener(ev, ()=>{ ensureAudio(); }, { once:true, passive:true });
-    });
-  })();
-  </script>
+  // Public API (unchanged)
+  window.haptic = function(kind='light'){
+    if (!isHapticsOn()) return;
 
+    // Attempt vibration first (Android/Chrome, installed PWA, etc.)
+    const ok = tryVibrate(kind);
+    if (ok) return;
+
+    // Fallbacks: iOS (no vibrate for web) or when Android blocks/ignores the call.
+    if (kind==='light') softClick(70, 70);
+    else if (kind==='medium') doubleClick();
+    else if (kind==='success'){ softClick(60, 90); setTimeout(()=> softClick(80, 50), 90); }
+    else softClick(70, 70);
+  };
+
+  // Prime the audio context as soon as the user interacts,
+  // so audio fallback fires instantly on iOS/blocked Android.
+  ['touchstart','mousedown','keydown'].forEach(ev=>{
+    window.addEventListener(ev, ()=>{ ensureAudio(); }, { once:true, passive:true });
+  });
+
+  // Optional: quick console test helper
+  window.testHaptics = function(){
+    console.log('[Haptics] vibrate in navigator:', 'vibrate' in navigator);
+    const ok = tryVibrate('medium');
+    console.log('[Haptics] vibrate() accepted:', ok);
+    if (!ok){ console.log('[Haptics] falling back to audio'); doubleClick(); }
+  };
+})();
+</script>
   <!-- =========================================================
        SCRIPT: PWA INSTALL (global, button lives in Settings)
        ========================================================= -->
