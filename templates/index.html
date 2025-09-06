@@ -6,9 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Darts Golf Scorer</title>
 
-  <!-- PWA manifest (optional if present in /static) -->
+  <!-- PWA manifest -->
   <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
   <meta name="theme-color" content="#182634">
+
+  <!-- iOS full-screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Darts Golf">
+  <meta name="mobile-web-app-capable" content="yes">
+
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}));
@@ -164,6 +171,60 @@
 
     /* Confetti canvas */
     #confettiCanvas{ position:fixed; inset:0; pointer-events:none; z-index:9998; }
+
+    /* Winner banner */
+    .winner-banner{
+      color: var(--primary-color);
+      font-weight: 900;
+      text-align: center;
+      font-size: clamp(32px, 8.5vw, 64px);
+      margin: 8px auto 14px;
+      letter-spacing: .02em;
+    }
+
+    /* --- Stats page styles (restore look & spacing) --- */
+    .stat-block{
+      background:#111;
+      border:1px solid var(--border-color);
+      border-radius:12px;
+      padding:14px 16px;
+      margin:12px auto;
+      max-width:900px;
+    }
+    .stat-title{
+      font-weight:900;
+      font-size:1.2em;
+      color:#e5e5e5;
+      margin:0 0 10px;
+      letter-spacing:.02em;
+    }
+    .stat-value{
+      font-size:1.3em;
+      font-weight:900;
+      color:#fff;
+    }
+    .stat-player{
+      font-weight:800;
+      color:#fff;
+      display:inline-block;
+      min-width:170px;
+      margin-right:10px;
+    }
+    .stat-block ol{
+      margin:0;
+      padding-left:1.1em;
+      list-style:decimal;
+    }
+    .stat-block ol li{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:8px 0;
+      border-bottom:1px dashed #333;
+    }
+    .stat-block ol li:last-child{
+      border-bottom:none;
+    }
   </style>
 </head>
 <body>
@@ -215,7 +276,7 @@
           <small>No completed rounds yet.</small>
         {% endif %}
       </div>
-
+      
       <div class="stat-block">
         <div class="stat-title">😬 Total Bogeys</div>
         {% if most_bogeys_ranking %}
@@ -280,6 +341,11 @@
 
           <!-- Settings button (Haptics only) -->
           <button type="button" class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
+
+          <!-- Add-to-Home (PWA install) -->
+          <button type="button" id="installBtn" class="settings-btn" style="margin-top:8px; display:none;">
+            ➕ Add to Home Screen
+          </button>
 
           <!-- Add-one-name-at-a-time input -->
           <form id="startForm" action="{{ url_for('start_game') }}" method="post" style="margin-top:12px;">
@@ -463,6 +529,13 @@
             <img src="{{ url_for('static', filename='images/finalstanding1.png') }}" alt="Final Standings" class="final-standings-img">
           </div>
 
+          {% set winner_name = game.winner or (game.final_standings and game.final_standings[0].name) %}
+          {% if winner_name %}
+            <div class="winner-banner" role="status" aria-live="polite">
+              🏆 Winner: {{ winner_name }}
+            </div>
+          {% endif %}
+
           <table class="scoreboard final" id="scoreboard">
             <thead>
               <tr><th>&nbsp;</th>
@@ -562,6 +635,19 @@
       </div>
       <div class="settings-help" style="margin-top:8px;">
         Current: <b id="settingsSummary"></b>
+      </div>
+    </div>
+  </div>
+
+  <!-- iOS Add-to-Home instructions -->
+  <div id="iosInstallOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="iosInstallTitle">
+      <h3 id="iosInstallTitle">Add to Home Screen</h3>
+      <p style="margin-top:6px;">
+        On iPhone/iPad (Safari): tap the <b>Share</b> button, then choose <b>Add to Home Screen</b>.
+      </p>
+      <div class="modal-actions" style="margin-top:12px;">
+        <button type="button" class="btn btn-confirm" onclick="closeIosInstall()">OK</button>
       </div>
     </div>
   </div>
@@ -956,6 +1042,73 @@
     // ---------- Init ----------
     renderRecent();
     renderSelected();
+  </script>
+
+  <!-- PWA Install / Add-to-Home handling (setup page only) -->
+  <script>
+    (function(){
+      const installBtn = document.getElementById('installBtn');
+      const iosOverlay = document.getElementById('iosInstallOverlay');
+      let deferredPrompt = null;
+
+      function isStandalone(){
+        return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      }
+      function isIOS(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent); }
+      function isSafari(){ return isIOS() && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent); }
+
+      function showInstallBtn(){ if (installBtn) installBtn.style.display = 'inline-block'; }
+      function hideInstallBtn(){ if (installBtn) installBtn.style.display = 'none'; }
+
+      function openIosInstall(){
+        if (!iosOverlay) return;
+        iosOverlay.style.display = 'flex';
+        iosOverlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+      }
+      window.closeIosInstall = function(){
+        if (!iosOverlay) return;
+        iosOverlay.style.display = 'none';
+        iosOverlay.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+      };
+
+      // Capture Android/Chrome install event
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (!isStandalone()) showInstallBtn();
+      });
+
+      window.addEventListener('appinstalled', () => {
+        hideInstallBtn();
+        showToast('App installed! 🎉', 'success');
+      });
+
+      document.addEventListener('DOMContentLoaded', () => {
+        if (isStandalone()) { hideInstallBtn(); return; }
+        if (deferredPrompt || isSafari()) showInstallBtn();
+      });
+
+      installBtn?.addEventListener('click', async () => {
+        if (isStandalone()) { showToast('Already installed', 'info'); hideInstallBtn(); return; }
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          try {
+            const choice = await deferredPrompt.userChoice;
+            if (choice && choice.outcome === 'accepted') {
+              showToast('Installing…', 'info');
+            }
+          } finally {
+            deferredPrompt = null;
+          }
+        } else if (isSafari()) {
+          openIosInstall();
+        } else {
+          showToast('Install not supported in this browser', 'info');
+        }
+      });
+    })();
   </script>
   {% endif %}
 
