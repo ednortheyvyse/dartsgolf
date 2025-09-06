@@ -19,7 +19,7 @@
   <meta name="apple-mobile-web-app-title" content="Darts Golf">
   <meta name="mobile-web-app-capable" content="yes">
 
-  <!-- Service Worker registration (kept tiny and early) -->
+  <!-- Service Worker registration -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}));
@@ -53,20 +53,31 @@
     }
 
     /* ------------------------------
-       Baseline Layout / Shell
+       iOS-SAFE PAGE SCROLL LOCK
+       Body never scrolls; only .container scrolls
        ------------------------------ */
-    html,body{
-      margin:0; padding:0;
-      height:100svh;
-      display:flex; flex-direction:column;
+    html, body { height: 100%; }
+    html { overflow: hidden; }            /* never allow page scroll */
+    body {
+      position: fixed;                    /* pin body to viewport */
+      inset: 0;
+      overflow: hidden;                   /* no body scroll */
+      display: flex;
+      flex-direction: column;
       background:var(--bg-color); color:var(--text-color);
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-    }
-    body{
       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
+
+    /* ------------------------------
+       Main scroll area
+       ------------------------------ */
     .container{
-      flex:1; overflow-y:auto; padding:15px 2px;
+      flex:1;
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;   /* momentum on iOS */
+      overscroll-behavior:contain;        /* stop bounce from bubbling */
+      padding:15px 2px;
       -ms-overflow-style:none; scrollbar-width:none;
     }
     .container::-webkit-scrollbar{ display:none; }
@@ -350,7 +361,7 @@
     #confettiCanvas{ position:fixed; inset:0; pointer-events:none; z-index:9998; }
 
     /* ------------------------------
-       STATS PAGE STYLES (names stay RED here)
+       STATS PAGE STYLES (names red)
        ------------------------------ */
     .stat-block{
       background:#111; border:1px solid var(--border-color); border-radius:12px;
@@ -362,7 +373,7 @@
     }
     .stat-value{ font-size:1.3em; font-weight:900; color:#fff; }
     .stat-player{
-      font-weight:800; color:var(--primary-color); /* keep red on stats page */
+      font-weight:800; color:var(--primary-color); /* red on stats */
       display:inline-block;
     }
     .stat-block ol{ margin:0; padding-left:1.1em; list-style:decimal; }
@@ -379,10 +390,9 @@
     .stat-right{ font-weight:900; white-space:nowrap; color:#fff; }
 
     /* ------------------------------
-       Scroll-control utilities (NEW)
+       Scroll-control utility class hooks (optional)
        ------------------------------ */
     .no-overscroll{ overscroll-behavior: contain; }
-    .scroll-lock{ overflow:hidden !important; }
   </style>
 </head>
 
@@ -986,7 +996,7 @@
   </script>
 
   <!-- =========================================================
-       SCRIPT: PWA INSTALL (global, button lives in Settings)
+       SCRIPT: PWA INSTALL (button lives in Settings)
        ========================================================= -->
   <script>
     (function(){
@@ -1214,7 +1224,7 @@
       let dragging = false;
       let pointerId=null;
 
-      const TOUCH_SLOP_SQ = 25; // 5px^2 — threshold for touch
+      const TOUCH_SLOP_SQ = 25; // 5px^2 threshold for touch
       function setBodyCursor(grabbing){ document.body.style.cursor = grabbing ? 'grabbing' : ''; }
 
       function createGhost(fromEl){
@@ -1731,7 +1741,6 @@
   </script>
   {% endif %}
 
-  {% if not show_stats %}
   <!-- =========================================================
        SCRIPT: SETTINGS MODAL LOGIC
        ========================================================= -->
@@ -1764,31 +1773,64 @@
       closeSettings();
     }
   </script>
-  {% endif %}
 
   <!-- =========================================================
-       SCROLL LOCK HELPERS (NEW)
-       Prevents touch scroll/wheel inside marked regions.
-       Add data-lock-scroll to any element to lock scrolling.
+       SCRIPT: GLOBAL SCROLL GUARD FOR iOS
+       (blocks page rubber-band; only .container scrolls)
        ========================================================= -->
   <script>
     (function(){
-      function lockScrollWithin(el){
-        // Prevent any scrolling gestures inside this element
-        const stop = (e)=>{ e.preventDefault(); };
-        // Passive must be false to allow preventDefault on touchmove
-        el.addEventListener('touchmove', stop, { passive:false });
-        el.addEventListener('wheel', stop, { passive:false });
+      const scrollArea = document.querySelector('.container'); // only scrollable region
+      let startY = 0;
+      let insideScrollable = false;
+
+      function isInsideScrollable(el) {
+        let n = el;
+        while (n && n !== document.body) {
+          if (n === scrollArea) return true;
+          n = n.parentElement;
+        }
+        return false;
       }
-      document.addEventListener('DOMContentLoaded', ()=>{
-        document.querySelectorAll('[data-lock-scroll]').forEach(lockScrollWithin);
+
+      document.addEventListener('touchstart', (e) => {
+        insideScrollable = isInsideScrollable(e.target);
+        startY = (e.touches && e.touches.length) ? e.touches[0].clientY : 0;
+      }, { passive: true });
+
+      document.addEventListener('touchmove', (e) => {
+        if (!scrollArea) { e.preventDefault(); return; }
+
+        // If touch is outside the scroll area, block it outright.
+        if (!insideScrollable) { e.preventDefault(); return; }
+
+        // Inside scroll area: block rubber-band when at edges and trying to go past
+        const y = (e.touches && e.touches.length) ? e.touches[0].clientY : startY;
+        const dy = y - startY;
+
+        const atTop = scrollArea.scrollTop <= 0;
+        const atBottom = scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 1;
+
+        if ((atTop && dy > 0) || (atBottom && dy < 0)) {
+          e.preventDefault(); // stop bounce from reaching <body>
+        }
+      }, { passive: false });
+
+      // Block wheel/trackpad page scroll (iPadOS / desktop Safari)
+      document.addEventListener('wheel', (e) => {
+        if (!isInsideScrollable(e.target)) e.preventDefault();
+      }, { passive: false });
+
+      // Also hard-lock explicitly marked regions (e.g., bottom controls)
+      document.querySelectorAll('[data-lock-scroll]').forEach(el=>{
+        el.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+        el.addEventListener('wheel',     e => e.preventDefault(), { passive:false });
       });
     })();
   </script>
 
   <!-- =========================================================
        CONTROLS (BOTTOM BAR)
-       (Now marked with data-lock-scroll + no-overscroll)
        ========================================================= -->
   {% if show_stats %}
     <div class="controls no-overscroll" data-lock-scroll>
