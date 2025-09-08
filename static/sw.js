@@ -1,5 +1,5 @@
 // static/sw.js
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `darts-golf-${CACHE_VERSION}`;
 
 // Core shell + icons/images to precache on first install
@@ -111,7 +111,7 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() => null);
-      return cached || networkFetch;
+      return cached || networkFetch || Response.error();
     })());
     return;
   }

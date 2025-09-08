@@ -101,23 +101,25 @@
     /* ------------------------------
        Controls (Bottom Bar) — fixed & flush to bottom
        ------------------------------ */
-/* Controls (Bottom Bar) — fixed & flush to bottom */
-@supports (-webkit-touch-callout: none) {
-  /* small bottom padding so buttons aren’t glued to the edge */
-  .controls { padding-bottom: 6px; }
+.controls{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:#000;
+  border-top:2px solid var(--border-color);
+  z-index: 20;
 
-  /* take the safe-area “spacer” out of layout */
-  .controls::after{
-    content:"";
-    position:absolute;         /* ← key: removes it from flow */
-    left:0; right:0; bottom:0;
-    height: env(safe-area-inset-bottom);
-    background: inherit;
-    pointer-events: none;       /* don’t block taps */
-  }
+  /* Fix A: regular visual padding only (no safe-area here) */
+  padding: 10px 10px 10px;
+}
 
-  /* optional: remove the last 10px gap inside controls */
-  .controls .button-grid:last-child { margin-bottom: 0; }
+/* Extend the bar’s background into the home-indicator area
+   without moving the buttons */
+.controls::after{
+  content:"";
+  display:block;
+  height: env(safe-area-inset-bottom);
 }
 
 
