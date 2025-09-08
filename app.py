@@ -184,6 +184,12 @@ def index():
     return render_template('index.html', game=gs, show_stats=False)
 
 
+# NEW: tolerate GET /start (prefetches / SW / crawlers) by redirecting home
+@app.route('/start', methods=['GET'])
+def start_game_get():
+    return redirect(url_for('index'))
+
+
 @app.route('/start', methods=['POST'])
 def start_game():
     gs_prev = _get_state()
@@ -344,11 +350,50 @@ def api_load_saved():
     return jsonify({'ok': True})
 
 
-# ---------- Service worker at root (1) ----------
+# ---------- Service worker at root (explicit, no-cache) ----------
 @app.route('/sw.js')
 def sw():
-    # served from /static/sw.js as /sw.js for proper scope
-    return send_from_directory(app.static_folder, 'sw.js', mimetype='application/javascript')
+    """
+    Serve the service worker at the origin scope with no caching.
+    Prefer a root-level sw.js (same dir as app.py) if present;
+    otherwise fall back to /static/sw.js.
+    """
+    root_sw = BASE_DIR / 'sw.js'
+    if root_sw.exists():
+        return send_from_directory(
+            BASE_DIR, 'sw.js',
+            mimetype='application/javascript',
+            max_age=0
+        )
+    return send_from_directory(
+        app.static_folder, 'sw.js',
+        mimetype='application/javascript',
+        max_age=0
+    )
+
+
+# ---------- Small health/ops and icon convenience routes ----------
+@app.route('/healthz', methods=['GET', 'HEAD'])
+def healthz():
+    return ("ok", 200)
+
+
+@app.route('/favicon.ico')
+def favicon():
+    fav = BASE_DIR / 'static' / 'favicon.ico'
+    if fav.exists():
+        return send_from_directory(app.static_folder, 'favicon.ico')
+    abort(404)
+
+
+# iOS will probe these even if you don't link them. Point them at the 180px icon.
+@app.route('/apple-touch-icon.png')
+@app.route('/apple-touch-icon-precomposed.png')
+def apple_touch_icon():
+    png_180 = BASE_DIR / 'static' / 'icons' / 'dartboard-180.png'
+    if png_180.exists():
+        return send_from_directory(app.static_folder, 'icons/dartboard-180.png')
+    abort(404)
 
 
 # ----------------- Game logic -----------------

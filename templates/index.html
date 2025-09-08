@@ -19,6 +19,7 @@
   <meta name="apple-mobile-web-app-title" content="Darts Golf">
   <meta name="mobile-web-app-capable" content="yes">
 
+
   <!-- Service Worker registration -->
   <script>
     if ('serviceWorker' in navigator) {
@@ -76,10 +77,10 @@
 
       /* Keep top/side safe areas, but REMOVE bottom padding.
          The controls & container already handle bottom insets. */
-      padding-top: env(safe-area-inset-top);
-      padding-right: env(safe-area-inset-right);
-      padding-bottom: 0; /* ← was env(safe-area-inset-bottom) */
-      padding-left: env(safe-area-inset-left);
+  padding-top: 0;                 /* allow content/background to reach into the status bar area */
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: 0;              /* keep this 0; we extend bottom via .controls::after */
+  padding-left: env(safe-area-inset-left);
     }
 
 
