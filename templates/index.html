@@ -102,25 +102,22 @@
        Controls (Bottom Bar) — fixed & flush to bottom
        ------------------------------ */
 /* Controls (Bottom Bar) — fixed & flush to bottom */
-.controls{
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background:#000;
-  border-top:2px solid var(--border-color);
-  z-index: 20;
+@supports (-webkit-touch-callout: none) {
+  /* small bottom padding so buttons aren’t glued to the edge */
+  .controls { padding-bottom: 6px; }
 
-  /* Fix A: regular visual padding only (no safe-area here) */
-  padding: 10px 10px 10px;
-}
+  /* take the safe-area “spacer” out of layout */
+  .controls::after{
+    content:"";
+    position:absolute;         /* ← key: removes it from flow */
+    left:0; right:0; bottom:0;
+    height: env(safe-area-inset-bottom);
+    background: inherit;
+    pointer-events: none;       /* don’t block taps */
+  }
 
-/* Extend the bar’s background into the home-indicator area
-   without moving the buttons */
-.controls::after{
-  content:"";
-  display:block;
-  height: env(safe-area-inset-bottom);
+  /* optional: remove the last 10px gap inside controls */
+  .controls .button-grid:last-child { margin-bottom: 0; }
 }
 
 
@@ -1906,7 +1903,7 @@
       <div class="button-grid two" data-lock-scroll>
         <a href="{{ url_for('index') }}"><button type="button" class="export-btn">Back</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
-          <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
+          <button type="button" id="restartBtn" class="restart-btn">New Game</button>
         </form>
       </div>
     </div>
@@ -1914,7 +1911,7 @@
     <!-- Bottom controls for SETUP — unified button-grid two -->
     <div class="controls no-overscroll" data-lock-scroll>
       <div class="button-grid two" data-lock-scroll>
-        <button type="button" class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
+        <button type="button" class="settings-btn" onclick="openSettings()">Settings</button>
         <!-- Submit the existing #startForm from here -->
         <button type="submit" class="export-btn" form="startForm">Start Game</button>
       </div>
@@ -1937,9 +1934,9 @@
   {% elif game.phase == 'final_ranking' %}
     <div class="controls no-overscroll" data-lock-scroll>
       <div class="button-grid two" data-lock-scroll>
-        <a href="{{ url_for('stats') }}"><button type="button" class="export-btn">View Stats</button></a>
+        <a href="{{ url_for('stats') }}"><button type="button" class="export-btn">Stats</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
-          <button type="button" id="restartBtn" class="restart-btn">Start New Game</button>
+          <button type="button" id="restartBtn" class="restart-btn">New Game</button>
         </form>
       </div>
     </div>
