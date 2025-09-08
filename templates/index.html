@@ -93,7 +93,7 @@
       overscroll-behavior:contain;        /* stop bounce from bubbling */
       padding:15px 2px;
       /* Keep last rows clear of the bottom controls + iOS safe area */
-      padding-bottom: calc(15px + var(--controls-h) + env(safe-area-inset-bottom));
+      padding-bottom: calc(15px + var(--controls-h));
       -ms-overflow-style:none; scrollbar-width:none;
     }
     .container::-webkit-scrollbar{ display:none; }
@@ -102,13 +102,13 @@
        Controls (Bottom Bar) — fixed & flush to bottom
        ------------------------------ */
 .controls{
-  position: fixed;
+  /*position: fixed;*/
   left: 0;
   right: 0;
   bottom: 0;
   background:#000;
   border-top:2px solid var(--border-color);
-  z-index: 20;
+  z-index: 19;
 
   /* Fix A: regular visual padding only (no safe-area here) */
   padding: 10px 10px 10px;
@@ -1863,39 +1863,26 @@
     })();
   </script>
 
-  <!-- =========================================================
+ =========================================================
        SCRIPT: RAISE CONTROLS FOR IPHONE + SET CONTAINER BOTTOM INSET
        (fixed controls; only compute height; no extra spacer)
        =========================================================
-  <script>
-    (function(){
-      const root = document.documentElement;
-      const controls = document.querySelector('.controls');
-
-      function updateIosExtraBottom() {
-        // Force no extra spacer; we rely on env(safe-area-inset-bottom) only
-        root.style.setProperty('--controls-extra-bottom', '0px');
-      }
-
-      function updateControlsHeightVar() {
-        if (!controls) return;
-        const h = controls.offsetHeight;
-        root.style.setProperty('--controls-h', h + 'px');
-      }
-
-      function hookVisualViewport(){
-        const vv = window.visualViewport;
-        if (!vv) return;
-        vv.addEventListener('resize', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
-        vv.addEventListener('scroll',  () => { updateIosExtraBottom(); updateControlsHeightVar(); });
-      }
-
-      window.addEventListener('load', () => { updateIosExtraBottom(); updateControlsHeightVar(); hookVisualViewport(); });
-      window.addEventListener('resize', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
-      window.addEventListener('orientationchange', () => { updateIosExtraBottom(); updateControlsHeightVar(); });
-      document.addEventListener('visibilitychange', () => { if (!document.hidden){ updateIosExtraBottom(); updateControlsHeightVar(); }});
-    })();
-  </script>-->
+<script>
+  (function(){
+    const root = document.documentElement;
+    const controls = document.querySelector('.controls');
+    function setH(){ if (controls) root.style.setProperty('--controls-h', controls.getBoundingClientRect().height + 'px'); }
+    window.addEventListener('load', setH, {once:true});
+    window.addEventListener('resize', setH);
+    window.addEventListener('orientationchange', setH);
+    // iOS visual viewport changes
+    if (window.visualViewport){
+      visualViewport.addEventListener('resize', setH);
+      visualViewport.addEventListener('scroll', setH);
+    }
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setH(); });
+  })();
+</script>
 
   <!-- =========================================================
        CONTROLS (BOTTOM BAR)
