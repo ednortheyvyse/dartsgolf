@@ -102,15 +102,14 @@
        Controls (Bottom Bar) — fixed & flush to bottom
        ------------------------------ */
     .controls{
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      padding: 10px 10px env(safe-area-inset-bottom); /* touch padding + safe area only */
-      background:#000;
-      border-top:2px solid var(--border-color);
-      z-index: 20; /* above content */
-    }
+  	padding: 10px 10px 10px; /* regular visual padding only */
+}
+/* Extend the bar’s background into the home-indicator area without moving buttons */
+.controls::after{
+  content:"";
+  display:block;
+  height: env(safe-area-inset-bottom);
+}
 
     .button-grid{
       display:grid; grid-template-columns:repeat(6,1fr);
