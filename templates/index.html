@@ -111,7 +111,7 @@
   z-index: 19;
 
   /* Fix A: regular visual padding only (no safe-area here) */
-  padding: 10px 10px 10px;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
 }
 
 /* Extend the bar’s background into the home-indicator area
