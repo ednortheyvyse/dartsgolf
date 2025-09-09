@@ -121,7 +121,7 @@ body::after{
   z-index: 19;
 
   /* Fix A: regular visual padding only (no safe-area here) */
-  padding: 10px 10px calc(0px + env(safe-area-inset-bottom));
+  padding: 10px 10px /*calc(0px + env(safe-area-inset-bottom));*/
 }
 
 /* Extend the bar’s background into the home-indicator area
@@ -136,7 +136,7 @@ body::after{
 @supports (-webkit-touch-callout: none) {
   .controls{
     /* Reduce the bottom padding so the buttons sit lower */
-    padding-bottom: calc(max(0px, env(safe-area-inset-bottom) - 0px));
+    padding-bottom: calc(max(0px, env(safe-area-inset-bottom) - 10px));
   }
 }
 
