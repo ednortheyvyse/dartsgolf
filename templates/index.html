@@ -132,6 +132,14 @@ body::after{
   height: env(safe-area-inset-bottom);
 }
 
+/* iOS-only tweak */
+@supports (-webkit-touch-callout: none) {
+  .controls{
+    /* Reduce the bottom padding so the buttons sit lower */
+    padding-bottom: calc(max(0px, env(safe-area-inset-bottom) - 10px));
+  }
+}
+
 
     .button-grid{
       display:grid; grid-template-columns:repeat(6,1fr);
