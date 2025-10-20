@@ -659,64 +659,68 @@ body::after{
             </tr>
           </thead>
           <tbody>
-            <tr class="total-row"><th>Total</th>
-              {% for p in game.players %}
-                {% set s = game.scores.get(p,0) %}
-                <td>{% if s>0 %}+{% endif %}{{ s }}</td>
-              {% endfor %}
-            </tr>
+            <tbody>
+  <tr class="total-row"><th>Total</th>
+    {% for p in game.players %}
+      {% set s = game.scores.get(p, 0) %}
+      <td>{% if s > 0 %}+{% endif %}{{ s }}</td>
+    {% endfor %}
+  </tr>
 
-            <tr class="current-row"><th>{{ "%02d"|format(game.current_round) }}</th>
-              {% for p in game.players %}
-                {% set v = game.round_history[game.current_round - 1].get(p) %}
-                {% if v is not none %}
-                  {% set ns = namespace(total=0) %}
-                  {% for r in range(game.current_round) %}
-                    {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
-                  {% endfor %}
-                  <td>
-                    <div class="cell">
-                      <span class="total-pill">{{ ns.total>0 and '+' or '' }}{{ ns.total }}</span>
-                      <span class="delta-corner {{ 'pos' if v>0 else ('neg' if v<0 else 'zero') }}">
-                        {{ v>0 and '+' or '' }}{{ v }}
-                      </span>
-                    </div>
-                  </td>
-                {% else %}
-                  <td>
-                    <div class="cell">
-                      <span class="total-pill">0</span>
-                      <span class="delta-corner hidden">0</span>
-                    </div>
-                  </td>
-                {% endif %}
-              {% endfor %}
-            </tr>
+  <!-- ✅ Current round being played -->
+  <tr class="current-row"><th>{{ "%02d"|format(game.current_round) }}</th>
+    {% for p in game.players %}
+      {% set v = game.round_history[game.current_round - 1].get(p) %}
+      {% if v is not none %}
+        {% set ns = namespace(total=0) %}
+        {% for r in range(game.current_round) %}
+          {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
+        {% endfor %}
+        <td class="{% if loop.index0 == game.current_player_index %}current-player-header{% endif %}">
+          <div class="cell">
+            <span class="total-pill">{{ ns.total > 0 and '+' or '' }}{{ ns.total }}</span>
+            <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+              {{ v > 0 and '+' or '' }}{{ v }}
+            </span>
+          </div>
+        </td>
+      {% else %}
+        <td class="{% if loop.index0 == game.current_player_index %}current-player-header{% endif %}">
+          <div class="cell">
+            <span class="total-pill">0</span>
+            <span class="delta-corner hidden">0</span>
+          </div>
+        </td>
+      {% endif %}
+    {% endfor %}
+  </tr>
 
-            {% for i in range(game.current_round - 1) | reverse %}
-              <tr><th>{{ "%02d"|format(i + 1) }}</th>
-                {% for p in game.players %}
-                  {% set v = game.round_history[i].get(p) %}
-                  {% if v is not none %}
-                    {% set ns = namespace(total=0) %}
-                    {% for r in range(i + 1) %}
-                      {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
-                    {% endfor %}
-                    <td>
-                      <div class="cell">
-                        <span class="total-pill">{{ ns.total>0 and '+' or '' }}{{ ns.total }}</span>
-                        <span class="delta-corner {{ 'pos' if v>0 else ('neg' if v<0 else 'zero') }}">
-                          {{ v>0 and '+' or '' }}{{ v }}
-                        </span>
-                      </div>
-                    </td>
-                  {% else %}
-                    <td></td>
-                  {% endif %}
-                {% endfor %}
-              </tr>
-            {% endfor %}
-          </tbody>
+  <!-- 🔁 Previous rounds (from latest to earliest) -->
+  {% for i in range(game.current_round - 1) | reverse %}
+    <tr><th>{{ "%02d"|format(i + 1) }}</th>
+      {% for p in game.players %}
+        {% set v = game.round_history[i].get(p) %}
+        {% if v is not none %}
+          {% set ns = namespace(total=0) %}
+          {% for r in range(i + 1) %}
+            {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
+          {% endfor %}
+          <td>
+            <div class="cell">
+              <span class="total-pill">{{ ns.total > 0 and '+' or '' }}{{ ns.total }}</span>
+              <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+                {{ v > 0 and '+' or '' }}{{ v }}
+              </span>
+            </div>
+          </td>
+        {% else %}
+          <td></td>
+        {% endif %}
+      {% endfor %}
+    </tr>
+  {% endfor %}
+</tbody>
+
         </table>
 
       {% elif game.phase == 'playoff' %}
@@ -730,38 +734,101 @@ body::after{
           </div>
           <div class="turn-info">{{ game.playoff_group[game.current_player_index] }}'s Turn</div>
         </div>
-        <table class="scoreboard" id="scoreboard">
+                <table class="scoreboard" id="scoreboard">
+          {# -----------------------------------------------------
+             BUILD A STABLE COLUMN SET (ALL PLAYERS IN THIS TIE)
+             ----------------------------------------------------- #}
+          {% set ns = namespace(players=[]) %}
+          {# current active subgroup #}
+          {% for p in game.playoff_group %}
+            {% if p not in ns.players %}{% set ns.players = ns.players + [p] %}{% endif %}
+          {% endfor %}
+          {# any who already scored this round #}
+          {% for p, _ in game.playoff_round_scores.items() %}
+            {% if p not in ns.players %}{% set ns.players = ns.players + [p] %}{% endif %}
+          {% endfor %}
+          {# anyone who appeared in any previous TB round #}
+          {% for rd in game.playoff_history %}
+            {% for p, _ in rd.items() %}
+              {% if p not in ns.players %}{% set ns.players = ns.players + [p] %}{% endif %}
+            {% endfor %}
+          {% endfor %}
+          {% set tie_players = ns.players %}
+
           <thead>
-            <tr><th>&nbsp;</th>
-              {% for p in game.playoff_group %}
-                <th class="{{ 'current-player-header' if p == game.playoff_group[game.current_player_index] else '' }}">{{ p }}</th>
+            <tr>
+              <th>&nbsp;</th>
+              {% for p in tie_players %}
+                {# highlight only if this header is the current shooter #}
+                {% set is_cur = (game.playoff_group and p == game.playoff_group[game.current_player_index]) %}
+                <th class="{{ 'current-player-header' if is_cur else '' }}">{{ p }}</th>
               {% endfor %}
             </tr>
           </thead>
+
           <tbody>
-            <tr class="total-row"><th>Total</th>
-              {% for _ in game.playoff_group %}
+            <!-- Stable total row: base score repeated across all tie players -->
+            <tr class="total-row">
+              <th>Total</th>
+              {% for _ in tie_players %}
                 {% set s = game.playoff_base_score %}
-                <td>{% if s>0 %}+{% endif %}{{ s }}</td>
+                <td>{% if s > 0 %}+{% endif %}{{ s }}</td>
               {% endfor %}
             </tr>
 
-            {% set total_tb = game.playoff_history|length %}
-            {% for round_scores in game.playoff_history | reverse %}
-              {% set tb_num = total_tb - loop.index0 %}
-              <tr><th>TB {{ "%02d"|format(tb_num) }}</th>
-                {% for p in game.playoff_group %}
-                  {% set v = round_scores.get(p) %}
-                  {% if v is not none %}
-                    <td>{% if v>0 %}+{% endif %}{{ v }}</td>
-                  {% else %}
-                    <td></td>
-                  {% endif %}
-                {% endfor %}
-              </tr>
-            {% endfor %}
+            <!-- ✅ Current TB round being played (use stable columns) -->
+            <tr class="current-row">
+              <th>TB {{ "%02d"|format(game.playoff_round) }}</th>
+              {% for p in tie_players %}
+                {% set v = game.playoff_round_scores.get(p) %}
+                {% set is_current = (game.playoff_group and p == game.playoff_group[game.current_player_index]) %}
+                {% if v is not none %}
+                  <td class="{{ 'current-player-header' if is_current else '' }}">
+                    <div class="cell">
+                      <span class="total-pill">{{ v > 0 and '+' or '' }}{{ v }}</span>
+                      <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+                        {{ v > 0 and '+' or '' }}{{ v }}
+                      </span>
+                    </div>
+                  </td>
+                {% else %}
+                  <td class="{{ 'current-player-header' if is_current else '' }}">
+                    <div class="cell">
+                      <span class="total-pill">0</span>
+                      <span class="delta-corner hidden">0</span>
+                    </div>
+                  </td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+
+  <!-- 🔁 Past completed TB rounds -->
+  {% set total_tb = game.playoff_history|length %}
+  {% for round_scores in game.playoff_history | reverse %}
+    {% set tb_num = total_tb - loop.index0 %}
+    <tr>
+      <th>TB {{ "%02d"|format(tb_num) }}</th>
+      {% for p in game.playoff_group %}
+        {% set v = round_scores.get(p) %}
+        {% if v is not none %}
+          <td>
+            <div class="cell">
+              <span class="total-pill">{{ v > 0 and '+' or '' }}{{ v }}</span>
+              <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+                {{ v > 0 and '+' or '' }}{{ v }}
+              </span>
+            </div>
+          </td>
+        {% else %}
+          <td></td>
+        {% endif %}
+      {% endfor %}
+    </tr>
+  {% endfor %}
+
           </tbody>
         </table>
+
 
       {% elif game.phase == 'final_ranking' %}
         <!-- =========================
@@ -1687,31 +1754,65 @@ body::after{
     }
 
     function renderPlayoff(g){
-      qs('#info-bar').innerHTML =
-        '<div class="round-count"><span class="round-label">TIE-BREAKER</span><span class="round-number">'+String(g.playoff_round).padStart(2,'0')+'</span></div>'+
-        '<div class="turn-info">'+g.playoff_group[g.current_player_index] + "'s Turn</div>";
-      var headers = g.playoff_group.map(function(p,i){return '<th class="'+(i===g.current_player_index?'current-player-header':'')+'">'+p+'</th>';}).join('');
-      var thead = '<thead><tr><th>&nbsp;</th>'+headers+'</tr></thead>';
+        // Info bar
+        qs('#info-bar').innerHTML =
+          '<div class="round-count"><span class="round-label">TIE-BREAKER</span><span class="round-number">'+String(g.playoff_round).padStart(2,'0')+'</span></div>'+
+          '<div class="turn-info">'+g.playoff_group[g.current_player_index] + "'s Turn</div>";
 
-      var totals = g.playoff_group.map(function(){ var s = g.playoff_base_score || 0; return '<td>'+(s>0?'+':'')+s+'</td>'; }).join('');
+        // ---- Build a stable header list (all players who ever appeared in this tie) ----
+        var curScores = g.playoff_round_scores || {};
+        var headerSet = new Set();
+        (g.playoff_group || []).forEach(p => headerSet.add(p));
+        Object.keys(curScores).forEach(p => headerSet.add(p));
+        (g.playoff_history || []).forEach(rd => {
+          Object.keys(rd || {}).forEach(p => headerSet.add(p));
+        });
+        var headerPlayers = Array.from(headerSet);
 
-      var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
+        // THEAD with current shooter highlight when applicable
+        var thead = '<thead><tr><th>&nbsp;</th>'+headerPlayers.map(function(p){
+          var isCur = (g.playoff_group && p === g.playoff_group[g.current_player_index]);
+          return '<th class="'+(isCur?'current-player-header':'')+'">'+p+'</th>';
+        }).join('')+'</tr></thead>';
 
+        // TB totals (base score only)
+        var totals = headerPlayers.map(function(){ var s = g.playoff_base_score || 0; return '<td>'+(s>0?'+':'')+s+'</td>'; }).join('');
+        var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
+
+        // ✅ Current TB round row (stable columns)
+        var currentCells = headerPlayers.map(function(p){
+          var v = curScores[p];
+          var isCur = (g.playoff_group && p === g.playoff_group[g.current_player_index]);
+          if (typeof v === 'undefined'){
+            return '<td'+(isCur?' class="current-player-header"':'')+'><div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div></td>';
+          }
+          return '<td'+(isCur?' class="current-player-header"':'')+'><div class="cell"><span class="total-pill">'+(v>0?'+':'')+v+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
+        }).join('');
+        tbody += '<tr class="current-row"><th>TB '+String(g.playoff_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
+
+      // 🔁 Past completed TB rounds (latest first)
       for (var idx = g.playoff_history.length - 1; idx >= 0; idx--) {
         var round_scores = g.playoff_history[idx] || {};
         var tbNum = idx + 1;
         var cells = g.playoff_group.map(function(p){
           var v = round_scores[p];
           if (typeof v === 'undefined') return '<td></td>';
-          return '<td>'+(v>0?'+':'')+v+'</td>';
+          return (
+            '<td>' +
+              '<div class="cell">' +
+                '<span class="total-pill">' + (v>0?'+':'') + v + '</span>' +
+                '<span class="delta-corner ' + (v>0?'pos':(v<0?'neg':'zero')) + '">' + (v>0?'+':'') + v + '</span>' +
+              '</div>' +
+            '</td>'
+          );
         }).join('');
-        tbody += '<tr><th>TB '+String(tbNum).padStart(2,'0')+'</th>'+cells+'</tr>';
+        tbody += '<tr><th>TB ' + String(tbNum).padStart(2,'0') + '</th>' + cells + '</tr>';
       }
 
-      tbody += '</tbody>';
-      qs('#scoreboard').innerHTML = thead+tbody;
-    }
 
+        tbody += '</tbody>';
+        qs('#scoreboard').innerHTML = thead + tbody;
+      }
     var LABELS = { "-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double Bogey" };
     function hit(val, el){
       haptic('light');
