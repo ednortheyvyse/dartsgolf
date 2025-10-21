@@ -23,4 +23,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dartsgolf:latest
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/dartsgolf:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/dartsgolf:${{ github.sha }}

@@ -42,6 +42,12 @@ except Exception:
 _games: dict[str, dict] = {}  # in-memory fallback
 
 
+# --- Constants ---
+DEFAULT_HOLES = 20
+DEFAULT_SCORE_BUTTONS = [-3, -2, -1, 0, 1, 2]
+RECENT_NAMES_CAP = 24
+
+
 def _fresh_state() -> dict:
     # Settings defaults (7)
     return {
@@ -69,8 +75,8 @@ def _fresh_state() -> dict:
         'rounds_played': 0,
 
         # ---- Settings (7) ----
-        'holes': 20,
-        'score_buttons': [-3, -2, -1, 0, 1, 2],
+        'holes': DEFAULT_HOLES,
+        'score_buttons': DEFAULT_SCORE_BUTTONS,
     }
 
 
@@ -143,7 +149,7 @@ def _compute_rounds_played(gs: dict) -> int:
 
 
 def _merge_recent(existing: list[str], new_names: list[str], cap: int = 24) -> list[str]:
-    out: list[str] = []
+    out: list[str] = [] # cap is already a parameter, so no need to change this line.
     seen_lower = set()
     for name in new_names + existing:
         k = name.lower()
@@ -151,7 +157,7 @@ def _merge_recent(existing: list[str], new_names: list[str], cap: int = 24) -> l
             continue
         out.append(name)
         seen_lower.add(k)
-        if len(out) >= cap:
+        if len(out) >= RECENT_NAMES_CAP: # Use the new constant here
             break
     return out
 
@@ -194,8 +200,8 @@ def start_game_get():
 def start_game():
     gs_prev = _get_state()
     # allow carrying settings chosen in setup (holes/buttons)
-    preserved_holes = int(gs_prev.get('holes', 20))
-    preserved_buttons = list(gs_prev.get('score_buttons', [-3, -2, -1, 0, 1, 2]))
+    preserved_holes = int(gs_prev.get('holes', DEFAULT_HOLES))
+    preserved_buttons = list(gs_prev.get('score_buttons', DEFAULT_SCORE_BUTTONS))
 
     players_raw = request.form.get('players', '')
     players = [n.strip() for n in players_raw.split(',') if n and n.strip()]
@@ -209,7 +215,7 @@ def start_game():
         flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "error")
         return redirect(url_for('index'))
 
-    updated_recent = _merge_recent(gs_prev.get('recent_names', []), players, cap=24)
+    updated_recent = _merge_recent(gs_prev.get('recent_names', []), players, cap=RECENT_NAMES_CAP)
 
     _reset_state()
     gs = _get_state()
@@ -245,8 +251,8 @@ def undo_last_move():
 def restart():
     gs = _get_state()
     prev_recent = gs.get('recent_names', [])
-    prev_holes = gs.get('holes', 20)
-    prev_buttons = gs.get('score_buttons', [-3, -2, -1, 0, 1, 2])
+    prev_holes = gs.get('holes', DEFAULT_HOLES)
+    prev_buttons = gs.get('score_buttons', DEFAULT_SCORE_BUTTONS)
     _reset_state()
     gs = _get_state()
     gs['recent_names'] = prev_recent
