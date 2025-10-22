@@ -599,6 +599,7 @@ def stats():
     birdie_streaks = {}
     bogey_streaks = {}
     birdie_counts = {}
+    stdevs = {} # New stat
     bogey_counts = {}
     avgs = {}
     rounds_counts = {}
@@ -611,10 +612,10 @@ def stats():
         if seq:
             avgs[p] = statistics.mean(seq)
             rounds_counts[p] = len(seq)
+            stdevs[p] = statistics.stdev(seq) if len(seq) > 1 else 0.0
         else:
             avgs[p] = 0.0
             rounds_counts[p] = 0
-
     players_with_data = [p for p in gs.get('players', []) if rounds_counts.get(p, 0) > 0]
 
     birdie_streak_order = sorted(
@@ -638,6 +639,13 @@ def stats():
         key=lambda p: (-bogey_counts[p], -avgs[p])
     )
 
+    consistency_order = sorted(
+        players_with_data,
+        key=lambda p: (stdevs[p], avgs[p]) # Lower stdev is better
+    )
+
+
+
     birdie_streak_ranking = [
         {'name': p, 'streak': birdie_streaks[p], 'count': birdie_counts[p], 'average': avgs[p]}
         for p in birdie_streak_order
@@ -658,10 +666,22 @@ def stats():
         {'name': p, 'count': bogey_counts[p], 'average': avgs[p]}
         for p in most_bogeys_order
     ]
+    consistency_ranking = [
+        {'name': p, 'stdev': stdevs[p], 'average': avgs[p]}
+        for p in consistency_order
+    ]
 
     best_comebacks = _best_comebacks_by_player(per)
     comeback_ranking = sorted(best_comebacks.values(), key=lambda d: d['improvement'], reverse=True)
 
+    # Calculate max values for bar scaling in the template
+    max_birdie_streak = max(birdie_streaks.values(), default=0)
+    max_bogey_streak = max(bogey_streaks.values(), default=0)
+    max_birdie_count = max(birdie_counts.values(), default=0)
+    max_bogey_count = max(bogey_counts.values(), default=0)
+    max_average_abs = max((abs(a) for a in avgs.values()), default=0)
+    max_comeback_improvement = max((cb['improvement'] for cb in best_comebacks.values()), default=0)
+    max_stdev = max((s['stdev'] for s in consistency_ranking), default=0)
     return render_template(
         'index.html',
         show_stats=True,
@@ -671,7 +691,16 @@ def stats():
         average_ranking=average_ranking,
         most_birdies_ranking=most_birdies_ranking,
         most_bogeys_ranking=most_bogeys_ranking,
+        consistency_ranking=consistency_ranking,
         comeback_ranking=comeback_ranking,
+        # Max values for mini-graph scaling
+        max_birdie_streak=max_birdie_streak,
+        max_bogey_streak=max_bogey_streak,
+        max_birdie_count=max_birdie_count,
+        max_bogey_count=max_bogey_count,
+        max_average_abs=max_average_abs,
+        max_comeback_improvement=max_comeback_improvement,
+        max_stdev=max_stdev,
     )
 
 
