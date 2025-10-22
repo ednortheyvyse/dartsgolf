@@ -345,10 +345,10 @@ body::after{
        ------------------------------ */
     @keyframes buttonPop {
       0% { transform: scale(1); }
-      50% { transform: scale(1.08); } /* Slightly bigger */
+      50% { transform: scale(1.15); } /* Slightly bigger, including font */
       100% { transform: scale(1); }
     }
-    .score-btn.pop-animation { animation: buttonPop 100ms ease-out forwards; }
+    .pop-animation { animation: buttonPop 100ms ease-out forwards; }
 
     /* Winner banner (final page) */
     .winner-banner{
@@ -382,6 +382,12 @@ body::after{
     /* Settings modal (rows) */
     .settings-grid{ display:grid; gap:10px; }
     .settings-row{ display:grid; gap:6px; }
+    .settings-group{
+      background: #222;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+    }
     .settings-help{ color:#bbb; font-size:.9em; }
 
     /* ------------------------------
@@ -647,7 +653,7 @@ body::after{
           <div class="round-count">
             <span class="round-label">ROUND</span>
             <span class="round-number">{{ "%02d"|format(game.current_round) }}</span>
-            <span class="round-total">/ 20</span>
+            <span class="round-total">/ {{ game.holes }}</span>
           </div>
           <div class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</div>
 
@@ -867,7 +873,9 @@ body::after{
                 {% endfor %}
               </tr>
               <tr><th scope="col">Player</th>
-                {% for st in game.final_standings %}<th scope="col">{{ st.name }}</th>{% endfor %}
+                {% for st in game.final_standings %}
+                  <th scope="col">{{ '🏆 ' if st.rank == 1 else '' }}{{ st.name }}</th>
+                {% endfor %}
               </tr>
             </thead>
             <tbody>
@@ -942,16 +950,25 @@ body::after{
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <h3 id="settingsTitle">Settings</h3>
       <div class="settings-grid">
-        <div class="settings-row">
+        <div class="settings-group">
           <label style="display:flex; align-items:center; gap:10px; font-weight:700;">
             <input id="hapticsToggle" type="checkbox">
             Haptic feedback
           </label>
           <div class="settings-help">Android: vibration · iOS: subtle tap sound</div>
         </div>
+        
+        <!-- Holes setting (only in setup) -->
+        <div class="settings-group" id="holesSettingsRow" style="display: none;">
+          <label for="holesInput" style="font-weight: 700;">Number of Rounds (Holes)</label>
+          <input id="holesInput" type="number" class="settings-input" min="1" max="50" step="1">
+          <div class="settings-help">
+            Set the game length. Can only be changed before the game starts.
+          </div>
+        </div>
 
         <!-- Add to Home Screen button (shown when eligible) -->
-        <div class="settings-row">
+        <div class="settings-group">
           <button type="button" id="installBtnSettings" class="btn btn-confirm" style="display:none;">
             ➕ Add to Home Screen
           </button>
@@ -1027,6 +1044,14 @@ body::after{
       window.addEventListener('keydown', (e)=>{ if (overlay.style.display === 'flex' && e.key === 'Escape') closeModal(false); });
       window.showConfirmModal = openModal;
     })();
+  </script>
+  
+  <script>
+    function popButton(el) {
+      if (!el) return;
+      el.classList.add('pop-animation');
+      el.addEventListener('animationend', () => el.classList.remove('pop-animation'), { once: true });
+    }
   </script>
 
   <!-- =========================================================
@@ -1721,7 +1746,7 @@ body::after{
         '<div class="round-count">'+
            '<span class="round-label">ROUND</span>'+
            '<span class="round-number">'+String(g.current_round).padStart(2,'0')+'</span>'+
-           '<span class="round-total">/ 20</span>'+
+           '<span class="round-total">/ '+g.holes+'</span>'+
          '</div>'+
          '<div class="turn-info">'+g.players[g.current_player_index]+"'s Turn</div>"+banner;
 
@@ -1825,37 +1850,29 @@ body::after{
     var LABELS = { "-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double Bogey" };
     function hit(val, el){
       haptic('light');
+      popButton(el);
       showBubbleFor(val, el);
-
-      // Add pop animation to the button
-      el.classList.add('pop-animation');
-      // Remove the class after the animation ends to allow it to be re-triggered
-      el.addEventListener('animationend', function handler(){
-        el.classList.remove('pop-animation');
-        el.removeEventListener('animationend', handler); // Remove listener to prevent memory leaks
-      }, { once: true }); // Use { once: true } for automatic removal
       sendScore(val);
     }
     function showBubbleFor(val, el){
       var key = String(val), label = (typeof LABELS[key] !== 'undefined') ? LABELS[key] : (val>0?('+'+val):String(val));
       var cls = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
       var rect = el.getBoundingClientRect(), x = rect.left + (rect.width/2), y = rect.top - 6;
-      var bubble = document.createElement('div'); bubble.className = 'score-bubble '+cls; bubble.textContent = label;
-      bubble.style.left = x + 'px'; bubble.style.top  = y + 'px'; document.body.appendChild(bubble);
-      var remove = function(){ if (bubble && bubble.parentNode) bubble.parentNode.removeChild(bubble); };
-      bubble.addEventListener('animationend', remove, { once:true }); setTimeout(remove, 1500);
+      // Create and animate the bubble... (this part is missing, but we'll add it back)
+      const bubble = document.createElement('div');
+      bubble.className = `score-bubble ${cls}`;
+      bubble.textContent = label;
+      bubble.style.left = `${x}px`;
+      bubble.style.top = `${y}px`;
+      document.body.appendChild(bubble);
+      bubble.addEventListener('animationend', () => bubble.remove());
     }
 
-    keepAwake(true);
-    updateEndButtonLabel(END_ACTIVE);
-
-    (function(){
-      const saved = loadLocal();
-      const g = window.__gameCache;
-      if (!saved || !saved.phase || saved.phase==='setup') return;
-      if (g && g.phase !== 'setup') return;
-      showActionToast('Resume previous game?', 'Resume', async ()=>{ location.reload(); }, 'info', 10000);
-    })();
+    // --- Init on load ---
+    document.addEventListener('DOMContentLoaded', () => {
+      keepAwake(true);
+      updateEndButtonLabel(END_ACTIVE);
+    });
   </script>
   {% endif %}
 
@@ -1918,12 +1935,25 @@ body::after{
   <script>
     const settingsOverlay = document.getElementById('settingsOverlay');
     const hapticsToggle   = document.getElementById('hapticsToggle');
+    const holesInput      = document.getElementById('holesInput');
+    const holesRow        = document.getElementById('holesSettingsRow');
     const settingsSummary = document.getElementById('settingsSummary');
 
     function openSettings(){
+      const g = window.__gameCache;
       hapticsToggle.checked = window.hapticsPref.isOn();
-      const onOff = hapticsToggle.checked ? 'on' : 'off';
-      settingsSummary.textContent = `haptics ${onOff}`;
+      holesInput.value = g.holes || 20;
+
+      // Only show the holes/rounds setting during the setup phase
+      if (g.phase === 'setup') {
+        holesRow.style.display = 'grid';
+        holesInput.disabled = false;
+      } else {
+        holesRow.style.display = 'none';
+        holesInput.disabled = true;
+      }
+
+      updateSettingsSummary();
       if (typeof window.updateInstallVisibility === 'function') {
         window.updateInstallVisibility();
       }
@@ -1931,17 +1961,44 @@ body::after{
       settingsOverlay.setAttribute('aria-hidden','false');
       document.body.style.overflow = 'hidden';
     }
+    function updateSettingsSummary() {
+      const g = window.__gameCache;
+      const hapticsStatus = window.hapticsPref.isOn() ? 'on' : 'off';
+      let summary = `haptics ${hapticsStatus}`;
+      if (g.phase === 'setup') {
+        summary += `, ${holesInput.value} rounds`;
+      } else {
+        summary += `, ${g.holes} rounds`;
+      }
+      settingsSummary.textContent = summary;
+    }
     function closeSettings(){
       settingsOverlay.style.display = 'none';
       settingsOverlay.setAttribute('aria-hidden','true');
       document.body.style.overflow = '';
     }
-    function saveSettings(){
+    async function saveSettings(){
       window.hapticsPref.set(!!hapticsToggle.checked);
-      const onOff = hapticsToggle.checked ? 'on' : 'off';
-      settingsSummary.textContent = `haptics ${onOff}`;
-      showToast('Settings saved', 'success');
-      closeSettings();
+
+      const payload = {};
+      const g = window.__gameCache;
+      if (g.phase === 'setup') {
+        const newHoles = parseInt(holesInput.value, 10);
+        if (newHoles && newHoles !== g.holes) {
+          payload.holes = newHoles;
+        }
+      }
+
+      try {
+        const res = await fetch('{{ url_for("api_settings") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.ok && data.game) {
+          window.__gameCache = data.game;
+          if (typeof saveLocal === 'function') saveLocal(data.game);
+          updateSettingsSummary();
+        }
+        showToast('Settings saved', 'success');
+      } catch(e) { showToast('Could not save settings', 'error'); }
     }
   </script>
 
@@ -2027,7 +2084,7 @@ body::after{
   {% if show_stats %}
     <div class="controls no-overscroll" data-lock-scroll>
       <div class="button-grid two" data-lock-scroll>
-        <a href="{{ url_for('index') }}"><button type="button" class="export-btn">Back</button></a>
+        <a href="{{ url_for('index') }}" onclick="popButton(this.querySelector('button'));"><button type="button" class="export-btn">Back</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">New Game</button>
         </form>
@@ -2037,9 +2094,9 @@ body::after{
     <!-- Bottom controls for SETUP — unified button-grid two -->
     <div class="controls no-overscroll" data-lock-scroll>
       <div class="button-grid two" data-lock-scroll>
-        <button type="button" class="settings-btn" onclick="openSettings()">Settings</button>
+        <button type="button" class="settings-btn" onclick="popButton(this); openSettings();">Settings</button>
         <!-- Submit the existing #startForm from here -->
-        <button type="submit" class="export-btn" form="startForm">Start Game</button>
+        <button type="submit" class="export-btn" form="startForm" onclick="popButton(this);">Start Game</button>
       </div>
     </div>
   {% elif game.phase in ['playing','playoff'] %}
@@ -2053,14 +2110,14 @@ body::after{
         <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
       </div>
       <div class="button-grid two playing" data-lock-scroll>
-        <button type="button" id="undoBtn" class="undo-btn" onclick="undo()" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
-        <button type="button" id="endBtn" class="end-btn" onclick="toggleEnd()">{{ 'Cancel' if game.end_after_round else 'End' }}</button>
+        <button type="button" id="undoBtn" class="undo-btn" onclick="popButton(this); undo();" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
+        <button type="button" id="endBtn" class="end-btn" onclick="popButton(this); toggleEnd();">{{ 'Cancel' if game.end_after_round else 'End' }}</button>
       </div>
     </div>
   {% elif game.phase == 'final_ranking' %}
     <div class="controls no-overscroll" data-lock-scroll>
       <div class="button-grid two" data-lock-scroll>
-        <a href="{{ url_for('stats') }}"><button type="button" class="export-btn">Stats</button></a>
+        <a href="{{ url_for('stats') }}" onclick="popButton(this.querySelector('button'));"><button type="button" class="export-btn">Stats</button></a>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">New Game</button>
         </form>
@@ -2075,6 +2132,7 @@ body::after{
       var form = document.getElementById('restartForm');
       if (btn && form) {
         btn.addEventListener('click', async function(){
+          popButton(this);
           const ok = await window.showConfirmModal({
             title: 'Start New Game',
             message: 'This will clear the current game and return to setup. Continue?',
