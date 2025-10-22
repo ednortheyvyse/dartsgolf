@@ -139,6 +139,12 @@ body::after{
 .settings-text,
 #nameField { font-size:18px; }
 
+.setup-section {
+  margin-top: 24px; /* More spacing between sections */
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
 /* ------------------------------
    Setup Screen
    ------------------------------ */
@@ -147,6 +153,11 @@ body::after{
   padding-top:4vh;
   max-width:950px; margin:0 auto;
   padding-left:8px; padding-right:8px;
+}
+.setup-screen .section-title {
+  font-size: 1.4em;
+  color: var(--primary-color); /* Use primary color for section titles */
+  margin-bottom: 12px;
 }
 .setup-actions{ display:grid; grid-template-columns:1fr; gap:10px; margin-top:8px; }
 .setup-screen button{
@@ -159,9 +170,14 @@ body::after{
   border:1px solid #ff4d4d; background:#2a0000; color:#ffcccc; font-weight:600;
 }
 
-.recent-wrap{ margin-top:14px; }
+.recent-wrap{ margin-top:14px; border-top:none; padding-top:0; } /* Adjust for new .setup-section */
 .recent-title{ color:#ccc; font-size:.95em; margin-bottom:8px; }
 .chip-list{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+
+.empty-state-message {
+  text-align: center;
+  color: #888;
+}
 
 /* Player "chips" — WHITE text by default */
 .chip{
@@ -227,10 +243,21 @@ body::after{
 /* Player name colors:
    - Default headers: WHITE
    - Current player's header: RED
+   - Current player's header: RED with a subtle pulse animation
    - Stats page names: RED via .stat-player */
 .scoreboard thead th:not(:first-child){ color:#fff; }
 .scoreboard.final thead tr:nth-child(2) th:not(:first-child){ color:#fff; }
-.current-player-header{ color:var(--primary-color) !important; font-weight:bold; }
+.current-player-header{
+  color:#fff !important; /* White text */
+  background-color: var(--secondary-color) !important; /* Solid green background */
+  font-weight:bold;
+  animation: none !important; /* Disable animation for solid background */
+}
+/* Animation for current player header */
+@keyframes pulseHighlight {
+  0% { background-color: transparent; }
+  100% { background-color: rgba(48, 159, 106, 0.15); } /* A subtle green tint */
+}
 
 /* ------------------------------
    Info Bar
@@ -241,7 +268,30 @@ body::after{
 }
 .round-count{ display:flex; align-items:flex-end; justify-content:center; gap:8px; line-height:1; margin-top:4px; flex-wrap:nowrap; }
 .round-label{ font-size:clamp(28px, 7vw, 56px); font-weight:900; letter-spacing:.06em; }
-.round-number{ font-size:clamp(44px, 12vw, 96px); font-weight:900; line-height:.9; color:#bbb; }
+
+/* Rolling number animation styles */
+.round-number-wrapper {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  /* Inherit font properties from here */
+  font-size:clamp(44px, 12vw, 96px);
+  font-weight:900;
+  line-height:.9;
+  color:#bbb;
+  /* Set height and width based on font size for two digits */
+  height: 1em; /* Height of one line of text */
+  width: 2em;  /* Width for two digits (approx) */
+  vertical-align: middle; /* Align with other spans */
+}
+.round-number-digit {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
 .round-total{ font-size:clamp(10px, 2.8vw, 16px); font-weight:700; opacity:.85; margin-left:2px; align-self:flex-start; transform:translateY(-6px); }
 .turn-info{ font-size:clamp(18px, 4.2vw, 28px); font-weight:700; color:var(--primary-color); text-align:center; }
 
@@ -265,12 +315,31 @@ body::after{
 .delta-corner.pos{  background:var(--primary-color); }
 .delta-corner.neg{  background:var(--secondary-color); }
 .delta-corner.zero{ background:#000; }
-.delta-corner.hidden{ opacity:0; }
+.delta-corner.hidden{ opacity:0; animation: none; } /* Disable animation when hidden */
 
+@keyframes deltaPop {
+  0% { transform: scale(0.5); opacity: 0; }
+  80% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.delta-animate-trigger { /* New class to trigger animation */
+  animation: deltaPop 0.3s ease-out forwards;
+}
 .scoreboard.playing tbody td,
 .scoreboard.final tbody td{ padding:0; }
 .scoreboard.playing td .cell,
 .scoreboard.final   td .cell{ width:100%; height:100%; }
+
+/* New: Highlight current player's cell background */
+.scoreboard.playing .current-player-cell,
+.scoreboard.playoff .current-player-cell {
+  background-color: var(--secondary-color); /* Match delta green */
+}
+/* Ensure text inside current player cell is white */
+.scoreboard.playing .current-player-cell .total-pill,
+.scoreboard.playoff .current-player-cell .total-pill {
+  color: #fff;
+}
 
 /* Hero images */
 .homepage-dartboard,
@@ -324,7 +393,15 @@ body::after{
    ------------------------------ */
 .modal-overlay{
   position:fixed; inset:0; background:rgba(0,0,0,.55);
-  display:none; align-items:center; justify-content:center; z-index:10000; padding:20px;
+  display:none; align-items:center; justify-content:center; z-index:10000; padding:20px;  /* Add transitions for fade in/out */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.modal-overlay.show { /* New class to trigger visibility */
+  opacity: 1;
+  visibility: visible;
+  display: flex; /* Keep display flex for layout */
 }
 .modal{
   background:#111; border:1px solid var(--border-color); border-radius:12px;
@@ -385,6 +462,12 @@ body::after{
 @media (prefers-reduced-motion: reduce){
   .score-bubble{ animation:none !important; opacity:1; }
 }
+@media (prefers-reduced-motion: reduce){
+  .score-bubble{ animation:none !important; opacity:1; }
+  .current-player-header { animation: none !important; background-color: transparent !important; }
+  .modal-overlay { transition: none !important; }
+  .stat-bar { transition: none !important; }
+}
 
 /* Confetti canvas (winner) */
 #confettiCanvas{ position:fixed; inset:0; pointer-events:none; z-index:9998; }
@@ -428,8 +511,12 @@ body::after{
   border-radius: 4px;
   background-color: var(--secondary-color); /* Default green for good things */
   transition: width 0.3s ease-out;
+  width: 0; /* Start at 0 width for animation */
   flex-shrink: 0; /* Prevent shrinking */
-  min-width: 2px; /* Smallest visible bar */
+  will-change: width; /* Hint to browser for smoother animation. */
+}
+.stat-bar.visible {
+  width: var(--target-width) !important; /* Use !important to ensure this overrides inline styles. */
 }
 .stat-bar.bad {
   background-color: var(--primary-color); /* Red for bad things */

@@ -68,7 +68,7 @@
                 </div>
                 <div class="stat-right">
                   <span>{{ row.streak }}</span>
-                  <div class="stat-bar" style="width: {{ (row.streak / (max_birdie_streak or 1) * 60) | round(0) }}px;"></div>
+                  <div class="stat-bar" data-width="{{ ((row.streak / (max_birdie_streak or 1) * 60) | round(0)) or (2 if row.streak > 0 else 0) }}px"></div>
                 </div>
               </li>
             {% endfor %}
@@ -90,7 +90,7 @@
                 </div>
                 <div class="stat-right">
                   <span>{{ row.streak }}</span>
-                  <div class="stat-bar bad" style="width: {{ (row.streak / (max_bogey_streak or 1) * 60) | round(0) }}px;"></div>
+                  <div class="stat-bar bad" data-width="{{ ((row.streak / (max_bogey_streak or 1) * 60) | round(0)) or (2 if row.streak > 0 else 0) }}px"></div>
                 </div>
               </li>
             {% endfor %}
@@ -112,7 +112,7 @@
                 </div>
                 <div class="stat-right">
                   <span>{{ row.count }}</span>
-                  <div class="stat-bar" style="width: {{ (row.count / (max_birdie_count or 1) * 60) | round(0) }}px;"></div>
+                  <div class="stat-bar" data-width="{{ ((row.count / (max_birdie_count or 1) * 60) | round(0)) or (2 if row.count > 0 else 0) }}px"></div>
                 </div>
               </li>
             {% endfor %}
@@ -134,7 +134,7 @@
                 </div>
                 <div class="stat-right">
                   <span>{{ row.count }}</span>
-                  <div class="stat-bar bad" style="width: {{ (row.count / (max_bogey_count or 1) * 60) | round(0) }}px;"></div>
+                  <div class="stat-bar bad" data-width="{{ ((row.count / (max_bogey_count or 1) * 60) | round(0)) or (2 if row.count > 0 else 0) }}px"></div>
                 </div>
               </li>
             {% endfor %}
@@ -156,7 +156,7 @@
                 </div>
                 <div class="stat-right">
                   <span>{{ "%.2f"|format(row.stdev) }}</span>
-                  <div class="stat-bar bad" style="width: {{ (row.stdev / (max_stdev or 1) * 60) | round(0) }}px;"></div>
+                  <div class="stat-bar bad" data-width="{{ ((row.stdev / (max_stdev or 1) * 60) | round(0)) or (2 if row.stdev > 0 else 0) }}px"></div>
                 </div>
               </li>
             {% endfor %}
@@ -179,9 +179,7 @@
                 </div>
                 <div class="stat-right">
                   <span>{{ "%+.2f"|format(row.average) }}</span>
-                  <div class="stat-bar"
-                       style="width: {{ (row.average|abs / (max_average_abs or 1) * 60) | round(0) }}px;
-                              background-color: {{ 'var(--primary-color)' if row.average > 0 else ('var(--secondary-color)' if row.average < 0 else '#666') }};">
+                  <div class="stat-bar {{ 'bad' if row.average > 0 else ('neutral' if row.average == 0 else '') }}" data-width="{{ ((row.average|abs / (max_average_abs or 1) * 60) | round(0)) or (2 if row.average|abs > 0 else 0) }}px">
                   </div>
                 </div>
               </li>
@@ -208,7 +206,7 @@
                 </div>
                 <div class="stat-right">
                   <span>{{ cb.improvement }} saved</span>
-                  <div class="stat-bar" style="width: {{ (cb.improvement / (max_comeback_improvement or 1) * 60) | round(0) }}px;"></div>
+                  <div class="stat-bar" data-width="{{ ((cb.improvement / (max_comeback_improvement or 1) * 60) | round(0)) or (2 if cb.improvement > 0 else 0) }}px"></div>
                 </div>
               </li>
             {% endfor %}
@@ -234,7 +232,7 @@
           {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
               {% for category, msg in messages %}
-                <div class="flash">{{ msg }}</div>
+                <div class="flash" role="alert">{{ msg }}</div>
               {% endfor %}
             {% endif %}
           {% endwith %}
@@ -290,7 +288,10 @@
         <div class="info-bar" id="info-bar" aria-live="polite" role="status">
           <div class="round-count">
             <span class="round-label">ROUND</span>
-            <span class="round-number">{{ "%02d"|format(game.current_round) }}</span>
+            <span class="round-number-wrapper">
+              <span class="round-number-digit old-digit" style="transform: translateY(0); opacity: 1;">{{ "%02d"|format(game.current_round) }}</span>
+              <span class="round-number-digit new-digit" style="transform: translateY(100%); opacity: 0;"></span>
+            </span>
             <span class="round-total">/ {{ game.holes }}</span>
           </div>
           <div class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</div>
@@ -336,7 +337,7 @@
         {% for r in range(game.current_round) %}
           {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
         {% endfor %}
-        <td class="{% if loop.index0 == game.current_player_index %}current-player-header{% endif %}">
+        <td>
           <div class="cell">
             <span class="total-pill">{{ ns.total > 0 and '+' or '' }}{{ ns.total }}</span>
             <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
@@ -345,7 +346,7 @@
           </div>
         </td>
       {% else %}
-        <td class="{% if loop.index0 == game.current_player_index %}current-player-header{% endif %}">
+        <td>
           <div class="cell">
             <span class="total-pill">0</span>
             <span class="delta-corner hidden">0</span>
@@ -390,7 +391,9 @@
         <div class="info-bar" id="info-bar" aria-live="polite" role="status">
           <div class="round-count">
             <span class="round-label">TIE-BREAKER</span>
-            <span class="round-number">{{ "%02d"|format(game.playoff_round) }}</span>
+            <span class="round-number-digit old-digit" style="transform: translateY(0); opacity: 1;">{{ "%02d"|format(game.playoff_round) }}</span>
+            <span class="round-number-digit new-digit" style="transform: translateY(100%); opacity: 0;"></span>
+            </span>
           </div>
           <div class="turn-info">{{ game.playoff_group[game.current_player_index] }}'s Turn</div>
         </div>
@@ -448,7 +451,7 @@
                 {% set v = game.playoff_round_scores.get(p) %}
                 {% set is_current = (game.playoff_group and p == game.playoff_group[game.current_player_index]) %}
                 {% if v is not none %}
-                  <td class="{{ 'current-player-header' if is_current else '' }}">
+                  <td>
                     <div class="cell">
                       <span class="total-pill">{{ v > 0 and '+' or '' }}{{ v }}</span>
                       <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
@@ -457,7 +460,7 @@
                     </div>
                   </td>
                 {% else %}
-                  <td class="{{ 'current-player-header' if is_current else '' }}">
+                  <td>
                     <div class="cell">
                       <span class="total-pill">0</span>
                       <span class="delta-corner hidden">0</span>
@@ -675,7 +678,7 @@
       const msgEl   = document.getElementById('confirmMessage');
       const okBtn   = document.getElementById('confirmOkBtn');
       const cancelBtn = document.getElementById('confirmCancelBtn');
-      let resolver = null;
+      let resolvePromise = null;
 
       function openModal(opts){
         const { title='Confirm', message='Are you sure?', okText='OK', cancelText='Cancel' } = opts || {};
@@ -683,22 +686,20 @@
         msgEl.textContent   = message;
         okBtn.textContent   = okText;
         cancelBtn.textContent = cancelText;
-        overlay.style.display = 'flex';
-        overlay.setAttribute('aria-hidden','false');
+        overlay.classList.add('show');
         document.body.style.overflow = 'hidden';
-        setTimeout(()=> okBtn.focus(), 0);
-        return new Promise(resolve => { resolver = resolve; });
+        setTimeout(() => okBtn.focus(), 0);
+        return new Promise(resolve => { resolvePromise = resolve; });
       }
       function closeModal(result){
-        overlay.style.display = 'none';
-        overlay.setAttribute('aria-hidden','true');
+        overlay.classList.remove('show');
         document.body.style.overflow = '';
-        if (resolver){ const r = resolver; resolver = null; r(result); }
+        if (resolvePromise){ const r = resolvePromise; resolvePromise = null; r(result); }
       }
       okBtn.addEventListener('click', ()=> closeModal(true));
       cancelBtn.addEventListener('click', ()=> closeModal(false));
-      overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(false); });
-      window.addEventListener('keydown', (e)=>{ if (overlay.style.display === 'flex' && e.key === 'Escape') closeModal(false); });
+      overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(false); }); // Close on backdrop click
+      window.addEventListener('keydown', (e)=>{ if (overlay.classList.contains('show') && e.key === 'Escape') closeModal(false); });
       window.showConfirmModal = openModal;
     })();
   </script>
@@ -826,14 +827,12 @@
 
       function openIosInstall(){
         if (!iosOverlay) return;
-        iosOverlay.style.display = 'flex';
-        iosOverlay.setAttribute('aria-hidden', 'false');
+        iosOverlay.classList.add('show');
         document.body.style.overflow = 'hidden';
       }
       window.closeIosInstall = function(){
         if (!iosOverlay) return;
-        iosOverlay.style.display = 'none';
-        iosOverlay.setAttribute('aria-hidden', 'true');
+        iosOverlay.classList.remove('show');
         document.body.style.overflow = '';
       };
 
@@ -1277,6 +1276,10 @@
       try{
         // Optimistic
         if (window.__gameCache){
+          const playerIndexToAnimate = window.__gameCache.current_player_index;
+          const roundIndexToAnimate = window.__gameCache.phase === 'playing' ? window.__gameCache.current_round - 1 : window.__gameCache.playoff_round - 1;
+          const isPlayoff = window.__gameCache.phase === 'playoff';
+
           const g = JSON.parse(JSON.stringify(window.__gameCache));
           if (g.phase === 'playing'){
             const pIdx = g.current_player_index;
@@ -1306,6 +1309,7 @@
           window.__gameCache = g;
           saveLocal(g);
           renderGame(g);
+          triggerDeltaAnimation(playerIndexToAnimate, roundIndexToAnimate, isPlayoff);
         }
 
         const res = await fetch('{{ url_for("api_score") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({score:val}) });
@@ -1393,19 +1397,180 @@
       updateEndButtonLabel(END_ACTIVE);
     }
 
+    // Function to trigger the delta animation on a specific cell
+    function triggerDeltaAnimation(playerIndex, roundIndex, isPlayoff, isWrappedRound = false) {
+      let targetCell;
+      const game = window.__gameCache; // Get current game state
+
+      if (isPlayoff) {
+        const scoredPlayerName = game.playoff_group[playerIndex]; // Player who just scored
+
+        // Find the column index for this player in the rendered table.
+        const headerThs = document.querySelectorAll('#scoreboard thead th:not(:first-child)');
+        let colIndex = -1;
+        for (let i = 0; i < headerThs.length; i++) {
+            const th = headerThs[i];
+            const displayName = th.textContent.trim();
+            // Check if the display name matches the scored player's name or initials
+            if (displayName === scoredPlayerName) {
+                colIndex = i;
+                break;
+            }
+            // If initials are used in the header, try matching with initials
+            if (headerThs.length > 4) { // Heuristic for when initials are used
+                const scoredPlayerInitials = scoredPlayerName.split(' ').map(w => w[0] || '').join('').toUpperCase();
+                if (displayName === scoredPlayerInitials) {
+                    colIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (colIndex !== -1) {
+          targetCell = document.querySelector(`#scoreboard .current-row td:nth-child(${colIndex + 1})`);
+        }
+      } else {
+        // For main game, find the specific round row
+        const rowOffset = (game.current_round - 1) - roundIndex + 1; // +1 for total row
+        const roundRow = document.querySelector(`#scoreboard tbody tr:nth-child(${rowOffset + 1})`); // +1 for 1-based nth-child
+        if (roundRow) {
+          targetCell = roundRow.querySelectorAll('td')[playerIndex];
+        }
+      }
+
+      const deltaCorner = targetCell?.querySelector('.delta-corner');
+      if (deltaCorner) {
+        deltaCorner.classList.add('delta-animate-trigger');
+        deltaCorner.addEventListener('animationend', () => deltaCorner.classList.remove('delta-animate-trigger'), { once: true });
+      }
+    }
+
     function sign(v){ return v>0?'+':''; }
 
+// Refactored function to update the info bar elements
+    function updateInfoBar(g) {
+      const infoBar = qs('#info-bar');
+      if (!infoBar) return;
+
+      const roundCountDiv = infoBar.querySelector('.round-count');
+      const oldDigitSpan = roundCountDiv.querySelector('.old-digit');
+      const newDigitSpan = roundCountDiv.querySelector('.new-digit');
+      const roundLabelSpan = roundCountDiv.querySelector('.round-label');
+      const roundTotalSpan = roundCountDiv.querySelector('.round-total');
+      const turnInfoDiv = infoBar.querySelector('.turn-info');
+      let endBannerWrap = infoBar.querySelector('.end-banner-wrap');
+
+      // Determine current round number and label based on phase
+      let currentRoundValue;
+      let roundLabelText;
+      let roundTotalText = '';
+
+      if (g.phase === 'playing') {
+        currentRoundValue = g.current_round;
+        roundLabelText = 'ROUND';
+        roundTotalText = `/ ${g.holes}`;
+      } else if (g.phase === 'playoff') {
+        currentRoundValue = g.playoff_round;
+        roundLabelText = 'TIE-BREAKER';
+        roundTotalText = ''; // No total rounds in playoff
+      } else {
+        return; // Not in a phase that uses this info bar
+      }
+
+      // Update Round Label
+      roundLabelSpan.textContent = roundLabelText;
+
+      // Update Round Number with animation
+      const oldRoundNumberText = oldDigitSpan.textContent;
+      const newRoundNumberText = String(currentRoundValue).padStart(2,'0');
+
+      if (oldRoundNumberText !== newRoundNumberText) {
+        // Set the new value to the new digit element
+        newDigitSpan.textContent = newRoundNumberText;
+
+        // Immediately reset newDigitSpan's position without transition to prepare for animation
+        newDigitSpan.style.transition = 'none';
+        newDigitSpan.style.transform = 'translateY(100%)'; // Start below
+        newDigitSpan.style.opacity = '0';
+
+        // Force reflow to apply the immediate reset before starting the actual animation
+        void newDigitSpan.offsetWidth;
+
+        // Enable transitions for the animation
+        oldDigitSpan.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
+        newDigitSpan.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
+
+        // Start the animation
+        oldDigitSpan.style.transform = 'translateY(-100%)';
+        oldDigitSpan.style.opacity = '0';
+        newDigitSpan.style.transform = 'translateY(0)';
+        newDigitSpan.style.opacity = '1';
+
+        // Update oldDigitSpan's text content immediately for logical state,
+        // but visually it will still be the old number animating out.
+        // This prevents re-triggering if updateInfoBar is called again before transitionend.
+        oldDigitSpan.textContent = newRoundNumberText;
+
+        // Clean up after animation completes
+        newDigitSpan.addEventListener('transitionend', function handler() {
+          newDigitSpan.removeEventListener('transitionend', handler); // Remove listener
+
+          // Reset oldDigitSpan to its final visible state (it already has the correct text)
+          oldDigitSpan.style.transform = 'translateY(0)';
+          oldDigitSpan.style.opacity = '1';
+          oldDigitSpan.style.transition = 'none'; // Disable transition for the reset
+
+          // Reset newDigitSpan to its hidden, empty state
+          newDigitSpan.textContent = ''; // Clear content
+          newDigitSpan.style.transform = 'translateY(100%)';
+          newDigitSpan.style.opacity = '0';
+          newDigitSpan.style.transition = 'none'; // Disable transition for immediate reset
+        }, { once: true });
+      } else {
+        // If no change, ensure old digit is visible and new digit is hidden/empty
+        oldDigitSpan.textContent = newRoundNumberText;
+        oldDigitSpan.style.transform = 'translateY(0)';
+        oldDigitSpan.style.opacity = '1';
+        oldDigitSpan.style.transition = 'none'; // Ensure no lingering transitions
+
+        newDigitSpan.textContent = ''; // Ensure new digit is empty
+        newDigitSpan.style.transform = 'translateY(100%)';
+        newDigitSpan.style.opacity = '0';
+        newDigitSpan.style.transition = 'none'; // Ensure no lingering transitions
+      }
+      if (g.phase === 'playing') {
+        roundTotalSpan.textContent = roundTotalText;
+        roundTotalSpan.style.display = '';
+      } else {
+        roundTotalSpan.style.display = 'none';
+      }
+
+      // 3. Update Turn Info
+      let currentPlayerName;
+      if (g.phase === 'playing') {
+        currentPlayerName = g.players[g.current_player_index];
+      } else if (g.phase === 'playoff') {
+        currentPlayerName = g.playoff_group[g.current_player_index];
+      }
+      turnInfoDiv.textContent = currentPlayerName + "'s Turn";
+
+      // 4. Update End Banner (only for playing phase)
+      if (g.phase === 'playing' && g.end_after_round) {
+        if (!endBannerWrap) {
+          endBannerWrap = document.createElement('div');
+          endBannerWrap.className = 'end-banner-wrap';
+          endBannerWrap.innerHTML = '<div class="end-banner"></div>';
+          infoBar.appendChild(endBannerWrap);
+        }
+        endBannerWrap.querySelector('.end-banner').textContent = 'Game will end after this round. Finish all players this round to finalize and run tie-breakers.';
+        endBannerWrap.style.display = '';
+      } else {
+        if (endBannerWrap) endBannerWrap.style.display = 'none';
+      }
+    }
+
     function renderPlaying(g){
-      var banner = g.end_after_round
-        ? '<div class="end-banner-wrap"><div class="end-banner">Game will end after this round. Finish all players this round to finalize and run tie-breakers.</div></div>'
-        : '';
-      qs('#info-bar').innerHTML =
-        '<div class="round-count">'+
-           '<span class="round-label">ROUND</span>'+
-           '<span class="round-number">'+String(g.current_round).padStart(2,'0')+'</span>'+
-           '<span class="round-total">/ '+g.holes+'</span>'+
-         '</div>'+
-         '<div class="turn-info">'+g.players[g.current_player_index]+"'s Turn</div>"+banner;
+      updateInfoBar(g); // Update the info bar elements
 
       var useInitials = g.players.length > 4;
       var headers = g.players.map(function(p, i) {
@@ -1424,21 +1589,24 @@
 
       var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
+      var justWrappedRound = g.current_player_index === 0 && g.current_round > 1;
+
       var curIdx = g.current_round - 1;
       var curRow = g.round_history[curIdx] || {};
-      var currentCells = g.players.map(function(p){
+      var currentCells = g.players.map(function(p, pIdx){
         var v = curRow[p];
         if (typeof v === 'undefined') {
           return '<td><div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div></td>';
         }
         var running = g.round_history.slice(0, g.current_round).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
+        var isNew = pIdx === (g.current_player_index - 1 + g.players.length) % g.players.length;
         return '<td><div class="cell"><span class="total-pill">'+(running>0?'+':'')+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
       }).join('');
       tbody += '<tr class="current-row"><th>'+String(g.current_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
 
       for(var i=g.current_round-2;i>=0;i--){
         var row = g.round_history[i] || {};
-        var cells = g.players.map(function(p){
+        var cells = g.players.map(function(p, pIdx){ // Pass pIdx here
           var v = row[p];
           if (typeof v === 'undefined') return '<td></td>';
           var running = g.round_history.slice(0, i+1).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
@@ -1452,11 +1620,7 @@
     }
 
     function renderPlayoff(g){
-        // Info bar
-        qs('#info-bar').innerHTML =
-          '<div class="round-count"><span class="round-label">TIE-BREAKER</span><span class="round-number">'+String(g.playoff_round).padStart(2,'0')+'</span></div>'+
-          '<div class="turn-info">'+g.playoff_group[g.current_player_index] + "'s Turn</div>";
-
+        updateInfoBar(g); // Update the info bar elements
         // ---- Build a stable header list (all players who ever appeared in this tie) ----
         var curScores = g.playoff_round_scores || {};
         var headerSet = new Set();
@@ -1482,13 +1646,13 @@
         var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
         // ✅ Current TB round row (stable columns)
-        var currentCells = headerPlayers.map(function(p){
+        var currentCells = headerPlayers.map(function(p, pIdx){
           var v = curScores[p];
           var isCur = (g.playoff_group && p === g.playoff_group[g.current_player_index]);
           if (typeof v === 'undefined'){
-            return '<td'+(isCur?' class="current-player-header"':'')+'><div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div></td>';
+            return '<td><div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div></td>';
           }
-          return '<td'+(isCur?' class="current-player-header"':'')+'><div class="cell"><span class="total-pill">'+(v>0?'+':'')+v+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
+          return '<td><div class="cell"><span class="total-pill">'+(v>0?'+':'')+v+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
         }).join('');
         tbody += '<tr class="current-row"><th>TB '+String(g.playoff_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
 
@@ -1625,8 +1789,7 @@
       if (typeof window.updateInstallVisibility === 'function') {
         window.updateInstallVisibility();
       }
-      settingsOverlay.style.display = 'flex';
-      settingsOverlay.setAttribute('aria-hidden','false');
+      settingsOverlay.classList.add('show');
       document.body.style.overflow = 'hidden';
     }
     function updateSettingsSummary() {
@@ -1641,8 +1804,7 @@
       settingsSummary.textContent = summary;
     }
     function closeSettings(){
-      settingsOverlay.style.display = 'none';
-      settingsOverlay.setAttribute('aria-hidden','true');
+      settingsOverlay.classList.remove('show');
       document.body.style.overflow = '';
     }
     async function saveSettings(){
@@ -1812,5 +1974,37 @@
       }
     })();
   </script>
+
+  {% if show_stats %}
+  <!-- =========================================================
+       SCRIPT: STATS BAR CHART ANIMATION
+       ========================================================= -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('DOMContentLoaded fired for stat bars.');
+      const observer = new IntersectionObserver((entries, obs) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const bar = entry.target;
+            const targetWidth = bar.getAttribute('data-width');
+            console.log(`Stat bar intersecting: ${bar.outerHTML}, targetWidth: ${targetWidth}`);
+            bar.style.setProperty('--target-width', targetWidth || '0px');
+            bar.offsetWidth; // Force reflow to ensure initial width:0 is rendered
+            bar.classList.add('visible');
+            obs.unobserve(bar); // Animate only once
+          }
+        });
+      }, { threshold: 0.1 }); // Trigger when 10% of the bar is visible
+
+      const statBars = document.querySelectorAll('.stat-bar');
+      console.log(`Found ${statBars.length} stat bars to observe.`);
+      if (statBars.length > 0) {
+        statBars.forEach(bar => observer.observe(bar));
+      } else {
+        console.warn('No .stat-bar elements found. Are they being rendered by Jinja2?');
+      }
+    });
+  </script>
+  {% endif %}
 </body>
 </html>
