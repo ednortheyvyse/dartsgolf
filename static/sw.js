@@ -6,6 +6,7 @@ const CACHE_NAME = `darts-golf-${CACHE_VERSION}`;
 const CORE_ASSETS = [
   '/', // HTML shell
   '/static/manifest.webmanifest',
+  '/static/style.css', // New: Externalized CSS
 
   // Icons / favicons used across the app
   '/static/icons/dartboard.svg',
@@ -27,7 +28,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     // Add core assets, but don't fail install if one URL 404s
-    await Promise.all(
+    await Promise.all( // Don't fail install if one URL 404s
       CORE_ASSETS.map((u) => cache.add(u).catch(() => void 0))
     );
   })());

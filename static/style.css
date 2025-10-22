@@ -1,0 +1,450 @@
+/* ------------------------------
+   CSS Variables / Color System
+   ------------------------------ */
+:root {
+  --bg-color:#1a1a1a;
+  --text-color:#f0f0f0;
+  --border-color:#444;
+
+  --primary-color:#E3292E;   /* RED (current turn & stats) */
+  --secondary-color:#309F6A; /* GREEN (negative deltas) */
+
+  --accent-color:#F9DFBC;    /* SCORE CELL BACKGROUND */
+  --accent-text-color:#000;  /* Running total text in cells */
+
+  /* Live-tuned by JS to ensure content isn't hidden under controls */
+  --controls-h: 96px;             /* fallback */
+  --controls-extra-bottom: 0px;   /* kept for compatibility; forced to 0 via JS */
+}
+
+/* ------------------------------
+   iOS-SAFE PAGE SCROLL LOCK
+   Body never scrolls; only .container scrolls
+   ------------------------------ */
+html, body { height: 100%; }
+html { overflow: hidden; }            /* never allow page scroll */
+
+body{
+  margin:0; /* ensure no default margin creates gaps */
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  color:var(--text-color);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: 0;
+  padding-left: env(safe-area-inset-left);
+}
+
+/* Paint the iOS home-indicator gutter (safe-area bottom) black */
+body::after{
+  content:"";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: env(safe-area-inset-bottom);
+  background: #000;        /* matches your bar */
+  pointer-events: none;
+  z-index: 18;             /* below .controls (z-index:19) */
+}
+
+/* ------------------------------
+   Main scroll area
+   ------------------------------ */
+.container{
+  flex:1;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;   /* momentum on iOS */
+  overscroll-behavior:contain;        /* stop bounce from bubbling */
+  padding:15px 2px;
+  /* Keep last rows clear of the bottom controls + iOS safe area */
+  padding-bottom: calc(15px + var(--controls-h));
+  -ms-overflow-style:none; scrollbar-width:none;
+}
+.container::-webkit-scrollbar{ display:none; }
+
+/* ------------------------------
+   Controls (Bottom Bar) — fixed & flush to bottom
+   ------------------------------ */
+.controls{
+  /*position: fixed;*/
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:#000;
+  border-top:2px solid var(--border-color);
+  z-index: 19;
+
+  /* Fix A: regular visual padding only (no safe-area here) */
+  padding: 10px 10px; /*calc(0px + env(safe-area-inset-bottom));*/
+
+}
+
+/* Extend the bar’s background into the home-indicator area
+   without moving the buttons */
+.controls::after{
+  content:"";
+  display:block;
+  height: 0 /*env(safe-area-inset-bottom);*/
+}
+
+/* iOS-only tweak */
+@supports (-webkit-touch-callout: none) {
+  .controls{
+    /* Reduce the bottom padding so the buttons sit lower */
+    padding-bottom: calc(max(0px, env(safe-area-inset-bottom) - 10px));
+  }
+}
+
+
+.button-grid{
+  display:grid; grid-template-columns:repeat(6,1fr);
+  gap:10px; margin-bottom:10px;
+}
+.button-grid.single{ grid-template-columns:1fr; }
+.button-grid.two{ grid-template-columns:repeat(2,1fr); }
+
+.utility-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+.button-grid button,
+.utility-grid button{
+  width:100%; padding:20px 0; font-size:1.8em; font-weight:bold;
+  border:none; border-radius:8px; cursor:pointer; touch-action:manipulation; white-space:nowrap;
+}
+
+/* Score buttons */
+.score-btn.minus{ background:var(--secondary-color); color:#fff; }
+.score-btn.plus{  background:var(--primary-color);  color:#fff; }
+.score-btn.zero{  background:#616161; color:#fff; }
+
+/* Utility buttons */
+.undo-btn{ background:#ff9800; color:#000; }
+.restart-btn{ background:#f44336; color:#fff; }
+.export-btn{ background:#2196f3; color:#fff; }
+.end-btn{ background:#2196f3; color:#fff; }
+.settings-btn{
+  background:#555; color:#fff;
+  font-size:1.1em; padding:12px 16px; border-radius:8px; border:none; cursor:pointer;
+}
+
+/* ------------------------------
+   Forms / Input ergonomics
+   ------------------------------ */
+.settings-input,
+.settings-text,
+#nameField { font-size:18px; }
+
+/* ------------------------------
+   Setup Screen
+   ------------------------------ */
+.setup-screen{
+  text-align:center;
+  padding-top:4vh;
+  max-width:950px; margin:0 auto;
+  padding-left:8px; padding-right:8px;
+}
+.setup-actions{ display:grid; grid-template-columns:1fr; gap:10px; margin-top:8px; }
+.setup-screen button{
+  padding:15px 30px; font-size:1.1em;
+  background:var(--secondary-color); color:#fff; border:none; border-radius:8px; cursor:pointer;
+}
+
+.flash{
+  margin:0 auto 16px; padding:12px 16px; border-radius:8px;
+  border:1px solid #ff4d4d; background:#2a0000; color:#ffcccc; font-weight:600;
+}
+
+.recent-wrap{ margin-top:14px; }
+.recent-title{ color:#ccc; font-size:.95em; margin-bottom:8px; }
+.chip-list{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+
+/* Player "chips" — WHITE text by default */
+.chip{
+  background:var(--secondary-color); color:#fff; /* Match the green add player button */
+  border:none; padding:12px 16px; border-radius:8px; cursor:grab; /* Match settings-btn padding, border, and border-radius */
+  user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
+  font-size:1.1em; font-weight:bold; touch-action:none; /* Match settings-btn font-size and add bold */
+  display:inline-flex; align-items:center; gap:8px;
+  box-sizing:border-box;
+}
+.chip.selected{ background:var(--secondary-color); } /* Keep background, border-color is no longer needed with border:none */
+.chip.draggable{ cursor:grab; }
+.chip.dragging{ opacity:.85; }
+.chip.placeholder{ border:2px dashed #666; background:transparent; }
+
+/* Number badge on selected chips */
+.chip .chip-index{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:1.4em; height:1.4em;
+  padding:0 .25em; margin-right:2px;
+  border-radius:999px; background:#444; color:#fff;
+  font-weight:900; font-size:.85em; line-height:1;
+}
+
+/* ✕ remove button inside the chip */
+.chip .chip-remove{
+  margin-left:2px;
+  background:transparent; border:none; color:#fff;
+  font-weight:900; font-size:1em; line-height:1;
+  cursor:pointer; padding:0 .3em; border-radius:6px;
+}
+.chip .chip-remove:focus-visible{ outline:2px solid #888; }
+
+.name-input-wrap input.settings-input{
+  background:#101010; border:1px solid var(--border-color);
+  border-radius:8px; color:#fff;
+}
+.name-input-wrap #addNameBtn{
+  background:#309F6A; color:#fff; border:none; border-radius:8px; font-weight:800;
+}
+
+/* ------------------------------
+   Scoreboard Table (all phases)
+   ------------------------------ */
+.scoreboard{
+  width:100%; border-collapse:collapse; table-layout:fixed;
+  margin-bottom:20px;
+}
+.scoreboard th,.scoreboard td{
+  border:1px solid var(--border-color); text-align:center; word-wrap:break-word;
+}
+.scoreboard thead th{
+  font-size:1.2em; padding:8px 5px; line-height:1.4; vertical-align:middle; background:#333;
+}
+.scoreboard tbody th,.scoreboard tbody td{ font-size:1.5em; vertical-align:middle; }
+.scoreboard tbody th{ background:#2b2b2b; font-size:1.1em; padding:12px 5px; }
+.scoreboard tbody td{
+  background:var(--accent-color); color:var(--accent-text-color);
+  font-weight:bold; padding:12px 5px;
+}
+.scoreboard .total-row td{ background:#333; color:#fff; }
+
+/* Player name colors:
+   - Default headers: WHITE
+   - Current player's header: RED
+   - Stats page names: RED via .stat-player */
+.scoreboard thead th:not(:first-child){ color:#fff; }
+.scoreboard.final thead tr:nth-child(2) th:not(:first-child){ color:#fff; }
+.current-player-header{ color:var(--primary-color) !important; font-weight:bold; }
+
+/* ------------------------------
+   Info Bar
+   ------------------------------ */
+.info-bar{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; margin-bottom:15px;
+}
+.round-count{ display:flex; align-items:flex-end; justify-content:center; gap:8px; line-height:1; margin-top:4px; flex-wrap:nowrap; }
+.round-label{ font-size:clamp(28px, 7vw, 56px); font-weight:900; letter-spacing:.06em; }
+.round-number{ font-size:clamp(44px, 12vw, 96px); font-weight:900; line-height:.9; color:#bbb; }
+.round-total{ font-size:clamp(10px, 2.8vw, 16px); font-weight:700; opacity:.85; margin-left:2px; align-self:flex-start; transform:translateY(-6px); }
+.turn-info{ font-size:clamp(18px, 4.2vw, 28px); font-weight:700; color:var(--primary-color); text-align:center; }
+
+.end-banner-wrap{ background:#182634; border-radius:12px; padding:10px; margin-top:12px; }
+.end-banner{
+  margin:0; padding:12px 16px; border:1px dashed #2196f3; color:#fff; background:transparent; border-radius:8px;
+  font-weight:700; text-align:center;
+}
+
+.scoreboard tr.current-row th{ background:#3a3a3a; }
+
+/* Cell internals (running total + delta chip) */
+.cell{ position:relative; display:flex; align-items:center; justify-content:center; min-height:58px; width:100%; height:100%; }
+.total-pill{ color:#000; background:none; padding:0; border-radius:0; font-weight:900; font-size:1.2em; line-height:1; }
+
+.delta-corner{
+  position:absolute; right:0; bottom:0; width:32px; height:32px; border-top-left-radius:100%;
+  background:#000; color:#fff; display:flex; align-items:flex-end; justify-content:flex-end; font-weight:900; font-size:.75em;
+  pointer-events:none; padding:2px 5px; box-sizing:border-box; overflow:hidden; line-height:1;
+}
+.delta-corner.pos{  background:var(--primary-color); }
+.delta-corner.neg{  background:var(--secondary-color); }
+.delta-corner.zero{ background:#000; }
+.delta-corner.hidden{ opacity:0; }
+
+.scoreboard.playing tbody td,
+.scoreboard.final tbody td{ padding:0; }
+.scoreboard.playing td .cell,
+.scoreboard.final   td .cell{ width:100%; height:100%; }
+
+/* Hero images */
+.homepage-dartboard,
+.final-standings-img{
+  display:block; width:auto; height:auto; max-width:min(92vw, 520px); max-height:48vh;
+  margin:0 auto 20px; object-fit:contain;
+}
+
+/* ------------------------------
+   UI Effects (score bubble)
+   ------------------------------ */
+.score-bubble{
+  position:fixed; z-index:9999; padding:8px 14px; border-radius:16px;
+  font-weight:800; font-size:1.1em; white-space:nowrap; pointer-events:none;
+  box-shadow:0 8px 20px rgba(0,0,0,.5);
+  transform:translate(-50%,0) scale(.95); opacity:0;
+  animation:floatUp 900ms ease-out forwards;
+  will-change:transform,opacity;
+}
+.score-bubble.pos{  background:var(--primary-color); color:#fff; }
+.score-bubble.neg{  background:var(--secondary-color); color:#fff; }
+.score-bubble.zero{ background:#616161; color:#fff; }
+
+@keyframes floatUp{
+  0%{   transform:translate(-50%,8px)  scale(.95); opacity:0; }
+  15%{  transform:translate(-50%,0px) scale(1.05);   opacity:1; }
+  100%{ transform:translate(-50%,-80px) scale(1.1); opacity:0; }
+}
+
+/* ------------------------------
+   Button Pop Animation
+   ------------------------------ */
+@keyframes buttonPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); } /* Slightly bigger, including font */
+  100% { transform: scale(1); }
+}
+.pop-animation { animation: buttonPop 100ms ease-out forwards; }
+
+/* Winner banner (final page) */
+.winner-banner{
+  color:var(--primary-color); font-weight:900; text-align:center;
+  font-size:clamp(32px, 8.5vw, 64px);
+  margin:8px auto 14px; letter-spacing:.02em;
+}
+
+#final-capture{ overflow:visible; }
+
+/* ------------------------------
+   Modals (Confirm / Settings / iOS Install hint)
+   ------------------------------ */
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.55);
+  display:none; align-items:center; justify-content:center; z-index:10000; padding:20px;
+}
+.modal{
+  background:#111; border:1px solid var(--border-color); border-radius:12px;
+  max-width:560px; width:100%; padding:18px; box-shadow:0 12px 36px rgba(0,0,0,.6);
+}
+.modal h3{ margin:0 0 8px; font-size:1.3em; }
+.modal p{ margin:0 0 16px; color:#ddd; }
+.modal-actions{ display:flex; gap:10px; justify-content:flex-end; }
+.modal-actions .btn{
+  padding:10px 16px; font-size:1.05em; font-weight:800; border:none; border-radius:8px; cursor:pointer;
+}
+.btn-cancel{ background:#444; color:#fff; }
+.btn-confirm{ background:#2196f3; color:#fff; }
+
+/* Settings modal (rows) */
+.settings-grid{ display:grid; gap:10px; }
+.settings-row{ display:grid; gap:6px; }
+.settings-group{
+  background: #222;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+}
+.settings-help{ color:#bbb; font-size:.9em; }
+
+/* ------------------------------
+  Playing-page utility row (now using button-grid two)
+  ------------------------------ */
+.button-grid.two.playing{ grid-template-columns:1fr 1fr; }
+.button-grid.two.playing button{
+  white-space:nowrap; font-size:clamp(16px, 4.5vw, 28px); padding:clamp(12px, 3.5vw, 20px) 0;
+}
+
+/* ------------------------------
+  Toasts
+  ------------------------------ */
+.toast-container{
+  position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+  z-index:10050; display:flex; flex-direction:column; gap:8px; pointer-events:none;
+}
+.toast{
+  pointer-events:auto; background:#222; color:#fff; border:1px solid var(--border-color);
+  border-radius:10px; padding:10px 14px; font-weight:800; font-size:.95em;
+  box-shadow:0 10px 24px rgba(0,0,0,.35);
+  opacity:0; transform:translateY(6px);
+  transition:opacity .18s ease, transform .18s ease;
+  display:flex; align-items:center; gap:10px;
+}
+.toast.show{ opacity:1; transform:translateY(0); }
+.toast--error{ background:#3b1111; border-color:#6b1d1d; }
+.toast--success{ background:#113b25; border-color:#1d6b3a; }
+.toast--info{ background:#11233b; border-color:#1d3b6b; }
+.toast button{ background:#2196f3; color:#fff; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:800; }
+
+/* ------------------------------
+   Reduced Motion
+   ------------------------------ */
+@media (prefers-reduced-motion: reduce){
+  .score-bubble{ animation:none !important; opacity:1; }
+}
+
+/* Confetti canvas (winner) */
+#confettiCanvas{ position:fixed; inset:0; pointer-events:none; z-index:9998; }
+
+/* ------------------------------
+   STATS PAGE STYLES (names red)
+   ------------------------------ */
+.stat-block{
+  background:#111; border:1px solid var(--border-color); border-radius:12px;
+  padding:14px 16px; margin:12px auto; max-width:900px;
+}
+.stat-title{
+  font-weight:900; font-size:1.2em; color:#e5e5e5;
+  margin:0 0 10px; letter-spacing:.02em;
+}
+.stat-value{ font-size:1.3em; font-weight:900; color:#fff; }
+.stat-right { /* Modified to be a flex container for value + bar */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end; /* Align content to the right */
+  min-width: 80px; /* Ensure space for the bar */
+}
+.stat-player{
+  font-weight:800; color:var(--primary-color); /* red on stats */
+  display:inline-block;
+}
+.stat-right > span { /* Original stat-right text styling */
+  font-weight:900;
+  color:#fff;
+}
+.stat-block ol{ margin:0; padding-left:1.1em; list-style:decimal; }
+.stat-block ol li{
+  display:flex; justify-content:space-between; align-items:flex-start;
+  padding:8px 0; border-bottom:1px dashed #333;
+  gap:12px;
+}
+/* Styles for mini-graphs */
+.stat-bar {
+  height: 8px;
+  border-radius: 4px;
+  background-color: var(--secondary-color); /* Default green for good things */
+  transition: width 0.3s ease-out;
+  flex-shrink: 0; /* Prevent shrinking */
+  min-width: 2px; /* Smallest visible bar */
+}
+.stat-bar.bad {
+  background-color: var(--primary-color); /* Red for bad things */
+}
+.stat-bar.neutral {
+  background-color: #666; /* Grey for averages around zero */
+}
+.stat-block ol li:last-child{ border-bottom:none; }
+
+/* Helpers for “from…to…” under name */
+.stat-left{ display:flex; flex-direction:column; gap:2px; min-width:170px; }
+.stat-sub{ color:#ccc; opacity:0.95; margin-left:0; }
+.stat-right{ font-weight:900; white-space:nowrap; color:#fff; }
+
+/* ------------------------------
+   Scroll-control utility class hooks (optional)
+   ------------------------------ */
+.no-overscroll{ overscroll-behavior: contain; }

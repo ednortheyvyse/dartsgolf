@@ -45,6 +45,10 @@ _games: dict[str, dict] = {}  # in-memory fallback
 # --- Constants ---
 DEFAULT_HOLES = 20
 DEFAULT_SCORE_BUTTONS = [-3, -2, -1, 0, 1, 2]
+MIN_HOLES = 1
+MAX_HOLES = 50
+MIN_SCORE_BUTTON_VALUE = -10
+MAX_SCORE_BUTTON_VALUE = 10
 RECENT_NAMES_CAP = 24
 
 
@@ -82,17 +86,29 @@ def _fresh_state() -> dict:
 
 # ------------ Storage helpers (10) ------------
 def _storage_key(sid: str) -> str:
+    """Generates a storage key for a given session ID."""
     return f"game:{sid}"
 
 
 def _storage_get(sid: str) -> dict | None:
+    """
+    Retrieves game state from storage for a given session ID.
+    Returns None if not found.
+    """
     if _redis:
         data = _redis.get(_storage_key(sid))
         return json.loads(data) if data else None
     return _games.get(sid)
 
 
-def _storage_set(sid: str, gs: dict) -> None:
+def _storage_set(sid: str, gs: dict) -> None: # type: ignore
+    """
+    Stores game state for a given session ID.
+    
+    Args:
+        sid: The session ID.
+        gs: The game state dictionary to store.
+    """
     if _redis:
         _redis.set(_storage_key(sid), json.dumps(gs))
     else:
@@ -100,6 +116,7 @@ def _storage_set(sid: str, gs: dict) -> None:
 
 
 def _storage_reset(sid: str) -> None:
+    """Resets (deletes) game state for a given session ID."""
     if _redis:
         _redis.delete(_storage_key(sid))
     _games.pop(sid, None)
@@ -107,6 +124,7 @@ def _storage_reset(sid: str) -> None:
 
 # -------------- Game accessors --------------
 def _get_sid() -> str:
+    """Retrieves or generates a unique session ID for the current user."""
     sid = session.get("sid")
     if not sid:
         sid = uuid4().hex
@@ -115,11 +133,12 @@ def _get_sid() -> str:
     return sid
 
 
-def _get_state() -> dict:
+def _get_state() -> dict: # type: ignore
+    """Retrieves the current game state, initializing it if not found."""
     sid = _get_sid()
     gs = _storage_get(sid)
     if not gs:
-        gs = _fresh_state()
+        gs: dict = _fresh_state() # type: ignore
         _storage_set(sid, gs)
     return gs
 
@@ -129,10 +148,31 @@ def _reset_state():
     _storage_set(sid, _fresh_state())
 
 
-def _persist():
+def _persist() -> None:
+    """Persists the current game state to storage."""
     sid = _get_sid()
     gs = _get_state()
     _storage_set(sid, gs)
+
+
+def _compute_rounds_played(gs: dict) -> int:
+    """Calculates the number of rounds actually played (i.e., with scores)."""
+    return sum(1 for r in gs.get('round_history', []) if r)
+
+
+def _merge_recent(existing: list[str], new_names: list[str], cap: int = RECENT_NAMES_CAP) -> list[str]:
+    """Merges new player names into a list of recent names, handling duplicates and capping the list."""
+    out: list[str] = []
+    seen_lower = set()
+    for name in new_names + existing:
+        k = name.lower()
+        if k in seen_lower:
+            continue
+        out.append(name)
+        seen_lower.add(k)
+        if len(out) >= cap:
+            break
+    return out
 
 
 def _final_order_players(gs: dict) -> list[str]:
@@ -215,7 +255,7 @@ def start_game():
         flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "error")
         return redirect(url_for('index'))
 
-    updated_recent = _merge_recent(gs_prev.get('recent_names', []), players, cap=RECENT_NAMES_CAP)
+    updated_recent = _merge_recent(gs_prev.get('recent_names', []), players)
 
     _reset_state()
     gs = _get_state()
@@ -232,6 +272,9 @@ def start_game():
 
 @app.route('/score', methods=['POST'])
 def record_score():
+    """
+    Records a score change via a form submission (non-API).
+    """
     gs = _get_state()
     score_change = int(request.form.get('score'))
     _apply_score(gs, score_change)
@@ -241,6 +284,9 @@ def record_score():
 
 @app.route('/undo', methods=['POST'])
 def undo_last_move():
+    """
+    Undoes the last score move via a form submission (non-API).
+    """
     gs = _get_state()
     _apply_undo(gs)
     _persist()
@@ -250,6 +296,9 @@ def undo_last_move():
 @app.route('/restart', methods=['POST'])
 def restart():
     gs = _get_state()
+    # Preserve recent names, holes, and score buttons across game restarts
+    # This ensures a smoother UX when starting a new game.
+    # (7)
     prev_recent = gs.get('recent_names', [])
     prev_holes = gs.get('holes', DEFAULT_HOLES)
     prev_buttons = gs.get('score_buttons', DEFAULT_SCORE_BUTTONS)
@@ -265,6 +314,9 @@ def restart():
 # ---------- JSON APIs ----------
 @app.post('/api/score')
 def api_score():
+    """
+    API endpoint to record a score change.
+    """
     gs = _get_state()
     data = request.get_json(force=True, silent=True) or {}
     score_change = int(data.get('score', 0))
@@ -275,6 +327,9 @@ def api_score():
 
 @app.post('/api/undo')
 def api_undo():
+    """
+    API endpoint to undo the last score move.
+    """
     gs = _get_state()
     _apply_undo(gs)
     _persist()
@@ -284,6 +339,9 @@ def api_undo():
 @app.post('/api/end')
 def api_end_after_round():
     gs = _get_state()
+    """
+    API endpoint to toggle the 'end_after_round' flag.
+    """
     if gs['phase'] == 'playing':
         gs['end_after_round'] = not bool(gs.get('end_after_round', False))
         _persist()
@@ -306,12 +364,12 @@ def api_settings():
         try:
             raw = data['score_buttons']
             if isinstance(raw, list):
-                btns = []
+                btns: list[int] = []
                 for v in raw:
                     iv = int(v)
-                    if -10 <= iv <= 10:
+                    if MIN_SCORE_BUTTON_VALUE <= iv <= MAX_SCORE_BUTTON_VALUE:
                         btns.append(iv)
-                # normalize & de-dup, keep order
+                # Normalize & de-dup, keep order
                 seen = set()
                 norm = []
                 for b in btns:
@@ -328,7 +386,7 @@ def api_settings():
     if gs['phase'] == 'setup' and 'holes' in data:
         try:
             holes = int(data['holes'])
-            if 1 <= holes <= 50:
+            if MIN_HOLES <= holes <= MAX_HOLES:
                 gs['holes'] = holes
                 gs['round_history'] = [{} for _ in range(holes)]
                 changed = True
@@ -404,6 +462,10 @@ def apple_touch_icon():
 
 # ----------------- Game logic -----------------
 def _apply_score(gs: dict, score_change: int):
+    """
+    Applies a score change to the current game state, handling player turns,
+    round progression, and initiating playoffs if conditions are met.
+    """
     holes = int(gs.get('holes', 20))
     if gs['phase'] == 'playing':
         player = gs['players'][gs['current_player_index']]
@@ -436,6 +498,10 @@ def _apply_score(gs: dict, score_change: int):
 
 
 def _apply_undo(gs: dict):
+    """
+    Undoes the last score move, reverting game state to the previous turn.
+    Only applicable during the 'playing' phase.
+    """
     # Undo applies only during main play (not in playoff phase)
     if gs['phase'] != 'playing' or not gs['undo_history']:
         return
@@ -455,6 +521,10 @@ def _apply_undo(gs: dict):
 
 
 def initiate_playoffs(gs: dict):
+    """
+    Initiates the playoff phase by identifying tied players and setting up
+    the initial playoff groups.
+    """
     gs['end_after_round'] = False
 
     # Group players by base total score; only ties (len > 1) need playoffs
@@ -473,6 +543,10 @@ def initiate_playoffs(gs: dict):
 
 
 def start_next_playoff(gs: dict):
+    """
+    Starts the next playoff round or transitions to final ranking if no
+    more ties are pending.
+    """
     if gs['pending_playoffs']:
         nxt = gs['pending_playoffs'].pop(0)
         gs['phase'] = 'playoff'
@@ -492,6 +566,10 @@ def start_next_playoff(gs: dict):
 
 
 def _tb_sequence_for_player_in_current_tie(gs: dict, player: str) -> list[int]:
+    """
+    Retrieves the tie-breaker score sequence for a given player within the
+    current playoff context.
+    """
     seq: list[int] = []
     for rnd in gs['playoff_history']:
         if player in rnd:
@@ -500,6 +578,10 @@ def _tb_sequence_for_player_in_current_tie(gs: dict, player: str) -> list[int]:
 
 
 def _finalize_player_from_current_tie(gs: dict, player: str):
+    """
+    Finalizes a player's standing in the current tie-breaker, removing them
+    from the active playoff pool.
+    """
     seq = _tb_sequence_for_player_in_current_tie(gs, player)
     if seq:
         gs['final_playoff_scores'][player] = seq[-1]
@@ -510,6 +592,10 @@ def _finalize_player_from_current_tie(gs: dict, player: str):
 
 
 def resolve_playoff_round(gs: dict):
+    """
+    Resolves the current playoff round, updates player standings, and
+    determines the next playoff group or transitions to final ranking.
+    """
     scores = gs['playoff_round_scores']
     gs['playoff_history'].append(scores.copy())
 
@@ -550,6 +636,9 @@ def resolve_playoff_round(gs: dict):
 # ---------------- Stats view (unchanged) ----------------
 @app.route('/stats')
 def stats():
+    """
+    Renders the statistics page, calculating various player metrics.
+    """
     gs = _get_state()
 
     def _extract_per_player_sequences(gs: dict) -> dict[str, list[int]]:
