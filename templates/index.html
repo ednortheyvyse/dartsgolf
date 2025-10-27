@@ -309,7 +309,8 @@
           <thead>
             <tr><th scope="col">&nbsp;</th>
               {% for p in game.players %}
-                <th scope="col" class="{{ 'current-player-header' if p == game.players[game.current_player_index] else '' }}">
+                {% set is_cur = (p == game.players[game.current_player_index]) %}
+                <th scope="col" class="{{ 'current-player-header' if is_cur else '' }}">
                   {% if game.players|length > 4 %}
                     {{ p.split(' ')|map('first')|join('')|upper }}
                   {% else %}
@@ -332,6 +333,7 @@
   <tr class="current-row"><th>{{ "%02d"|format(game.current_round) }}</th>
     {% for p in game.players %}
       {% set v = game.round_history[game.current_round - 1].get(p) %} {# This is a data cell, not a header #}
+      {% set is_cur_cell = (loop.index0 == game.current_player_index) %}
       {% if v is not none %}
         {% set ns = namespace(total=0) %}
         {% for r in range(game.current_round) %}
@@ -346,7 +348,7 @@
           </div>
         </td>
       {% else %}
-        <td>
+        <td class="{{ 'current-player-cell' if is_cur_cell else '' }}">
           <div class="cell">
             <span class="total-pill">0</span>
             <span class="delta-corner hidden">0</span>
@@ -395,35 +397,22 @@
             <span class="round-number-digit new-digit" style="transform: translateY(100%); opacity: 0;"></span>
             </span>
           </div>
-          <div class="turn-info">{{ game.playoff_group[game.current_player_index] }}'s Turn</div>
+          <div class="turn-info">
+            {% if game.playoff_group %}{{ game.playoff_group[game.current_player_index] }}'s Turn{% endif %}
+          </div>
         </div>
                 <table class="scoreboard" id="scoreboard">
           {# -----------------------------------------------------
              BUILD A STABLE COLUMN SET (ALL PLAYERS IN THIS TIE)
              ----------------------------------------------------- #}
-          {% set ns = namespace(players=[]) %}
-          {# current active subgroup #}
-          {% for p in game.playoff_group %}
-            {% if p not in ns.players %}{% set ns.players = ns.players + [p] %}{% endif %}
-          {% endfor %}
-          {# any who already scored this round #}
-          {% for p, _ in game.playoff_round_scores.items() %}
-            {% if p not in ns.players %}{% set ns.players = ns.players + [p] %}{% endif %}
-          {% endfor %}
-          {# anyone who appeared in any previous TB round #}
-          {% for rd in game.playoff_history %}
-            {% for p, _ in rd.items() %}
-              {% if p not in ns.players %}{% set ns.players = ns.players + [p] %}{% endif %}
-            {% endfor %}
-          {% endfor %}
-          {% set tie_players = ns.players %}
+          {% set tie_players = game.playoff_pool %}
 
           <thead>
             <tr><th scope="col">&nbsp;</th>
               {% for p in tie_players %}
                 {# highlight only if this header is the current shooter #}
                 {% set is_cur = (game.playoff_group and p == game.playoff_group[game.current_player_index]) %}
-                <th scope="col" class="{{ 'current-player-header' if is_cur else '' }}">
+                <th scope="col" class="{{ 'current-player-header' if is_cur else '' }}" data-player-name="{{ p }}">
                   {% if tie_players|length > 4 %}
                     {{ p.split(' ')|map('first')|join('')|upper }}
                   {% else %}
@@ -460,7 +449,7 @@
                     </div>
                   </td>
                 {% else %}
-                  <td>
+                  <td class="{{ 'current-player-cell' if is_current else '' }}">
                     <div class="cell">
                       <span class="total-pill">0</span>
                       <span class="delta-corner hidden">0</span>
@@ -476,7 +465,7 @@
     {% set tb_num = total_tb - loop.index0 %}
     <tr>
       <th scope="row">TB {{ "%02d"|format(tb_num) }}</th>
-      {% for p in game.playoff_group %}
+      {% for p in tie_players %} {# Use the stable tie_players list #}
         {% set v = round_scores.get(p) %}
         {% if v is not none %}
           <td>
@@ -652,7 +641,7 @@
       <p style="margin-top:6px;">
         On iPhone/iPad (Safari): tap the <b>Share</b> button, then choose <b>Add to Home Screen</b>.
       </p>
-      <div class="modal-actions" style="margin-top:12px;%;">
+      <div class="modal-actions" style="margin-top:12px;">
         <button type="button" class="btn btn-confirm" onclick="closeIosInstall()">OK</button>
       </div>
     </div>
@@ -882,11 +871,11 @@
   <!-- =========================================================
        SCRIPT: SETUP PAGE — Pills with Pointer Events drag
        ========================================================= -->
-  <script>
+  <script>;
     // ---------- State ----------
     const recentNames      = {{ (game.recent_names or []) | tojson | safe }};
     const chipList         = document.getElementById('chipList');           // recent chips (if any)
-    const selectedWrap     = document.getElementById('selectedWrap');       // container for selected chips
+    const selectedWrap     = document.getElementById('selectedWrap'); // container for selected chips
     const selectedChipList = document.getElementById('selectedChipList');
     const playersHidden    = document.getElementById('playersInput');       // hidden CSV posted to /start
     const nameField        = document.getElementById('nameField');
@@ -1225,11 +1214,13 @@
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e)=>{
-      const map = { '1':-3, '2':-2, '3':-1, '4':0, '5':+1, '6':+2, 'u':'undo', 'U':'undo' };
+      const map = { '1':-3, '2':-2, '3':-1, '4':0, '5':+1, '6':+2, '0':0, 'u':'undo', 'U':'undo' };
       if(!(e.key in map)) return;
       e.preventDefault();
       if (map[e.key]==='undo') { undo(); return; }
-      hit(map[e.key], document.body);
+      // For keyboard, we don't have a button to animate, so we pass `null`
+      // to the hit function to prevent the page-pop animation.
+      hit(map[e.key], null);
     });
 
     // Local save (resume)
@@ -1276,9 +1267,9 @@
       try{
         // Optimistic
         if (window.__gameCache){
-          const playerIndexToAnimate = window.__gameCache.current_player_index;
-          const roundIndexToAnimate = window.__gameCache.phase === 'playing' ? window.__gameCache.current_round - 1 : window.__gameCache.playoff_round - 1;
           const isPlayoff = window.__gameCache.phase === 'playoff';
+          const playerToAnimate = isPlayoff ? window.__gameCache.playoff_group[window.__gameCache.current_player_index] : window.__gameCache.players[window.__gameCache.current_player_index];
+          const playerIndexToAnimate = window.__gameCache.current_player_index; // For main game logic
 
           const g = JSON.parse(JSON.stringify(window.__gameCache));
           if (g.phase === 'playing'){
@@ -1304,12 +1295,21 @@
             const player = g.playoff_group[pIdx];
             g.playoff_round_scores = g.playoff_round_scores || {};
             g.playoff_round_scores[player] = val;
-            g.current_player_index = Math.min(pIdx + 1, g.playoff_group.length - 1);
+            // Only advance the index if it's not the last player in the group.
+            const isLastPlayerOfRound = (pIdx === g.playoff_group.length - 1);
+            if (isLastPlayerOfRound) {
+              // Round is over. Server will resolve it. Optimistically reset for next round.
+              g.playoff_round_scores = {};
+              g.playoff_group = []; // The server will send the new, smaller group.
+              g.current_player_index = 0;
+            } else {
+              g.current_player_index = pIdx + 1;
+            }
           }
           window.__gameCache = g;
           saveLocal(g);
           renderGame(g);
-          triggerDeltaAnimation(playerIndexToAnimate, roundIndexToAnimate, isPlayoff);
+          triggerDeltaAnimation(playerToAnimate, val, isPlayoff);
         }
 
         const res = await fetch('{{ url_for("api_score") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({score:val}) });
@@ -1380,7 +1380,7 @@
         const ok = await window.showConfirmModal({ title: 'Cancel End', message: 'The game will continue normally after this round. Continue?', okText: 'Cancel End', cancelText: 'Keep Ending' });
         if (!ok) return;
       }
-      var res = await fetch('{{ url_for('api_end_after_round') }}',{method:'POST'});
+      var res = await fetch('{{ url_for('api_end_after_round') }}', {method:'POST'});
       var data = await res.json(); if(!data.ok) return;
       window.__gameCache = data.game;
       saveLocal(data.game);
@@ -1398,50 +1398,47 @@
     }
 
     // Function to trigger the delta animation on a specific cell
-    function triggerDeltaAnimation(playerIndex, roundIndex, isPlayoff, isWrappedRound = false) {
+    function triggerDeltaAnimation(scoredPlayerName, scoreValue, isPlayoff) {
       let targetCell;
       const game = window.__gameCache; // Get current game state
 
       if (isPlayoff) {
-        const scoredPlayerName = game.playoff_group[playerIndex]; // Player who just scored
-
-        // Find the column index for this player in the rendered table.
         const headerThs = document.querySelectorAll('#scoreboard thead th:not(:first-child)');
-        let colIndex = -1;
-        for (let i = 0; i < headerThs.length; i++) {
-            const th = headerThs[i];
-            const displayName = th.textContent.trim();
-            // Check if the display name matches the scored player's name or initials
-            if (displayName === scoredPlayerName) {
-                colIndex = i;
-                break;
-            }
-            // If initials are used in the header, try matching with initials
-            if (headerThs.length > 4) { // Heuristic for when initials are used
-                const scoredPlayerInitials = scoredPlayerName.split(' ').map(w => w[0] || '').join('').toUpperCase();
-                if (displayName === scoredPlayerInitials) {
-                    colIndex = i;
-                    break;
-                }
-            }
-        }
+        const colIndex = Array.from(headerThs).findIndex(th => th.dataset.playerName === scoredPlayerName);
 
         if (colIndex !== -1) {
-          targetCell = document.querySelector(`#scoreboard .current-row td:nth-child(${colIndex + 1})`);
+          targetCell = document.querySelector(`#scoreboard .current-row td:nth-child(${colIndex + 2})`);
+          if (targetCell) {
+            // The cell was rendered empty. Now we fill it and animate it.
+            const v = scoreValue;
+            const signedV = (v > 0 ? '+' : '') + v;
+            const deltaClass = v > 0 ? 'pos' : (v < 0 ? 'neg' : 'zero');
+
+            // 1. Populate the cell's inner HTML with the score and delta elements.
+            targetCell.innerHTML = `
+              <div class="cell">
+                <span class="total-pill">${signedV}</span>
+                <span class="delta-corner ${deltaClass}">${signedV}</span>
+              </div>
+            `;
+
+            // 2. Find the newly created delta corner and trigger its animation.
+            const deltaCorner = targetCell.querySelector('.delta-corner');
+            if (deltaCorner) {
+              deltaCorner.classList.add('delta-animate-trigger');
+              deltaCorner.addEventListener('animationend', () => deltaCorner.classList.remove('delta-animate-trigger'), { once: true });
+            }
+          }
         }
       } else {
-        // For main game, find the specific round row
-        const rowOffset = (game.current_round - 1) - roundIndex + 1; // +1 for total row
-        const roundRow = document.querySelector(`#scoreboard tbody tr:nth-child(${rowOffset + 1})`); // +1 for 1-based nth-child
-        if (roundRow) {
-          targetCell = roundRow.querySelectorAll('td')[playerIndex];
+        // Main game logic remains the same, as it works correctly.
+        const roundRow = document.querySelector(`#scoreboard tbody tr:nth-child(2)`);
+        targetCell = roundRow?.querySelectorAll('td')[game.current_player_index - 1];
+        const deltaCorner = targetCell?.querySelector('.delta-corner');
+        if (deltaCorner) {
+          deltaCorner.classList.add('delta-animate-trigger');
+          deltaCorner.addEventListener('animationend', () => deltaCorner.classList.remove('delta-animate-trigger'), { once: true });
         }
-      }
-
-      const deltaCorner = targetCell?.querySelector('.delta-corner');
-      if (deltaCorner) {
-        deltaCorner.classList.add('delta-animate-trigger');
-        deltaCorner.addEventListener('animationend', () => deltaCorner.classList.remove('delta-animate-trigger'), { once: true });
       }
     }
 
@@ -1594,23 +1591,27 @@
       var curIdx = g.current_round - 1;
       var curRow = g.round_history[curIdx] || {};
       var currentCells = g.players.map(function(p, pIdx){
-        var v = curRow[p];
+        var v = curRow[p]; // Score for this player in this round
+        var isCurrentPlayerForCell = (pIdx === g.current_player_index && typeof v === 'undefined');
         if (typeof v === 'undefined') {
-          return '<td><div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div></td>';
+          // This is an empty cell, apply highlight if it's the current player's turn
+          return '<td class="' + (isCurrentPlayerForCell ? 'current-player-cell' : '') + '">' +
+                 '<div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div>' +
+                 '</td>';
         }
+        // This cell has a score, render it normally
         var running = g.round_history.slice(0, g.current_round).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
-        var isNew = pIdx === (g.current_player_index - 1 + g.players.length) % g.players.length;
         return '<td><div class="cell"><span class="total-pill">'+(running>0?'+':'')+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
       }).join('');
       tbody += '<tr class="current-row"><th>'+String(g.current_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
 
       for(var i=g.current_round-2;i>=0;i--){
-        var row = g.round_history[i] || {};
-        var cells = g.players.map(function(p, pIdx){ // Pass pIdx here
+        var row = g.round_history[i] || {}; // This is a past round, no highlight needed.
+        var cells = g.players.map(function(p) {
           var v = row[p];
           if (typeof v === 'undefined') return '<td></td>';
-          var running = g.round_history.slice(0, i+1).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
-          return '<td><div class="cell"><span class="total-pill">'+(running>0?'+':'')+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
+          var running = g.round_history.slice(0, i + 1).reduce(function(sum, rh) { return sum + (rh[p] || 0); }, 0);
+          return '<td><div class="cell"><span class="total-pill">' + (running > 0 ? '+' : '') + running + '</span><span class="delta-corner ' + (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'zero')) + '">' + (v > 0 ? '+' : '') + v + '</span></div></td>';
         }).join('');
         tbody += '<tr><th>'+String(i+1).padStart(2,'0')+'</th>'+cells+'</tr>';
       }
@@ -1622,14 +1623,8 @@
     function renderPlayoff(g){
         updateInfoBar(g); // Update the info bar elements
         // ---- Build a stable header list (all players who ever appeared in this tie) ----
+        var headerPlayers = g.playoff_pool || []; // Use the stable pool
         var curScores = g.playoff_round_scores || {};
-        var headerSet = new Set();
-        (g.playoff_group || []).forEach(p => headerSet.add(p));
-        Object.keys(curScores).forEach(p => headerSet.add(p));
-        (g.playoff_history || []).forEach(rd => {
-          Object.keys(rd || {}).forEach(p => headerSet.add(p));
-        });
-        var headerPlayers = Array.from(headerSet);
 
         // THEAD with current shooter highlight when applicable
         var useInitials = headerPlayers.length > 4;
@@ -1638,7 +1633,7 @@
           var displayName = useInitials
             ? p.split(' ').map(function(w) { return w[0] || ''; }).join('').toUpperCase()
             : p;
-          return '<th class="'+(isCur ? 'current-player-header' : '')+'">' + displayName + '</th>';
+          return '<th class="'+(isCur ? 'current-player-header' : '')+'" data-player-name="'+p+'">' + displayName + '</th>';
         }).join('')+'</tr></thead>';
 
         // TB totals (base score only)
@@ -1646,13 +1641,17 @@
         var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
         // ✅ Current TB round row (stable columns)
-        var currentCells = headerPlayers.map(function(p, pIdx){
+        var currentCells = headerPlayers.map(function(p) {
           var v = curScores[p];
-          var isCur = (g.playoff_group && p === g.playoff_group[g.current_player_index]);
-          if (typeof v === 'undefined'){
-            return '<td><div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div></td>';
+          // Determine if this cell belongs to the current player whose turn it is
+          var isCurrentPlayerForCell = (g.playoff_group && p === g.playoff_group[g.current_player_index]);
+          // For the player who just scored, render an empty cell. The animation function will fill it.
+          // For all other players, render as normal.
+          if (typeof v === 'undefined') {
+            // Render an empty cell with the highlight if it's the current player's turn
+            return '<td class="'+(isCurrentPlayerForCell ? 'current-player-cell' : '')+'"><div class="cell"><span class="total-pill"></span><span class="delta-corner hidden"></span></div></td>';
           }
-          return '<td><div class="cell"><span class="total-pill">'+(v>0?'+':'')+v+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
+          return '<td><div class="cell"><span class="total-pill">' + (v > 0 ? '+' : '') + v + '</span><span class="delta-corner ' + (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'zero')) + '">' + (v > 0 ? '+' : '') + v + '</span></div></td>';
         }).join('');
         tbody += '<tr class="current-row"><th>TB '+String(g.playoff_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
 
@@ -1660,7 +1659,7 @@
       for (var idx = g.playoff_history.length - 1; idx >= 0; idx--) {
         var round_scores = g.playoff_history[idx] || {};
         var tbNum = idx + 1;
-        var cells = g.playoff_group.map(function(p){
+        var cells = headerPlayers.map(function(p){ // Use stable headerPlayers list
           var v = round_scores[p];
           if (typeof v === 'undefined') return '<td></td>';
           return (
@@ -1682,14 +1681,19 @@
     var LABELS = { "-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double Bogey" };
     function hit(val, el){
       haptic('light');
-      popButton(el);
-      showBubbleFor(val, el);
+      if (el) { // Only animate and position bubble if an element is provided
+        popButton(el);
+        showBubbleFor(val, el);
+      } else {
+        // For keyboard input, show bubble from the bottom of the screen
+        showBubbleFor(val, null);
+      }
       sendScore(val);
     }
     function showBubbleFor(val, el){
       var key = String(val), label = (typeof LABELS[key] !== 'undefined') ? LABELS[key] : (val>0?('+'+val):String(val));
       var cls = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
-      var rect = el.getBoundingClientRect(), x = rect.left + (rect.width/2), y = rect.top - 6;
+      var rect = el?.getBoundingClientRect(), x = rect ? rect.left + (rect.width/2) : window.innerWidth / 2, y = rect ? rect.top - 6 : window.innerHeight - 80;
       // Create and animate the bubble
       const bubble = document.createElement('div');
       bubble.className = `score-bubble ${cls}`;
@@ -1712,36 +1716,43 @@
   <!-- =========================================================
        SCRIPT: CONFETTI ON WINNER
        ========================================================= -->
-  <script>
+  <script id="confetti-script">
     (function(){
       const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (prefersReduced) return;
 
       const canvas = document.getElementById('confettiCanvas');
       const ctx = canvas.getContext('2d');
-      let W, H, raf, t0;
-      const pieces = [];
+      let W, H, raf = null;
+      let pieces = [];
       function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
       window.addEventListener('resize', resize); resize();
 
       function spawn(n){
         for(let i=0;i<n;i++){
           pieces.push({
-            x: Math.random()*W, y: -20 - Math.random()*H*0.3,
-            vx: (Math.random()-0.5)*2, vy: 2+Math.random()*3,
+            x: Math.random() * W, y: -20 - Math.random() * 20, // Start from just above the top, across the whole width
+            vx: (Math.random()-0.5)*1, vy: 2+Math.random()*3,
             size: 5+Math.random()*8, rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.2,
-            shape: Math.random()<0.5?'rect':'tri'
+            shape: Math.random()<0.5?'rect':'tri',
+            life: 2.0,
+            fade: 0.002 + Math.random() * 0.005 // Make them last longer to reach the bottom
           });
         }
       }
-      function step(ts){
-        if(!t0) t0 = ts;
-        const dt = Math.min(32, ts - t0); t0 = ts;
+      function step(){
         ctx.clearRect(0,0,W,H);
-        for (const p of pieces){
-          p.vy += 0.01; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
-          if (p.y > H+40) { p.y = -20; p.x = Math.random()*W; p.vy = 2+Math.random()*3; }
+        let i = pieces.length;
+        while (i--) {
+          const p = pieces[i];
+          p.life -= p.fade;
+          if (p.life <= 0) {
+            pieces.splice(i, 1);
+            continue;
+          }
+          p.vy += 0.02; p.x += p.vx; p.y += p.vy; p.rot += p.vr; // A little more gravity
           ctx.save();
+          ctx.globalAlpha = p.life;
           ctx.translate(p.x, p.y);
           ctx.rotate(p.rot);
           ctx.fillStyle = ['#E3292E','#309F6A','#F9DFBC','#ffffff','#ffd54f'][Math.floor(Math.random()*5)];
@@ -1752,11 +1763,28 @@
           }
           ctx.restore();
         }
-        raf = requestAnimationFrame(step);
+
+        if (pieces.length > 0) {
+          raf = requestAnimationFrame(step);
+        } else {
+          ctx.clearRect(0,0,W,H); // Final clear
+          cancelAnimationFrame(raf);
+          raf = null;
+        }
       }
-      spawn(180);
-      raf = requestAnimationFrame(step);
-      setTimeout(()=>{ cancelAnimationFrame(raf); ctx.clearRect(0,0,W,H); }, 6000);
+      spawn(300); // A bigger initial burst on page load
+      if (!raf) raf = requestAnimationFrame(step);
+
+      // Expose a function to trigger more confetti
+      window.triggerConfetti = () => {
+        let counter = 0;
+        const streamInterval = setInterval(() => {
+          spawn(20); // Spawn a small burst every 50ms
+          if (!raf) raf = requestAnimationFrame(step);
+          counter++;
+          if (counter >= 20) clearInterval(streamInterval); // Stream for 1 second
+        }, 50);
+      };
     })();
   </script>
   {% endif %}
@@ -1946,8 +1974,9 @@
     </div>
   {% elif game.phase == 'final_ranking' %}
     <div class="controls no-overscroll" data-lock-scroll>
-      <div class="button-grid two" data-lock-scroll>
+      <div class="button-grid final-controls" data-lock-scroll>
         <a href="{{ url_for('stats') }}" onclick="popButton(this.querySelector('button'));"><button type="button" class="export-btn">Stats</button></a>
+        <button type="button" id="confettiBtn" class="confetti-btn" onclick="popButton(this); window.triggerConfetti();">🎉</button>
         <form id="restartForm" action="{{ url_for('restart') }}" method="post">
           <button type="button" id="restartBtn" class="restart-btn">New Game</button>
         </form>

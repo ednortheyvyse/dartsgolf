@@ -9,6 +9,10 @@ from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
     session, send_from_directory, abort
 )
+import logging
+
+# Configure logging to show DEBUG messages from all loggers
+logging.basicConfig(level=logging.DEBUG)
 
 # ---------------- App & Folders ----------------
 BASE_DIR = Path(__file__).resolve().parent
@@ -97,11 +101,16 @@ def _storage_get(sid: str) -> dict | None:
     """
     if _redis:
         data = _redis.get(_storage_key(sid))
-        return json.loads(data) if data else None
-    return _games.get(sid)
+        gs = json.loads(data) if data else None # type: ignore
+        logging.debug(f"[_storage_get] (Redis) Loaded state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores') if gs else 'N/A'}")
+        return gs
+    else:
+        gs = _games.get(sid)
+        logging.debug(f"[_storage_get] (In-memory) Loaded state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores') if gs else 'N/A'}")
+        return gs
 
 
-def _storage_set(sid: str, gs: dict) -> None: # type: ignore
+def _storage_set(sid: str, gs: dict) -> None:
     """
     Stores game state for a given session ID.
     
@@ -109,6 +118,7 @@ def _storage_set(sid: str, gs: dict) -> None: # type: ignore
         sid: The session ID.
         gs: The game state dictionary to store.
     """
+    logging.debug(f"[_storage_set] Saving state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores')}")
     if _redis:
         _redis.set(_storage_key(sid), json.dumps(gs))
     else:
@@ -133,13 +143,17 @@ def _get_sid() -> str:
     return sid
 
 
-def _get_state() -> dict: # type: ignore
+def _get_state() -> dict:
     """Retrieves the current game state, initializing it if not found."""
     sid = _get_sid()
     gs = _storage_get(sid)
     if not gs:
         gs: dict = _fresh_state() # type: ignore
         _storage_set(sid, gs)
+    # Defensive: ensure playoff_round_scores is always a dictionary
+    if not isinstance(gs.get('playoff_round_scores'), dict):
+        gs['playoff_round_scores'] = {}
+        _storage_set(sid, gs) # Persist this correction
     return gs
 
 
@@ -148,11 +162,12 @@ def _reset_state():
     _storage_set(sid, _fresh_state())
 
 
-def _persist() -> None:
+def _persist(gs: dict) -> None:
     """Persists the current game state to storage."""
+    # This function now correctly receives the modified gs object
+    # and saves it, instead of re-fetching from storage.
     sid = _get_sid()
-    gs = _get_state()
-    _storage_set(sid, gs)
+    _storage_set(sid, gs) # This line is correct, the issue was in the calling functions.
 
 
 def _compute_rounds_played(gs: dict) -> int:
@@ -225,7 +240,7 @@ def index():
 
         gs['final_standings'] = standings
         gs['max_playoff_rounds'] = max((len(h) for h in gs['all_playoff_history'].values()), default=0)
-        _persist()
+        _persist(gs)
 
     return render_template('index.html', game=gs, show_stats=False)
 
@@ -266,7 +281,7 @@ def start_game():
     gs['round_history'] = [{} for _ in range(gs['holes'])]
     gs['phase'] = 'playing'
     gs['recent_names'] = updated_recent
-    _persist()
+    _persist(gs)
     return redirect(url_for('index'))
 
 
@@ -278,7 +293,7 @@ def record_score():
     gs = _get_state()
     score_change = int(request.form.get('score'))
     _apply_score(gs, score_change)
-    _persist()
+    _persist(gs)
     return redirect(url_for('index'))
 
 
@@ -289,8 +304,8 @@ def undo_last_move():
     """
     gs = _get_state()
     _apply_undo(gs)
-    _persist()
-    return redirect(url_for('index'))
+    _persist(gs)
+    return redirect(url_for('index')) # _apply_undo modifies gs, so this is correct.
 
 
 @app.route('/restart', methods=['POST'])
@@ -306,8 +321,8 @@ def restart():
     gs = _get_state()
     gs['recent_names'] = prev_recent
     gs['holes'] = prev_holes
-    gs['score_buttons'] = prev_buttons
-    _persist()
+    gs['score_buttons'] = prev_buttons # This is a fresh state, so gs is the one we just created.
+    _persist(gs)
     return redirect(url_for('index'))
 
 
@@ -317,11 +332,14 @@ def api_score():
     """
     API endpoint to record a score change.
     """
+    # 1. Get the current state
     gs = _get_state()
     data = request.get_json(force=True, silent=True) or {}
     score_change = int(data.get('score', 0))
+    # 2. Modify the state in-place
     _apply_score(gs, score_change)
-    _persist()
+    # 3. Persist the MODIFIED state
+    _persist(gs)
     return jsonify({'ok': True, 'game': gs})
 
 
@@ -330,9 +348,12 @@ def api_undo():
     """
     API endpoint to undo the last score move.
     """
+    # 1. Get the current state
     gs = _get_state()
+    # 2. Modify the state in-place
     _apply_undo(gs)
-    _persist()
+    # 3. Persist the MODIFIED state
+    _persist(gs)
     return jsonify({'ok': True, 'game': gs})
 
 
@@ -344,7 +365,7 @@ def api_end_after_round():
     """
     if gs['phase'] == 'playing':
         gs['end_after_round'] = not bool(gs.get('end_after_round', False))
-        _persist()
+        _persist(gs)
     return jsonify({'ok': True, 'game': gs})
 
 
@@ -394,7 +415,7 @@ def api_settings():
             pass
 
     if changed:
-        _persist()
+        _persist(gs)
     return jsonify({'ok': True, 'game': gs, 'changed': changed})
 
 
@@ -466,6 +487,7 @@ def _apply_score(gs: dict, score_change: int):
     Applies a score change to the current game state, handling player turns,
     round progression, and initiating playoffs if conditions are met.
     """
+    logging.debug(f"[_apply_score] Before score: {gs.get('playoff_round_scores')}, current_player_index: {gs.get('current_player_index')}")
     holes = int(gs.get('holes', 20))
     if gs['phase'] == 'playing':
         player = gs['players'][gs['current_player_index']]
@@ -491,9 +513,12 @@ def _apply_score(gs: dict, score_change: int):
     elif gs['phase'] == 'playoff':
         # In playoff mode, current_player_index iterates over the ACTIVE tie subgroup only
         player = gs['playoff_group'][gs['current_player_index']]
+        app.logger.debug(f"[_apply_score] Playoff phase: player={player}, current_playoff_round_scores_before_assign={gs.get('playoff_round_scores')}")
         gs['playoff_round_scores'][player] = score_change
+        logging.debug(f"[_apply_score] After adding score for {player}: {gs.get('playoff_round_scores')}")
         gs['current_player_index'] += 1
         if gs['current_player_index'] >= len(gs['playoff_group']):
+            logging.debug(f"[_apply_score] Playoff round complete, resolving. Scores: {gs.get('playoff_round_scores')}")
             resolve_playoff_round(gs)
 
 
@@ -596,6 +621,7 @@ def resolve_playoff_round(gs: dict):
     Resolves the current playoff round, updates player standings, and
     determines the next playoff group or transitions to final ranking.
     """
+    logging.debug(f"[resolve_playoff_round] Starting resolution. Current playoff_round_scores: {gs.get('playoff_round_scores')}")
     scores = gs['playoff_round_scores']
     gs['playoff_history'].append(scores.copy())
 
@@ -603,6 +629,7 @@ def resolve_playoff_round(gs: dict):
         gs['all_playoff_history'].setdefault(p, []).append(int(tb))
 
     gs['playoff_round_scores'] = {}
+    logging.debug(f"[resolve_playoff_round] playoff_round_scores reset. New state: {gs.get('playoff_round_scores')}")
     gs['current_player_index'] = 0
 
     def worst_subgroup_in_pool() -> list[str]:
