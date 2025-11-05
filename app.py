@@ -236,6 +236,9 @@ def _merge_recent(existing: list[str], new_names: list[str], cap: int = 24) -> l
 @app.route('/')
 def index():
     gs = _get_state()
+    
+    # Retrieve and clear any player list from a failed form submission
+    previous_players = session.pop('previous_players_input', None)
 
     # Inject the correct score labels based on the current rudeness level
     level = gs.get('rudeness_level', 0)
@@ -261,7 +264,7 @@ def index():
         gs['max_playoff_rounds'] = max((len(h) for h in gs['all_playoff_history'].values()), default=0)
         _persist(gs)
 
-    return render_template('index.html', game=gs, show_stats=False)
+    return render_template('index.html', game=gs, show_stats=False, previous_players=previous_players)
 
 
 # NEW: tolerate GET /start (prefetches / SW / crawlers) by redirecting home
@@ -281,13 +284,22 @@ def start_game():
     players_raw = request.form.get('players', '')
     players = [n.strip() for n in players_raw.split(',') if n and n.strip()]
     if not players:
-        flash("Please enter at least one player name.", "error")
+        session['previous_players_input'] = players_raw
+        flash("Please enter at least one player name.", "warning")
         return redirect(url_for('index'))
 
     lowered = [p.lower() for p in players]
     if len(set(lowered)) != len(lowered):
         dups = sorted({name for name in players if lowered.count(name.lower()) > 1})
-        flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "error")
+        session['previous_players_input'] = ','.join([p for p in players if p.lower() not in [d.lower() for d in dups]])
+        flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "warning")
+        return redirect(url_for('index'))
+
+    # Check for names longer than 14 characters
+    long_names = [p for p in players if len(p) > 14]
+    if long_names:
+        session['previous_players_input'] = players_raw
+        flash(f"Player names cannot exceed 14 characters. Offending name: '{long_names[0]}'", "warning")
         return redirect(url_for('index'))
 
     updated_recent = _merge_recent(gs_prev.get('recent_names', []), players)

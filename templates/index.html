@@ -55,12 +55,22 @@
        MAIN CONTENT CONTAINER
        ========================================================= -->
   <div class="container">
-
+    <!-- Flash message container (moved to global scope) -->
+    <div class="flash-container">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, msg in messages %}
+            <div class="flash {{ category or 'info' }}" role="alert">{{ msg }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+    </div>
     {% if show_stats %}
       <!-- =====================================================
            STATS VIEW
            ===================================================== -->
       <h1>Game Stats</h1>
+
 
       <div class="stat-block">
         <div class="stat-title">⛳ Birdie Streaks</div>
@@ -273,15 +283,6 @@
             <span class="title-sub">Scorer</span>
           </h1>
 
-
-          {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-              {% for category, msg in messages %}
-                <div class="flash" role="alert">{{ msg }}</div>
-              {% endfor %}
-            {% endif %}
-          {% endwith %}
-
           <!-- Add-one-name-at-a-time input -->
           <form id="startForm" action="{{ url_for('start_game') }}" method="post" style="margin-top:12px;">
             <input id="playersInput" type="hidden" name="players" required>
@@ -296,6 +297,7 @@
                 style="flex:1; padding-right:56px; padding-top: 12px; padding-bottom: 12px; box-sizing: border-box;"
                 autocomplete="off"
                 inputmode="text"
+                maxlength="14"
               >
               <button
                 type="button"
@@ -310,20 +312,21 @@
               Press <b>Enter</b> or tap the arrow to add. Tap <b>✕</b> to remove. Drag pills to reorder.
             </small>
 
-            <!-- Selected players (chips you build) -->
-          <style>.selected-wrap .selected-title { margin-bottom: 8px; }</style>
-            <div class="selected-wrap" id="selectedWrap" style="margin-top:12px; display:none;">
-              <div class="selected-title">Players (drag to reorder)</div>
-              <div id="selectedChipList" class="chip-list"></div>
-            </div>
           </form>
 
-          {% if game.recent_names %}
-            <div class="recent-wrap">
-              <div class="recent-title">Recent players</div>
+          <!-- New two-column container for player lists -->
+          <div class="player-lists-container">
+            <!-- Left Column: Selected Players -->
+            <div class="player-list-wrap" id="selectedWrap">
+              <div class="player-list-title">Players (drag to reorder)</div>
+              <div id="selectedChipList" class="chip-list"></div>
+            </div>
+            <!-- Right Column: Recent Players -->
+            <div class="player-list-wrap" id="recentWrap">
+              <div class="player-list-title">Recent players</div>
               <div id="chipList" class="chip-list"></div>
             </div>
-          {% endif %}
+          </div>
 
         </div>
 
@@ -724,10 +727,7 @@
   <!-- =========================================================
        SCRIPT: INITIAL SERVER STATE INJECTION
        ========================================================= -->
-  <script>
-    window.__gameCache = {{ game | tojson | safe }};
-    window.recentNames = {{ (game.recent_names or []) | tojson | safe }}; // Make recentNames global
-  </script>
+  <script>window.__gameCache = {{ game | tojson | safe }};</script>
 
   <!-- =========================================================
        SCRIPT: CONFIRM HELPER
@@ -764,14 +764,6 @@
       window.showConfirmModal = openModal;
     })();
   </script>
-  
-  <script>
-    function popButton(el) {
-      if (!el) return;
-      el.classList.add('pop-animation');
-      el.addEventListener('animationend', () => el.classList.remove('pop-animation'), { once: true });
-    }
-  </script>
 
   <!-- =========================================================
        SCRIPT: TOAST HELPERS
@@ -779,6 +771,12 @@
   <script>
     function showToast(message, type='info', ms=2200){
       const host = document.getElementById('toastHost');
+      function popButton(el) {
+        if (!el) return;
+        el.classList.add('pop-animation');
+        el.addEventListener('animationend', () => el.classList.remove('pop-animation'), { once: true });
+      }
+
       if(!host) return ()=>{};
       const t = document.createElement('div');
       t.className = 'toast toast--' + type;
@@ -916,13 +914,13 @@
       });
 
       installBtn?.addEventListener('click', async () => {
-        if (isStandalone()) { showToast('Already installed', 'info'); hideInstallBtn(); return; }
+        if (isStandalone()) { showToast('Already installed', 'warning'); hideInstallBtn(); return; }
         if (deferredPrompt) {
           deferredPrompt.prompt();
           try {
             const choice = await deferredPrompt.userChoice;
             if (choice && choice.outcome === 'accepted') {
-              showToast('Installing…', 'info');
+              showToast('Installing…', 'warning');
             }
           } finally {
             deferredPrompt = null;
@@ -931,7 +929,7 @@
         } else if (isSafari()) {
           openIosInstall();
         } else {
-          showToast('Install not supported in this browser', 'info');
+          showToast('Install not supported in this browser', 'warning');
         }
       });
 
@@ -939,334 +937,20 @@
     })();
   </script>
 
-  {% if game.phase == 'setup' and not show_stats %}
   <!-- =========================================================
-       SCRIPT: SETUP PAGE — Pills with Pointer Events drag
+       SCRIPT: GLOBAL HELPER FUNCTIONS
        ========================================================= -->
-  <script>;
-    const chipList         = document.getElementById('chipList');           // recent chips (if any)
-    const selectedWrap     = document.getElementById('selectedWrap'); // container for selected chips
-    const selectedChipList = document.getElementById('selectedChipList');
-    const playersHidden    = document.getElementById('playersInput');       // hidden CSV posted to /start
-    const nameField        = document.getElementById('nameField');
-    const addNameBtn       = document.getElementById('addNameBtn');
-    const startForm        = document.getElementById('startForm');
-
-    let selected = []; // array of names in order (case-preserving)
-
-    function norm(s){ return (s||'').trim().replace(/\s+/g,' '); }
-    function idxOfName(arr, name){
-      const n = name.toLowerCase();
-      for (let i=0;i<arr.length;i++) if (arr[i].toLowerCase()===n) return i;
-      return -1;
+  <script>
+    function popButton(el) {
+      if (!el) return;
+      el.classList.add('pop-animation');
+      el.addEventListener('animationend', () => el.classList.remove('pop-animation'), { once: true });
     }
-
-    // ---------- Rendering ----------
-    function renderSelected(){
-      selectedWrap.style.display = selected.length ? 'block' : 'none';
-      selectedChipList.innerHTML = selected.map((n, i) => (
-        `<div class="chip draggable" data-name="${escapeHtml(n)}" title="Drag to reorder">
-           <span class="chip-index">${i+1}</span>
-           <span class="chip-name">${escapeHtml(n)}</span>
-           <button type="button" class="chip-remove" aria-label="Remove ${escapeHtml(n)}" title="Remove">✕</button>
-         </div>`
-      )).join('');
-      bindSelectedEvents();
-      writeHidden();
-      reflectRecentSelection();
-    }
-
-    function renderRecent(){
-      if (!chipList) return;
-      const recentWrap = chipList.closest('.recent-wrap');
-      if (window.recentNames.length === 0 && recentWrap) {
-        recentWrap.style.display = 'none';
-      } else if (recentWrap) {
-        recentWrap.style.display = 'block';
-      }
-      chipList.innerHTML = (window.recentNames || []).map(n =>
-        `<div class="chip" data-name="${escapeHtml(n)}">${escapeHtml(n)}</div>`
-      ).join('');
-      chipList.querySelectorAll('.chip').forEach(el=>{
-        el.addEventListener('click', ()=>{
-          const name = el.getAttribute('data-name');
-          toggleName(name);
-        });
-      });
-      reflectRecentSelection();
-    }
-
-    function reflectRecentSelection(){
-      if (!chipList) return;
-      chipList.querySelectorAll('.chip').forEach(el=>{
-        const n = el.getAttribute('data-name');
-        const sel = idxOfName(selected, n) >= 0;
-        el.classList.toggle('selected', sel);
-      });
-    }
-
-    function writeHidden(){
-      playersHidden.value = selected.join(', ');
-    }
-
-    // ---------- Add / Remove ----------
-    function addName(raw){
-      const name = norm(raw);
-      if (!name) return;
-      if (idxOfName(selected, name) >= 0){
-        showToast('Duplicate name', 'info', 1400);
-        return;
-      }
-      selected.push(name);
-      renderSelected();
-      nameField.value = '';
-      nameField.focus();
-      haptic('light');
-    }
-
-    function removeName(name){
-      const i = idxOfName(selected, name);
-      if (i >= 0){
-        selected.splice(i,1);
-        renderSelected(); // re-number pills
-      }
-    }
-
-    function toggleName(name){
-      if (idxOfName(selected, name) >= 0) removeName(name);
-      else addName(name);
-    }
-
-    // Delegated click for ✕ remove
-    selectedChipList.addEventListener('click', (e)=>{
-      const btn = e.target.closest('.chip-remove');
-      if (!btn) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const chip = btn.closest('.draggable');
-      if (!chip) return;
-      const name = chip.getAttribute('data-name');
-      removeName(name);
-    });
-
-    // ---------- Desktop HTML5 DnD fallback (only if no Pointer Events) ----------
-    function bindSelectedEvents(){
-      const hasPointer = 'PointerEvent' in window;
-      selectedChipList.querySelectorAll('.draggable').forEach(chip=>{
-        if (!hasPointer){
-          chip.setAttribute('draggable','true');
-          chip.addEventListener('dragstart', (e)=>{ chip.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
-          chip.addEventListener('dragend',   ()=> chip.classList.remove('dragging'));
-        } else {
-          chip.removeAttribute('draggable'); // prevent native DnD when using Pointer Events
-        }
-      });
-
-      if (!hasPointer) {
-        selectedChipList.addEventListener('dragover', (e)=>{
-          e.preventDefault();
-          const after = getAfter(selectedChipList, e.clientY);
-          const dragging = selectedChipList.querySelector('.dragging');
-          if (!dragging) return;
-          if (!after) selectedChipList.appendChild(dragging);
-          else selectedChipList.insertBefore(dragging, after);
-        });
-        selectedChipList.addEventListener('drop', ()=>{
-          commitOrderFromDom(); // re-render to update numbering
-        });
-      }
-    }
-
-    function getAfter(container, y){
-      const els = [...container.querySelectorAll('.draggable:not(.dragging)')];
-      return els.reduce((closest, child)=>{
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height/2;
-        return (offset < 0 && offset > closest.offset) ? {offset, element: child} : closest;
-      }, {offset: Number.NEGATIVE_INFINITY, element: null}).element;
-    }
-
-    // ---------- Pointer Events drag (modern browsers) ----------
-    ;(function(){
-      if (!('PointerEvent' in window)) return;
-      if (!selectedChipList) return;
-
-      let active = null;        // element being dragged (original)
-      let ghost = null;         // floating clone
-      let placeholder = null;   // insertion marker
-      let startX=0, startY=0;   // pointer down pos
-      let offX=0, offY=0;       // offset within chip
-      let dragging = false;
-      let pointerId=null;
-
-      const TOUCH_SLOP_SQ = 25; // 5px^2 threshold for touch
-      function setBodyCursor(grabbing){ document.body.style.cursor = grabbing ? 'grabbing' : ''; }
-
-      function createGhost(fromEl){
-        const r = fromEl.getBoundingClientRect();
-        const g = fromEl.cloneNode(true);
-        g.style.position = 'fixed';
-        g.style.left = r.left + 'px';
-        g.style.top  = r.top  + 'px';
-        g.style.width = r.width + 'px';
-        g.style.height = r.height + 'px';
-        g.style.pointerEvents = 'none';
-        g.style.opacity = '0.85';
-        g.style.boxSizing = 'border-box';
-        g.classList.add('dragging');
-        document.body.appendChild(g);
-        return g;
-      }
-      function makePlaceholder(fromEl){
-        const p = document.createElement('div');
-        p.className = 'chip placeholder';
-        p.style.width  = fromEl.offsetWidth + 'px';
-        p.style.height = fromEl.offsetHeight + 'px';
-        return p;
-      }
-      function indexFromPoint(x, y){
-        const children = Array.from(selectedChipList.children).filter(el => el !== placeholder);
-        if (!children.length) return 0;
-        let bestIdx = children.length;
-        let bestDist = Infinity;
-        children.forEach((el, idx)=>{
-          const r = el.getBoundingClientRect();
-          const cx = r.left + r.width/2;
-          const cy = r.top + r.height/2;
-          const dx = cx - x, dy = cy - y;
-          const d  = dx*dx + dy*dy;
-          if (d < bestDist){ bestDist = d; bestIdx = idx; }
-        });
-        const near = children[bestIdx];
-        if (!near) return children.length;
-        const r = near.getBoundingClientRect();
-        const before =
-          (Math.abs(y - (r.top + r.height/2)) > Math.abs(x - (r.left + r.width/2)))
-            ? (y < r.top + r.height/2)
-            : (x < r.left + r.width/2);
-        return before ? bestIdx : bestIdx + 1;
-      }
-      function commitOrderFromDom(){
-        selected = Array
-          .from(selectedChipList.querySelectorAll('.draggable'))
-          .map(el=> el.getAttribute('data-name'));
-        writeHidden();
-        renderSelected(); // re-number after reorder
-      }
-
-      function startDrag(){
-        if (!active || dragging) return;
-        ghost = createGhost(active);
-        placeholder = makePlaceholder(active);
-        selectedChipList.insertBefore(placeholder, active);
-        active.style.visibility = 'hidden'; // keep layout size; avoids jump
-        dragging = true;
-        setBodyCursor(true);
-      }
-
-      function onPointerDown(e){
-        e.preventDefault();
-        const rmBtn = e.target.closest('.chip-remove');
-        if (rmBtn) return;
-
-        const chip = e.target.closest('.draggable');
-        if (!chip) return;
-
-        active = chip;
-        pointerId = e.pointerId;
-        try { active.setPointerCapture(pointerId); } catch(_){ }
-
-        const r = chip.getBoundingClientRect();
-        startX = e.clientX; startY = e.clientY;
-        offX = startX - r.left; offY = startY - r.top;
-        dragging = false;
-
-        if (e.pointerType === 'mouse') {
-          startDrag();
-        }
-      }
-
-      function onPointerMove(e){
-        if (!active) return;
-
-        if (!dragging){
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
-          const dist2 = dx*dx + dy*dy;
-          if (e.pointerType !== 'mouse' && dist2 <= TOUCH_SLOP_SQ) return;
-          startDrag();
-        }
-
-        e.preventDefault();
-        const x = e.clientX - offX, y = e.clientY - offY;
-        if (ghost){
-          ghost.style.left = x + 'px';
-          ghost.style.top  = y + 'px';
-        }
-
-        const idx = indexFromPoint(e.clientX, e.clientY);
-        const target = selectedChipList.children[idx];
-        if (!target) selectedChipList.appendChild(placeholder);
-        else selectedChipList.insertBefore(placeholder, target);
-      }
-
-      function onPointerUp(e){
-        if (!active) return;
-
-        if (dragging){
-          if (placeholder && placeholder.parentNode){
-            selectedChipList.insertBefore(active, placeholder);
-          }
-          active.style.visibility = '';
-          placeholder?.remove(); placeholder = null;
-          ghost?.remove(); ghost = null;
-          commitOrderFromDom();
-        }
-
-        try { active.releasePointerCapture(pointerId); } catch(_){ }
-        active = null;
-        dragging = false;
-        pointerId = null;
-        setBodyCursor(false);
-      }
-
-      selectedChipList.addEventListener('pointerdown', onPointerDown, { passive:false });
-      window.addEventListener('pointermove', onPointerMove, { passive:false });
-      window.addEventListener('pointerup', onPointerUp, { passive:false });
-      window.addEventListener('pointercancel', onPointerUp, { passive:false });
-      window.addEventListener('blur', onPointerUp, { passive:false });
-    })();
-
-    // ---------- Form UX ----------
-    addNameBtn.addEventListener('click', ()=> addName(nameField.value));
-    nameField.addEventListener('keydown', (e)=>{
-      if (e.key === 'Enter'){
-        e.preventDefault();
-        addName(nameField.value);
-      }
-    });
-
-    startForm.addEventListener('submit', (e)=>{
-      if (!selected.length){
-        e.preventDefault();
-        showToast('Add at least one player', 'info', 1600);
-        nameField.focus();
-        return;
-      }
-      writeHidden();
-    });
-
-    // ---------- Helpers ----------
     function escapeHtml(s){
       return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
-
-    // ---------- Init ----------
-    renderRecent();
-    renderSelected();
+    function norm(s){ return (s||'').trim().replace(/\s+/g,' '); }
   </script>
-  {% endif %}
-
   {% if (game.phase == 'playing' or game.phase == 'playoff') and not show_stats %}
   <!-- =========================================================
        SCRIPT: PLAYING / PLAYOFF CLIENT RENDER & ACTIONS
@@ -1406,8 +1090,8 @@
 
     async function undo(){
       const g0 = window.__gameCache;
-      if (!g0 || g0.phase !== 'playing'){ showToast('Undo not available now', 'info', 1400); return; }
-      if (!g0.undo_history || !g0.undo_history.length){ showToast('Nothing to undo', 'info', 1400); return; }
+      if (!g0 || g0.phase !== 'playing'){ showToast('Undo not available now', 'warning', 1400); return; }
+      if (!g0.undo_history || !g0.undo_history.length){ showToast('Nothing to undo', 'warning', 1400); return; }
 
       const snapshot = JSON.parse(JSON.stringify(g0));
       const opId = ++__opCounter;
@@ -1801,6 +1485,330 @@
       keepAwake(true);
       updateEndButtonLabel(END_ACTIVE);
     });
+  </script>
+  {% elif game.phase == 'setup' and not show_stats %}
+  <!-- =========================================================
+       SCRIPT: SETUP PAGE — Pills with Pointer Events drag
+       ========================================================= -->
+  <script>
+    const chipList         = document.getElementById('chipList');           // recent chips (if any)
+    const selectedWrap     = document.getElementById('selectedWrap'); // container for selected chips
+    const selectedChipList = document.getElementById('selectedChipList');
+    const playersHidden    = document.getElementById('playersInput');       // hidden CSV posted to /start
+    const nameField        = document.getElementById('nameField');
+    const addNameBtn       = document.getElementById('addNameBtn');
+    const startForm        = document.getElementById('startForm');
+
+    // Initialize 'selected' array. If there was a form error, repopulate with the previous input.
+    // Otherwise, start with an empty array.
+    let selected = [];
+    let allRecentNames = {{ (game.recent_names or []) | tojson | safe }};
+    {% if previous_players %}
+      selected = {{ previous_players.split(',') | map('trim') | list | tojson }};
+    {% endif %}
+
+    // ---------- Rendering ----------
+    function renderSelected(){
+      if (selected.length) {
+        selectedChipList.innerHTML = selected.map((n, i) => (
+          `<div class="chip draggable" data-name="${escapeHtml(n)}" title="Drag to reorder">
+             <span class="chip-index">${i+1}</span>
+             <span class="chip-name">${escapeHtml(n)}</span>
+             <button type="button" class="chip-remove" aria-label="Remove ${escapeHtml(n)}" title="Remove">✕</button>
+           </div>`
+        )).join('');
+      } else {
+        selectedChipList.innerHTML = '<div class="empty-list-text">empty</div>';
+      }
+      bindSelectedEvents();
+      writeHidden();
+      renderRecent(); // Re-render recents to show/hide selected names
+    }
+
+    function renderRecent(){
+      if (!chipList) return;
+      const availableRecents = allRecentNames.filter(n => idxOfName(selected, n) < 0);
+
+      if (availableRecents.length > 0) {
+        chipList.innerHTML = availableRecents.map(n =>
+          `<div class="chip" data-name="${escapeHtml(n)}">${escapeHtml(n)}</div>`
+        ).join('');
+      } else {
+        chipList.innerHTML = '<div class="empty-list-text">empty</div>';
+      }
+
+      chipList.querySelectorAll('.chip[data-name]').forEach(el=>{
+        el.addEventListener('click', ()=>{
+          const name = el.getAttribute('data-name');
+          addName(name); // Clicking a recent now only adds it
+        });
+      });
+    }
+
+    function writeHidden(){
+      playersHidden.value = selected.join(', ');
+    }
+
+    // ---------- Add / Remove Logic ----------
+    function addName(raw){
+      const name = norm(raw);
+      if (!name) return;
+      if (name.length > 14) {
+        showToast('Name cannot be longer than 14 characters.', 'warning', 3000);
+        return;
+      }
+
+      if (idxOfName(selected, name) >= 0) { // Duplicate detected
+        // Only show toast if it was a manual entry, not a click on a recent pill
+        // (which shouldn't be possible anyway with the new logic, but this is safer)
+        if (nameField.value.trim().toLowerCase() === name.toLowerCase()) {
+          showToast(`Duplicate name: ${name}`, 'warning', 3000);
+        }
+        return;
+      }
+      selected.push(name);
+      renderSelected();
+      nameField.value = '';
+      nameField.focus();
+      haptic('light');
+    }
+
+    function removeName(name){
+      const i = idxOfName(selected, name);
+      if (i >= 0){
+        selected.splice(i,1);
+        renderSelected(); // re-number pills
+      }
+    }
+
+    // Delegated click for ✕ remove
+    selectedChipList.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.chip-remove');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const chip = btn.closest('.draggable');
+      if (!chip) return;
+      const name = chip.getAttribute('data-name');
+      removeName(name);
+    });
+
+    // ---------- Helpers ----------
+    function idxOfName(arr, name){
+      const n = name.toLowerCase();
+      for (let i=0;i<arr.length;i++) if (arr[i].toLowerCase()===n) return i;
+      return -1;
+    }
+    // ---------- Desktop HTML5 DnD fallback (only if no Pointer Events) ----------
+    function bindSelectedEvents(){
+      const hasPointer = 'PointerEvent' in window;
+      selectedChipList.querySelectorAll('.draggable').forEach(chip=>{
+        if (!hasPointer){
+          chip.setAttribute('draggable','true');
+          chip.addEventListener('dragstart', (e)=>{ chip.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
+          chip.addEventListener('dragend',   ()=> chip.classList.remove('dragging'));
+        } else {
+          chip.removeAttribute('draggable'); // prevent native DnD when using Pointer Events
+        }
+      });
+
+      if (!hasPointer) {
+        selectedChipList.addEventListener('dragover', (e)=>{
+          e.preventDefault();
+          const after = getAfter(selectedChipList, e.clientY);
+          const dragging = selectedChipList.querySelector('.dragging');
+          if (!dragging) return;
+          if (!after) selectedChipList.appendChild(dragging);
+          else selectedChipList.insertBefore(dragging, after);
+        });
+        selectedChipList.addEventListener('drop', ()=>{
+          commitOrderFromDom(); // re-render to update numbering
+        });
+      }
+    }
+
+    function getDropTarget(container, y){
+      const els = [...container.querySelectorAll('.draggable:not(.dragging)')];
+      return els.reduce((closest, child)=>{
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height/2;
+        return (offset < 0 && offset > closest.offset) ? {offset, element: child} : closest;
+      }, {offset: Number.NEGATIVE_INFINITY, element: null}).element;
+    }
+
+    // ---------- Pointer Events drag (modern browsers) ----------
+    ;(function(){
+      if (!('PointerEvent' in window)) return;
+      if (!document.getElementById('selectedChipList')) return;
+
+      let active = null;        // element being dragged (original)
+      let ghost = null;         // floating clone
+      let placeholder = null;   // insertion marker
+      let startX=0, startY=0;   // pointer down pos
+      let offX=0, offY=0;       // offset within chip
+      let dragging = false;
+      let pointerId=null;
+
+      const TOUCH_SLOP_SQ = 25; // 5px^2 threshold for touch
+      function setBodyCursor(grabbing){ document.body.style.cursor = grabbing ? 'grabbing' : ''; }
+
+      function createGhost(fromEl){
+        const r = fromEl.getBoundingClientRect();
+        const g = fromEl.cloneNode(true);
+        g.style.position = 'fixed';
+        g.style.left = r.left + 'px';
+        g.style.top  = r.top  + 'px';
+        g.style.width = r.width + 'px';
+        g.style.height = r.height + 'px';
+        g.style.pointerEvents = 'none';
+        g.style.opacity = '0.85';
+        g.style.boxSizing = 'border-box';
+        g.classList.add('dragging');
+        document.body.appendChild(g);
+        return g;
+      }
+      function makePlaceholder(fromEl){
+        const p = document.createElement('div');
+        p.className = 'chip placeholder';
+        p.style.width  = fromEl.offsetWidth + 'px';
+        p.style.height = fromEl.offsetHeight + 'px';
+        return p;
+      }
+      function indexFromPoint(x, y){
+        const children = Array.from(selectedChipList.children).filter(el => el !== placeholder);
+        if (!children.length) return 0;
+        let bestIdx = children.length;
+        let bestDist = Infinity;
+        children.forEach((el, idx)=>{
+          const r = el.getBoundingClientRect();
+          const cx = r.left + r.width/2;
+          const cy = r.top + r.height/2;
+          const dx = cx - x, dy = cy - y;
+          const d  = dx*dx + dy*dy;
+          if (d < bestDist){ bestDist = d; bestIdx = idx; }
+        });
+        const near = children[bestIdx];
+        if (!near) return children.length;
+        const r = near.getBoundingClientRect();
+        const before =
+          (Math.abs(y - (r.top + r.height/2)) > Math.abs(x - (r.left + r.width/2)))
+            ? (y < r.top + r.height/2)
+            : (x < r.left + r.width/2);
+        return before ? bestIdx : bestIdx + 1;
+      }
+      function commitOrderFromDom(){
+        selected = Array
+          .from(selectedChipList.querySelectorAll('.draggable'))
+          .map(el=> el.getAttribute('data-name'));
+        writeHidden();
+        renderSelected(); // re-number after reorder
+      }
+
+      function startDrag(){
+        if (!active || dragging) return;
+        ghost = createGhost(active);
+        placeholder = makePlaceholder(active);
+        selectedChipList.insertBefore(placeholder, active);
+        active.style.visibility = 'hidden'; // keep layout size; avoids jump
+        dragging = true;
+        setBodyCursor(true);
+      }
+
+      function onPointerDown(e){
+        e.preventDefault();
+        const rmBtn = e.target.closest('.chip-remove');
+        if (rmBtn) return;
+
+        const chip = e.target.closest('.draggable');
+        if (!chip) return;
+
+        active = chip;
+        pointerId = e.pointerId;
+        try { active.setPointerCapture(pointerId); } catch(_){ }
+
+        const r = chip.getBoundingClientRect();
+        startX = e.clientX; startY = e.clientY;
+        offX = startX - r.left; offY = startY - r.top;
+        dragging = false;
+
+        if (e.pointerType === 'mouse') {
+          startDrag();
+        }
+      }
+
+      function onPointerMove(e){
+        if (!active) return;
+
+        if (!dragging){
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          const dist2 = dx*dx + dy*dy;
+          if (e.pointerType !== 'mouse' && dist2 <= TOUCH_SLOP_SQ) return;
+          startDrag();
+        }
+
+        e.preventDefault();
+        const x = e.clientX - offX, y = e.clientY - offY;
+        if (ghost){
+          ghost.style.left = x + 'px';
+          ghost.style.top  = y + 'px';
+        }
+
+        const idx = indexFromPoint(e.clientX, e.clientY);
+        const target = document.getElementById('selectedChipList').children[idx];
+        if (!target) selectedChipList.appendChild(placeholder);
+        else selectedChipList.insertBefore(placeholder, target);
+      }
+
+      function onPointerUp(e){
+        if (!active) return;
+
+        if (dragging){
+          if (placeholder && placeholder.parentNode){
+            selectedChipList.insertBefore(active, placeholder);
+          }
+          active.style.visibility = '';
+          placeholder?.remove(); placeholder = null;
+          ghost?.remove(); ghost = null;
+          commitOrderFromDom();
+        }
+
+        try { active.releasePointerCapture(pointerId); } catch(_){ }
+        active = null;
+        dragging = false;
+        pointerId = null;
+        setBodyCursor(false);
+      }
+
+      document.getElementById('selectedChipList').addEventListener('pointerdown', onPointerDown, { passive:false });
+      window.addEventListener('pointermove', onPointerMove, { passive:false });
+      window.addEventListener('pointerup', onPointerUp, { passive:false });
+      window.addEventListener('pointercancel', onPointerUp, { passive:false });
+      window.addEventListener('blur', onPointerUp, { passive:false });
+    })();
+
+    // ---------- Form UX ----------
+    addNameBtn.addEventListener('click', ()=> addName(nameField.value));
+    nameField.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter'){
+        e.preventDefault();
+        addName(nameField.value);
+      }
+    });
+
+    startForm.addEventListener('submit', (e)=>{
+      if (!selected.length){
+        e.preventDefault();
+        showToast('Add at least one player', 'warning', 1600);
+        nameField.focus();
+        return;
+      }
+      writeHidden();
+    });
+
+    // ---------- Init ----------
+    renderRecent();
+    renderSelected();
   </script>
   {% endif %}
 
@@ -2226,5 +2234,21 @@
     });
   </script>
   {% endif %}
+
+  <!-- =========================================================
+       SCRIPT: AUTO-HIDE FLASH MESSAGES (RUNS LAST)
+       ========================================================= -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const flashMessages = document.querySelectorAll('.flash');
+      flashMessages.forEach(flash => {
+        setTimeout(() => {
+          flash.classList.add('hiding');
+          // After the animation, remove the element from the DOM
+          flash.addEventListener('transitionend', () => flash.remove(), { once: true });
+        }, 3000); // 3 seconds
+      });
+    });
+  </script>
 </body>
 </html>
