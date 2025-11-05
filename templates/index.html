@@ -34,6 +34,11 @@
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/dartboard-180.png') }}">
   <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 
+  <!-- Google Font for the main title -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rye&family=Galada&display=swap" rel="stylesheet">
+
   <!-- =========================================================
        GLOBAL STYLES (CSS) - Externalized
        ========================================================= -->
@@ -59,6 +64,7 @@
 
       <div class="stat-block">
         <div class="stat-title">⛳ Birdie Streaks</div>
+        <small class="stat-description">Longest consecutive run of rounds with a score below par.</small>
         {% if birdie_streak_ranking %}
           <ol>
             {% for row in birdie_streak_ranking %}
@@ -81,6 +87,7 @@
 
       <div class="stat-block">
         <div class="stat-title">🔥 Bogey Streaks</div>
+        <small class="stat-description">Longest consecutive run of rounds with a score above par.</small>
         {% if bogey_streak_ranking %}
           <ol>
             {% for row in bogey_streak_ranking %}
@@ -103,6 +110,7 @@
 
       <div class="stat-block">
         <div class="stat-title">🕊️ Total Birdies</div>
+        <small class="stat-description">Total number of rounds with a score below par.</small>
         {% if most_birdies_ranking %}
           <ol>
             {% for row in most_birdies_ranking %}
@@ -122,9 +130,10 @@
           <small>No completed rounds yet.</small>
         {% endif %}
       </div>
-      
+  
       <div class="stat-block">
-        <div class="stat-title">😈 Total Bogeys</div>
+        <div class="stat-title">💔 Total Bogeys</div>
+        <small class="stat-description">Total number of rounds with a score above par.</small>
         {% if most_bogeys_ranking %}
           <ol>
             {% for row in most_bogeys_ranking %}
@@ -143,32 +152,36 @@
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
         {% endif %}
-      </div>
-      
+      </div>      
+
       <div class="stat-block">
-        <div class="stat-title">📈 Consistency (Std. Dev.)</div>
-        {% if consistency_ranking %}
+        <div class="stat-title">🎯 On Target %</div>
+        <small class="stat-description">Percentage of rounds completed at par or better.</small>
+        {% if on_target_ranking %}
           <ol>
-            {% for row in consistency_ranking %}
+            {% for row in on_target_ranking %}
               <li>
                 <div class="stat-left">
                   <span class="stat-player">{{ row.name }}</span>
                 </div>
                 <div class="stat-right">
-                  <span>{{ "%.2f"|format(row.stdev) }}</span>
-                  <div class="stat-bar bad" data-width="{{ ((row.stdev / (max_stdev or 1) * 60) | round(0)) or (2 if row.stdev > 0 else 0) }}px"></div>
+                  <span>{{ row.percentage | round | int }}%</span>
+                  <div class="stat-bar" data-width="{{ ((row.percentage / (max_on_target_percentage or 1) * 60) | round(0)) or (2 if row.percentage > 0 else 0) }}px"></div>
                 </div>
               </li>
             {% endfor %}
           </ol>
         {% else %}
           <div class="stat-value">—</div>
-          <small>Need at least 2 rounds per player.</small>
+          <small>No completed rounds yet.</small>
         {% endif %}
       </div>
 
+
+      
       <div class="stat-block"> {# Fixed stray char #}
         <div class="stat-title">📊 Average Scores</div>
+        <small class="stat-description">Average score per round over the entire game.</small>
         {% if average_ranking %}
           <ol>
             {% for row in average_ranking %}
@@ -192,7 +205,8 @@
       </div>
 
       <div class="stat-block">
-        <div class="stat-title">↩️ Biggest Comebacks</div>
+        <div class="stat-title">📈 Biggest Saves</div>
+        <small class="stat-description">Largest score improvement in the game.</small>
         {% if comeback_ranking %}
           <ol>
             {% for cb in comeback_ranking %}
@@ -218,7 +232,8 @@
       </div>
 
       <div class="stat-block">
-        <div class="stat-title">📉 Biggest Falls</div>
+        <div class="stat-title">📉 Worst Falls</div>
+        <small class="stat-description">Largest score drop in the game.</small>
         {% if fall_ranking %}
           <ol>
             {% for fall in fall_ranking %}
@@ -253,7 +268,11 @@
              SETUP PHASE
              ========================= -->
         <div class="setup-screen">
-          <img src="{{ url_for('static', filename='images/dartsgolf4.png') }}" alt="Darts Golf Scorer Dartboard" class="homepage-dartboard">
+          <h1 class="main-title">
+            <span class="title-main">DARTS GOLF</span>
+            <span class="title-sub">Scorer</span>
+          </h1>
+
 
           {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -305,6 +324,7 @@
               <div id="chipList" class="chip-list"></div>
             </div>
           {% endif %}
+
         </div>
 
       {% elif game.phase == 'playing' %}
@@ -625,16 +645,7 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <h3 id="settingsTitle">Settings</h3>
       <div class="settings-grid">
-        <!-- Clear Recent Players -->
-        <div class="settings-group" style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <label style="font-weight: 700;">Recent Players</label>
-            <div class="settings-help">Remove all names from the "Recent players" list.</div>
-          </div>
-          <button type="button" id="clearRecentsBtn" class="btn btn-cancel" title="Clear Recent Players" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 12px 16px; font-size: 1.2em; line-height: 1;">
-            ✕
-          </button>
-        </div>
+
 
         <div class="settings-group">
           <label style="display:flex; align-items:center; gap:10px; font-weight:700;">
@@ -666,7 +677,16 @@
             Set the game length. Can only be changed before the game starts.
           </div>
         </div>
-
+        <!-- Clear Recent Players -->
+        <div class="settings-group" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <label style="font-weight: 700;">Recent Players</label>
+            <div class="settings-help">Remove all names from the "Recent players" list.</div>
+          </div>
+          <button type="button" id="clearRecentsBtn" class="btn btn-cancel" title="Clear Recent Players" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 12px 16px; font-size: 1.2em; line-height: 1;">
+            ✕
+          </button>
+        </div>
         <!-- Add to Home Screen button (shown when eligible) -->
         <div class="settings-group">
           <button type="button" id="installBtnSettings" class="btn btn-confirm" style="display:none;">
@@ -2108,7 +2128,7 @@
       const g = window.__gameCache;
       const hapticsStatus = window.hapticsPref.isOn() ? 'on' : 'off';
       const rudeness = RUDENESS_MAP[g.rudeness_level || 0];
-      let summary = `haptics ${hapticsStatus}, rudeness ${rudeness}`;
+      let summary = `haptics ${hapticsStatus}, ${rudeness}`;
       if (g.phase === 'setup') {
 
         summary += `, ${holesInput.value} rounds`;

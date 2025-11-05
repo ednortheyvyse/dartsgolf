@@ -61,7 +61,7 @@ body::after{
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;   /* momentum on iOS */
   overscroll-behavior:contain;        /* stop bounce from bubbling */
-  padding:15px 2px;
+  padding:15px 5px;
   /* Keep last rows clear of the bottom controls + iOS safe area */
   padding-bottom: calc(15px + var(--controls-h));
   -ms-overflow-style:none; scrollbar-width:none;
@@ -170,9 +170,31 @@ body::after{
    ------------------------------ */
 .setup-screen{
   text-align:center;
-  padding-top:4vh;
+  padding-top:1vh;
   max-width:950px; margin:0 auto;
   padding-left:8px; padding-right:8px;
+}
+.main-title {
+  margin: 0 0 24px; /* Space below the title */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+.title-main {
+  font-family: 'Rye', serif;
+  font-weight: 400; /* This font is naturally bold */
+  font-size: clamp(44px, 12vw, 90px); /* Adjust size for the new font */
+  letter-spacing: .03em;
+  color: #fff;
+}
+.title-sub {
+  font-family: 'Galada', cursive;
+  font-size: clamp(40px, 11vw, 80px); /* Adjust size for the new font */
+  color: var(--secondary-color);
+  margin-top: -1.4rem; /* Reduced overlap */
+  letter-spacing: .08em; /* Increased letter spacing */
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5); /* Add shadow for readability */
 }
 .setup-screen .section-title {
   font-size: 1.4em;
@@ -190,10 +212,6 @@ body::after{
   border:1px solid #ff4d4d; background:#2a0000; color:#ffcccc; font-weight:600;
 }
 
-.recent-wrap{ margin-top:14px; border-top:none; padding-top:0; } /* Adjust for new .setup-section */
-.recent-title{ color:#ccc; font-size:.95em; margin-bottom:8px; }
-.chip-list{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
-
 .empty-state-message {
   text-align: center;
   color: #888;
@@ -201,6 +219,7 @@ body::after{
 
 /* Player "chips" — WHITE text by default */
 .chip{
+  /* Style adjustments for a cleaner look */
   background:var(--secondary-color); color:#fff; /* Match the green add player button */
   border:none; padding:12px 16px; border-radius:8px; cursor:grab; /* Match settings-btn padding, border, and border-radius */
   user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
@@ -208,6 +227,7 @@ body::after{
   display:inline-flex; align-items:center; gap:8px;
   box-sizing:border-box;
 }
+.chip-list{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
 .chip.selected{ background:var(--secondary-color); } /* Keep background, border-color is no longer needed with border:none */
 .chip.draggable{ cursor:grab; }
 .chip.dragging{ opacity:.85; }
@@ -366,11 +386,11 @@ body::after{
    UI Effects (score bubble)
    ------------------------------ */
 .score-bubble{
-  position:fixed; z-index:9999; padding:8px 14px; border-radius:16px;
-  font-weight:800; font-size:1.1em; white-space:nowrap; pointer-events:none;
+  position:fixed; z-index:9999; padding:10px 18px; border-radius:16px;
+  font-weight:800; font-size:1.2em; white-space:nowrap; pointer-events:none;
   box-shadow:0 8px 20px rgba(0,0,0,.5);
   transform:translate(-50%,0) scale(.95); opacity:0;
-  animation:floatUp 900ms ease-out forwards;
+  animation:floatUp 1200ms ease-out forwards;
   will-change:transform,opacity;
 }
 .score-bubble.pos{  background:var(--primary-color); color:#fff; }
@@ -378,9 +398,9 @@ body::after{
 .score-bubble.zero{ background:#616161; color:#fff; }
 
 @keyframes floatUp{
-  0%{   transform:translate(-50%,8px)  scale(.95); opacity:0; }
-  15%{  transform:translate(-50%,0px) scale(1.05);   opacity:1; }
-  100%{ transform:translate(-50%,-80px) scale(1.1); opacity:0; }
+  0%   { transform: translate(-50%, 8px) scale(.95); opacity: 0; }
+  15%  { transform: translate(-50%, -80px) scale(1.2); opacity: 1; } /* Move up even faster */
+  100% { transform: translate(-50%, -80px) scale(1.2); opacity: 0; } /* Hold position and fade out over the remaining duration */
 }
 
 /* ------------------------------
@@ -523,13 +543,23 @@ body::after{
 /* ------------------------------
    STATS PAGE STYLES (names red)
    ------------------------------ */
+.container > h1 {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
 .stat-block{
-  background:#111; border:1px solid var(--border-color); border-radius:12px;
-  padding:14px 16px; margin:12px auto; max-width:900px;
+  background:#111; border:1px solid var(--border-color); border-radius:12px; padding:14px 16px; margin:12px auto; max-width:900px;
 }
 .stat-title{
   font-weight:900; font-size:1.2em; color:#e5e5e5;
   margin:0 0 10px; letter-spacing:.02em;
+}
+.stat-description {
+  display: block;
+  margin: -8px 0 12px;
+  color: #bbb;
+  font-size: .9em;
 }
 .stat-value{ font-size:1.3em; font-weight:900; color:#fff; }
 .stat-right { /* Modified to be a flex container for value + bar */
