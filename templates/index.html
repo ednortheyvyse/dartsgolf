@@ -1874,27 +1874,38 @@
     (function(){
       const scrollArea = document.querySelector('.container'); // only scrollable region
       let startY = 0;
-      let insideScrollable = false;
+      let allowScroll = false;
 
-      function isInsideScrollable(el) {
+      function shouldAllowScroll(el) {
         let n = el;
         while (n && n !== document.body) {
+          // If we hit the main scroll area, allow it
           if (n === scrollArea) return true;
+          // If we hit a modal or an input, stop and disallow body scroll
+          if (n.classList.contains('modal') || n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') {
+            return false;
+          }
           n = n.parentElement;
         }
-        return false;
+        // If we reach the body without hitting a modal/input, it's a background touch, disallow.
+        return false; 
       }
 
       document.addEventListener('touchstart', (e) => {
-        insideScrollable = isInsideScrollable(e.target);
+        allowScroll = shouldAllowScroll(e.target);
         startY = (e.touches && e.touches.length) ? e.touches[0].clientY : 0;
       }, { passive: true });
 
       document.addEventListener('touchmove', (e) => {
-        if (!scrollArea) { e.preventDefault(); return; }
+        // If the touch started on an element that should not cause body scroll (like the slider),
+        // but is not the main scroll container itself, then we do nothing and let the browser handle it.
+        if (!allowScroll) {
+          const isDirectlyOnSlider = e.target.closest('.settings-slider');
+          if (isDirectlyOnSlider) return; // Explicitly allow slider dragging
+        }
 
         // If touch is outside the scroll area, block it outright.
-        if (!insideScrollable) { e.preventDefault(); return; }
+        if (!allowScroll) { e.preventDefault(); return; }
 
         // Inside scroll area: block rubber-band when at edges and trying to go past
         const y = (e.touches && e.touches.length) ? e.touches[0].clientY : startY;
@@ -2054,7 +2065,7 @@
       const g = window.__gameCache;
       const hapticsStatus = window.hapticsPref.isOn() ? 'on' : 'off';
       const rudeness = RUDENESS_MAP[g.rudeness_level || 0];
-      let summary = `haptics ${hapticsStatus}, rudeness ${rudeness}`;
+      let summary = `haptics ${hapticsStatus}, ${rudeness}`;
       if (g.phase === 'setup') {
         summary += `, ${holesInput.value} rounds`;
       } else {
