@@ -59,9 +59,6 @@
 
       <div class="stat-block">
         <div class="stat-title">⛳ Birdie Streaks</div>
-        <div class="settings-help" style="margin-bottom: 10px;">
-          Longest streak of rounds below par.
-        </div>
         {% if birdie_streak_ranking %}
           <ol>
             {% for row in birdie_streak_ranking %}
@@ -84,9 +81,6 @@
 
       <div class="stat-block">
         <div class="stat-title">🔥 Bogey Streaks</div>
-        <div class="settings-help" style="margin-bottom: 10px;">
-          Longest streak of rounds above par.
-        </div>
         {% if bogey_streak_ranking %}
           <ol>
             {% for row in bogey_streak_ranking %}
@@ -109,9 +103,6 @@
 
       <div class="stat-block">
         <div class="stat-title">🕊️ Total Birdies</div>
-        <div class="settings-help" style="margin-bottom: 10px;">
-          Total rounds scored below par. More is better.
-        </div>
         {% if most_birdies_ranking %}
           <ol>
             {% for row in most_birdies_ranking %}
@@ -134,9 +125,6 @@
       
       <div class="stat-block">
         <div class="stat-title">😈 Total Bogeys</div>
-        <div class="settings-help" style="margin-bottom: 10px;">
-          Total rounds scored above par. Fewer is better.
-        </div>
         {% if most_bogeys_ranking %}
           <ol>
             {% for row in most_bogeys_ranking %}
@@ -158,35 +146,29 @@
       </div>
       
       <div class="stat-block">
-        <div class="stat-title">🎯 On Target</div>
-        <div class="settings-help" style="margin-bottom: 10px;">
-          Percentage of rounds a player scored 0 or less. Higher is better.
-        </div>
-        {% if on_target_ranking %}
+        <div class="stat-title">📈 Consistency (Std. Dev.)</div>
+        {% if consistency_ranking %}
           <ol>
-            {% for row in on_target_ranking %}
+            {% for row in consistency_ranking %}
               <li>
                 <div class="stat-left">
                   <span class="stat-player">{{ row.name }}</span>
                 </div>
                 <div class="stat-right">
-                  <span>{{ "%.0f"|format(row.percentage) }}%</span>
-                  <div class="stat-bar" data-width="{{ ((row.percentage / (max_on_target_percentage or 1) * 60) | round(0)) or (2 if row.percentage > 0 else 0) }}px"></div>
+                  <span>{{ "%.2f"|format(row.stdev) }}</span>
+                  <div class="stat-bar bad" data-width="{{ ((row.stdev / (max_stdev or 1) * 60) | round(0)) or (2 if row.stdev > 0 else 0) }}px"></div>
                 </div>
               </li>
             {% endfor %}
           </ol>
         {% else %}
           <div class="stat-value">—</div>
-          <small>Need at least 1 round per player.</small>
+          <small>Need at least 2 rounds per player.</small>
         {% endif %}
       </div>
 
       <div class="stat-block"> {# Fixed stray char #}
         <div class="stat-title">📊 Average Scores</div>
-        <div class="settings-help" style="margin-bottom: 10px;">
-          Average score per round. Lower is better.
-        </div>
         {% if average_ranking %}
           <ol>
             {% for row in average_ranking %}
@@ -211,9 +193,6 @@
 
       <div class="stat-block">
         <div class="stat-title">↩️ Biggest Comebacks</div>
-        <div class="settings-help" style="margin-bottom: 10px;">
-          Largest improvement in cumulative score.
-        </div>
         {% if comeback_ranking %}
           <ol>
             {% for cb in comeback_ranking %}
@@ -226,7 +205,7 @@
                   </small>
                 </div>
                 <div class="stat-right">
-                  <span>{{ cb.improvement }} Saved</span>
+                  <span>{{ cb.improvement }} saved</span>
                   <div class="stat-bar" data-width="{{ ((cb.improvement / (max_comeback_improvement or 1) * 60) | round(0)) or (2 if cb.improvement > 0 else 0) }}px"></div>
                 </div>
               </li>
@@ -240,9 +219,6 @@
 
       <div class="stat-block">
         <div class="stat-title">📉 Biggest Falls</div>
-        <div class="settings-help" style="margin-bottom: 10px;">
-          Largest drop in cumulative score.
-        </div>
         {% if fall_ranking %}
           <ol>
             {% for fall in fall_ranking %}
@@ -255,7 +231,7 @@
                   </small>
                 </div>
                 <div class="stat-right">
-                  <span>{{ fall.worsening }} Lost</span>
+                  <span>{{ fall.worsening }} lost</span>
                   <div class="stat-bar bad" data-width="{{ ((fall.worsening / (max_fall_worsening or 1) * 60) | round(0)) or (2 if fall.worsening > 0 else 0) }}px"></div>
                 </div>
               </li>
@@ -649,6 +625,17 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <h3 id="settingsTitle">Settings</h3>
       <div class="settings-grid">
+        <!-- Clear Recent Players -->
+        <div class="settings-group" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <label style="font-weight: 700;">Recent Players</label>
+            <div class="settings-help">Remove all names from the "Recent players" list.</div>
+          </div>
+          <button type="button" id="clearRecentsBtn" class="btn btn-cancel" title="Clear Recent Players" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 12px 16px; font-size: 1.2em; line-height: 1;">
+            ✕
+          </button>
+        </div>
+
         <div class="settings-group">
           <label style="display:flex; align-items:center; gap:10px; font-weight:700;">
             <input id="hapticsToggle" type="checkbox">
@@ -659,10 +646,13 @@
 
         <!-- Rudeness Slider -->
         <div class="settings-group" id="rudenessSettingsRow">
-          <label for="rudenessSlider" style="font-weight: 700;">
+          <label for="rudenessSlider" style="font-weight: 700; display: block;">
             Rudeness: <span id="rudenessLabel">Serious</span>
           </label>
-          <input id="rudenessSlider" type="range" class="settings-slider" min="0" max="2" step="1">
+          <div id="rudenessSlider" class="slider-container">
+            <div class="slider-track"></div>
+            <div class="slider-thumb"></div>
+          </div>
           <div class="settings-help">
             Adjust the tone of the score announcements.
           </div>
@@ -670,9 +660,9 @@
         
         <!-- Holes setting (only in setup) -->
         <div class="settings-group" id="holesSettingsRow" style="display: none;">
-          <label for="holesInput" style="font-weight: 700;">Number of Rounds (Holes)</label>
-          <input id="holesInput" type="number" class="settings-input" min="1" max="50" step="1">
-          <div class="settings-help">
+          <label for="holesInput" style="font-weight: 700; display: block;">Number of Rounds (Holes)</label>
+          <input id="holesInput" type="number" class="settings-input" min="1" max="50" step="1" style="width: 100%; box-sizing: border-box; padding: 12px; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;">
+          <div class="settings-help" style="margin-top: 8px;">
             Set the game length. Can only be changed before the game starts.
           </div>
         </div>
@@ -716,6 +706,7 @@
        ========================================================= -->
   <script>
     window.__gameCache = {{ game | tojson | safe }};
+    window.recentNames = {{ (game.recent_names or []) | tojson | safe }}; // Make recentNames global
   </script>
 
   <!-- =========================================================
@@ -933,8 +924,6 @@
        SCRIPT: SETUP PAGE — Pills with Pointer Events drag
        ========================================================= -->
   <script>;
-    // ---------- State ----------
-    const recentNames      = {{ (game.recent_names or []) | tojson | safe }};
     const chipList         = document.getElementById('chipList');           // recent chips (if any)
     const selectedWrap     = document.getElementById('selectedWrap'); // container for selected chips
     const selectedChipList = document.getElementById('selectedChipList');
@@ -969,7 +958,13 @@
 
     function renderRecent(){
       if (!chipList) return;
-      chipList.innerHTML = recentNames.map(n =>
+      const recentWrap = chipList.closest('.recent-wrap');
+      if (window.recentNames.length === 0 && recentWrap) {
+        recentWrap.style.display = 'none';
+      } else if (recentWrap) {
+        recentWrap.style.display = 'block';
+      }
+      chipList.innerHTML = (window.recentNames || []).map(n =>
         `<div class="chip" data-name="${escapeHtml(n)}">${escapeHtml(n)}</div>`
       ).join('');
       chipList.querySelectorAll('.chip').forEach(el=>{
@@ -1874,38 +1869,27 @@
     (function(){
       const scrollArea = document.querySelector('.container'); // only scrollable region
       let startY = 0;
-      let allowScroll = false;
+      let insideScrollable = false;
 
-      function shouldAllowScroll(el) {
+      function isInsideScrollable(el) {
         let n = el;
         while (n && n !== document.body) {
-          // If we hit the main scroll area, allow it
           if (n === scrollArea) return true;
-          // If we hit a modal or an input, stop and disallow body scroll
-          if (n.classList.contains('modal') || n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') {
-            return false;
-          }
           n = n.parentElement;
         }
-        // If we reach the body without hitting a modal/input, it's a background touch, disallow.
-        return false; 
+        return false;
       }
 
       document.addEventListener('touchstart', (e) => {
-        allowScroll = shouldAllowScroll(e.target);
+        insideScrollable = isInsideScrollable(e.target);
         startY = (e.touches && e.touches.length) ? e.touches[0].clientY : 0;
       }, { passive: true });
 
       document.addEventListener('touchmove', (e) => {
-        // If the touch started on an element that should not cause body scroll (like the slider),
-        // but is not the main scroll container itself, then we do nothing and let the browser handle it.
-        if (!allowScroll) {
-          const isDirectlyOnSlider = e.target.closest('.settings-slider');
-          if (isDirectlyOnSlider) return; // Explicitly allow slider dragging
-        }
+        if (!scrollArea) { e.preventDefault(); return; }
 
         // If touch is outside the scroll area, block it outright.
-        if (!allowScroll) { e.preventDefault(); return; }
+        if (!insideScrollable) { e.preventDefault(); return; }
 
         // Inside scroll area: block rubber-band when at edges and trying to go past
         const y = (e.touches && e.touches.length) ? e.touches[0].clientY : startY;
@@ -2032,18 +2016,77 @@
     const rudenessSlider  = document.getElementById('rudenessSlider');
     const rudenessLabel   = document.getElementById('rudenessLabel');
     const settingsSummary = document.getElementById('settingsSummary');
-
+    const clearRecentsBtn = document.getElementById('clearRecentsBtn');    
+    
+    // --- Custom Rudeness Slider Logic ---
     const RUDENESS_MAP = ['Serious', 'Medium', 'Rude'];
-    rudenessSlider.addEventListener('input', () => {
-      rudenessLabel.textContent = RUDENESS_MAP[rudenessSlider.value] || 'Serious';
+    const rudenessThumb = rudenessSlider.querySelector('.slider-thumb');
+    let rudenessLevel = 0; // Internal state for the slider's value
+
+    function setRudenessSlider(level, animate = false) {
+      rudenessLevel = Math.max(0, Math.min(level, RUDENESS_MAP.length - 1));
+      rudenessLabel.textContent = RUDENESS_MAP[rudenessLevel];
+      // Position is 0% for level 0, 50% for level 1, 100% for level 2
+      const percent = (rudenessLevel / (RUDENESS_MAP.length - 1)) * 100;
+      if (!animate) rudenessThumb.classList.add('dragging'); // Prevent animation on initial set
+      rudenessThumb.style.left = `${percent}%`;
+      if (!animate) {
+        // Force reflow and then remove the class to re-enable animation for future interactions
+        rudenessThumb.offsetHeight; 
+        rudenessThumb.classList.remove('dragging');
+      }
+    }
+
+    function handleSliderMove(clientX) {
+      const rect = rudenessSlider.getBoundingClientRect();
+      const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      
+      // Update thumb position visually while dragging
+      rudenessThumb.style.left = `${percent * 100}%`;
+
+      // Update the label in real-time
+      const level = Math.round(percent * (RUDENESS_MAP.length - 1));
+      rudenessLabel.textContent = RUDENESS_MAP[level];
+    }
+
+    function handleSliderEnd(clientX) {
+      const rect = rudenessSlider.getBoundingClientRect();
+      const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const finalLevel = Math.round(percent * (RUDENESS_MAP.length - 1));
+      setRudenessSlider(finalLevel, true); // Snap with animation
+    }
+
+    let isDragging = false;
+    rudenessSlider.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      rudenessThumb.classList.add('dragging');
+      rudenessSlider.setPointerCapture(e.pointerId);
+      handleSliderMove(e.clientX);
     });
+    rudenessSlider.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      handleSliderMove(e.clientX);
+    });
+    rudenessSlider.addEventListener('pointerup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      rudenessThumb.classList.remove('dragging');
+      rudenessSlider.releasePointerCapture(e.pointerId);
+      handleSliderEnd(e.clientX);
+    });
+    // Also handle clicks on the track
+    rudenessSlider.addEventListener('click', (e) => {
+      // Prevent click from firing during a drag sequence
+      if (e.target === rudenessThumb) return;
+      handleSliderEnd(e.clientX);
+    });
+
 
     function openSettings(){
       const g = window.__gameCache;
       hapticsToggle.checked = window.hapticsPref.isOn();
       holesInput.value = g.holes || 20;
-      rudenessSlider.value = g.rudeness_level || 0;
-      rudenessLabel.textContent = RUDENESS_MAP[rudenessSlider.value] || 'Serious';
+      setRudenessSlider(g.rudeness_level || 0);
 
       // Only show the holes/rounds setting during the setup phase
       if (g.phase === 'setup') {
@@ -2065,8 +2108,9 @@
       const g = window.__gameCache;
       const hapticsStatus = window.hapticsPref.isOn() ? 'on' : 'off';
       const rudeness = RUDENESS_MAP[g.rudeness_level || 0];
-      let summary = `haptics ${hapticsStatus}, ${rudeness}`;
+      let summary = `haptics ${hapticsStatus}, rudeness ${rudeness}`;
       if (g.phase === 'setup') {
+
         summary += `, ${holesInput.value} rounds`;
       } else {
         summary += `, ${g.holes} rounds`;
@@ -2074,6 +2118,7 @@
       settingsSummary.textContent = summary;
     }
     function closeSettings(){
+
       settingsOverlay.classList.remove('show');
       document.body.style.overflow = '';
     }
@@ -2081,7 +2126,8 @@
       window.hapticsPref.set(!!hapticsToggle.checked);
 
       const payload = {};
-      payload.rudeness_level = parseInt(rudenessSlider.value, 10);
+
+      payload.rudeness_level = rudenessLevel;
       const g = window.__gameCache;
       if (g.phase === 'setup') {
         const newHoles = parseInt(holesInput.value, 10);
@@ -2101,6 +2147,32 @@
         showToast('Settings saved', 'success');
       } catch(e) { showToast('Could not save settings', 'error'); }
     }
+
+    clearRecentsBtn.addEventListener('click', async () => {
+      const ok = await window.showConfirmModal({
+        title: 'Clear Recent Players',
+        message: 'Are you sure you want to remove all recent player names? This cannot be undone.',
+        okText: 'Clear',
+        cancelText: 'Cancel'
+      });
+      if (!ok) return;
+
+      try {
+        const res = await fetch('{{ url_for("api_clear_recents") }}', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok && data.game) {
+          window.__gameCache = data.game;
+          // Update the local recentNames variable before re-rendering
+          window.recentNames = data.game.recent_names || [];
+          if (typeof saveLocal === 'function') saveLocal(data.game);
+          showToast('Recent players cleared', 'success');
+          // Re-render the recent players list on the setup screen if it exists
+          if (typeof renderRecent === 'function') {
+            renderRecent();
+          }
+        }
+      } catch (e) { showToast('Could not clear recent players', 'error'); }
+    });
   </script>
 
   {% if show_stats %}

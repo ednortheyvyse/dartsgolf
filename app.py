@@ -468,6 +468,17 @@ def api_load_saved():
     return jsonify({'ok': True})
 
 
+@app.post('/api/clear_recents')
+def api_clear_recents():
+    """
+    Clears the list of recent player names.
+    """
+    gs = _get_state()
+    gs['recent_names'] = []
+    _persist(gs)
+    return jsonify({'ok': True, 'game': gs})
+
+
 # ---------- Service worker at root (explicit, no-cache) ----------
 @app.route('/sw.js')
 def sw():
