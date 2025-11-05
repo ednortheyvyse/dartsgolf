@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 from collections import defaultdict
 import statistics
+import numpy as np
 
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
@@ -54,6 +55,19 @@ MAX_HOLES = 50
 MIN_SCORE_BUTTON_VALUE = -10
 MAX_SCORE_BUTTON_VALUE = 10
 RECENT_NAMES_CAP = 24
+RUDENESS_LABELS = [
+    # Level 0: Serious
+    {-3: "Albatross", -2: "Eagle", -1: "Birdie", 0: "Par", 1: "Bogey", 2: "Double Bogey"},
+    # Level 1: Medium
+    {-3: "Amazing!", -2: "Incredible!", -1: "Nice one!", 0: "Hell Yeah Brother", 1: "Oof", 2: "Yikes"},
+    # Level 2: Rude
+    {
+        -3: "Fucking Magical", -2: "Holy Shit!", -1: "Fuck Yeah!", 0: "Meh",
+        1: "Fucksake", 2: "CUNT!"
+    },
+]
+
+
 
 
 def _fresh_state() -> dict:
@@ -85,6 +99,7 @@ def _fresh_state() -> dict:
         # ---- Settings (7) ----
         'holes': DEFAULT_HOLES,
         'score_buttons': DEFAULT_SCORE_BUTTONS,
+        'rudeness_level': 0,
     }
 
 
@@ -222,6 +237,10 @@ def _merge_recent(existing: list[str], new_names: list[str], cap: int = 24) -> l
 def index():
     gs = _get_state()
 
+    # Inject the correct score labels based on the current rudeness level
+    level = gs.get('rudeness_level', 0)
+    gs['score_labels'] = RUDENESS_LABELS[level]
+
     # Build final standings if we just entered final_ranking
     if gs['phase'] == 'final_ranking' and not gs['final_standings']:
         gs['rounds_played'] = _compute_rounds_played(gs)
@@ -257,6 +276,7 @@ def start_game():
     # allow carrying settings chosen in setup (holes/buttons)
     preserved_holes = int(gs_prev.get('holes', DEFAULT_HOLES))
     preserved_buttons = list(gs_prev.get('score_buttons', DEFAULT_SCORE_BUTTONS))
+    preserved_rudeness = int(gs_prev.get('rudeness_level', 0))
 
     players_raw = request.form.get('players', '')
     players = [n.strip() for n in players_raw.split(',') if n and n.strip()]
@@ -278,6 +298,7 @@ def start_game():
     gs['scores'] = {p: 0 for p in players}
     gs['holes'] = max(1, int(preserved_holes))
     gs['score_buttons'] = preserved_buttons[:]
+    gs['rudeness_level'] = preserved_rudeness
     gs['round_history'] = [{} for _ in range(gs['holes'])]
     gs['phase'] = 'playing'
     gs['recent_names'] = updated_recent
@@ -317,11 +338,13 @@ def restart():
     prev_recent = gs.get('recent_names', [])
     prev_holes = gs.get('holes', DEFAULT_HOLES)
     prev_buttons = gs.get('score_buttons', DEFAULT_SCORE_BUTTONS)
+    prev_rudeness = gs.get('rudeness_level', 0)
     _reset_state()
     gs = _get_state()
     gs['recent_names'] = prev_recent
     gs['holes'] = prev_holes
     gs['score_buttons'] = prev_buttons # This is a fresh state, so gs is the one we just created.
+    gs['rudeness_level'] = prev_rudeness
     _persist(gs)
     return redirect(url_for('index'))
 
@@ -401,6 +424,16 @@ def api_settings():
                     gs['score_buttons'] = norm
                     changed = True
         except Exception:
+            pass
+
+    # Rudeness Level
+    if 'rudeness_level' in data:
+        try:
+            level = int(data['rudeness_level'])
+            if 0 <= level < len(RUDENESS_LABELS):
+                gs['rudeness_level'] = level
+                changed = True
+        except (ValueError, TypeError):
             pass
 
     # Holes (only pre-game)
@@ -687,27 +720,52 @@ def stats():
                 cur = 0
         return best
 
-    def _best_comebacks_by_player(per: dict[str, list[int]]):
+    def _best_comebacks_by_player(cumulative_per: dict[str, list[int]]) -> dict:
         out = {}
-        for p, seq in per.items():
-            n = len(seq)
-            best = None
-            for i in range(n - 1):
-                for j in range(i + 1, n):
-                    improvement = seq[i] - seq[j]
-                    if improvement > 0:
-                        cand = {
-                            'player': p,
-                            'improvement': improvement,
-                            'from_score': seq[i],
-                            'to_score': seq[j],
-                            'from_round': i + 1,
-                            'to_round': j + 1,
-                        }
-                        if (best is None) or (cand['improvement'] > best['improvement']):
-                            best = cand
-            if best:
-                out[p] = best
+        for p, seq in cumulative_per.items():
+            if len(seq) < 2: continue
+            s = np.array(seq)
+            cummin_from_end = np.minimum.accumulate(s[::-1])[::-1]
+            improvements = s[:-1] - cummin_from_end[1:]
+            if np.any(improvements > 0):
+                max_improvement = np.max(improvements)
+                if max_improvement > 0:
+                    from_idx = np.argmax(improvements)
+                    # Find the index of the minimum score in the rest of the array
+                    to_idx = from_idx + 1 + np.argmin(s[from_idx+1:])
+                    out[p] = {
+                        'player': p,
+                        'improvement': int(max_improvement),
+                        'from_score': seq[from_idx],
+                        'to_score': seq[to_idx],
+                        'from_round': from_idx + 1,
+                        'to_round': to_idx + 1,
+                    }
+        return out
+
+    def _biggest_falls_by_player(cumulative_per: dict[str, list[int]]) -> dict:
+        out = {}
+        for p, seq in cumulative_per.items():
+            if len(seq) < 2: continue
+            s = np.array(seq)
+            # Find the running maximum from the end of the sequence backwards
+            cummax_from_end = np.maximum.accumulate(s[::-1])[::-1]
+            # Calculate potential worsenings: score at a later point minus score now
+            worsenings = cummax_from_end[1:] - s[:-1]
+            if np.any(worsenings > 0):
+                max_worsening = np.max(worsenings)
+                if max_worsening > 0:
+                    from_idx = np.argmax(worsenings)
+                    # Find the index of the maximum score in the rest of the array
+                    to_idx = from_idx + 1 + np.argmax(s[from_idx+1:])
+                    out[p] = {
+                        'player': p,
+                        'worsening': int(max_worsening),
+                        'from_score': seq[from_idx],
+                        'to_score': seq[to_idx],
+                        'from_round': from_idx + 1,
+                        'to_round': to_idx + 1,
+                    }
         return out
 
     per = _extract_per_player_sequences(gs)
@@ -715,8 +773,11 @@ def stats():
     birdie_streaks = {}
     bogey_streaks = {}
     birdie_counts = {}
-    stdevs = {} # New stat
     bogey_counts = {}
+    # Calculate cumulative scores for comeback/fall stats
+    cumulative_per = {p: np.cumsum(seq).tolist() for p, seq in per.items()}
+    on_target_percentages = {}
+
     avgs = {}
     rounds_counts = {}
 
@@ -726,13 +787,17 @@ def stats():
         birdie_counts[p] = sum(1 for v in seq if v < 0)
         bogey_counts[p] = sum(1 for v in seq if v > 0)
         if seq:
+            avg = statistics.mean(seq)
+            # Calculate on target percentage
+            on_target_rounds = sum(1 for v in seq if v <= 0)
+            on_target_percentages[p] = (on_target_rounds / len(seq)) * 100 if len(seq) > 0 else 0
             avgs[p] = statistics.mean(seq)
             rounds_counts[p] = len(seq)
-            stdevs[p] = statistics.stdev(seq) if len(seq) > 1 else 0.0
         else:
+            on_target_percentages[p] = 0
             avgs[p] = 0.0
             rounds_counts[p] = 0
-    players_with_data = [p for p in gs.get('players', []) if rounds_counts.get(p, 0) > 0]
+    players_with_data = [p for p in gs.get('players', []) if rounds_counts.get(p, 0) > 0] # type: ignore
 
     birdie_streak_order = sorted(
         players_with_data,
@@ -755,11 +820,10 @@ def stats():
         key=lambda p: (-bogey_counts[p], -avgs[p])
     )
 
-    consistency_order = sorted(
+    on_target_order = sorted(
         players_with_data,
-        key=lambda p: (stdevs[p], avgs[p]) # Lower stdev is better
+        key=lambda p: (-on_target_percentages.get(p, 0), avgs.get(p, 0)) # Higher percentage is better
     )
-
 
 
     birdie_streak_ranking = [
@@ -782,22 +846,24 @@ def stats():
         {'name': p, 'count': bogey_counts[p], 'average': avgs[p]}
         for p in most_bogeys_order
     ]
-    consistency_ranking = [
-        {'name': p, 'stdev': stdevs[p], 'average': avgs[p]}
-        for p in consistency_order
+    on_target_ranking = [
+        {'name': p, 'percentage': on_target_percentages.get(p, 0)} for p in on_target_order
     ]
-
-    best_comebacks = _best_comebacks_by_player(per)
+    best_comebacks = _best_comebacks_by_player(cumulative_per)
     comeback_ranking = sorted(best_comebacks.values(), key=lambda d: d['improvement'], reverse=True)
+
+    biggest_falls = _biggest_falls_by_player(cumulative_per)
+    fall_ranking = sorted(biggest_falls.values(), key=lambda d: d['worsening'], reverse=True)
 
     # Calculate max values for bar scaling in the template
     max_birdie_streak = max(birdie_streaks.values(), default=0)
     max_bogey_streak = max(bogey_streaks.values(), default=0)
+    max_on_target_percentage = max(on_target_percentages.values(), default=0)
     max_birdie_count = max(birdie_counts.values(), default=0)
     max_bogey_count = max(bogey_counts.values(), default=0)
     max_average_abs = max((abs(a) for a in avgs.values()), default=0)
     max_comeback_improvement = max((cb['improvement'] for cb in best_comebacks.values()), default=0)
-    max_stdev = max((s['stdev'] for s in consistency_ranking), default=0)
+    max_fall_worsening = max((f['worsening'] for f in biggest_falls.values()), default=0)
     return render_template(
         'index.html',
         show_stats=True,
@@ -807,16 +873,18 @@ def stats():
         average_ranking=average_ranking,
         most_birdies_ranking=most_birdies_ranking,
         most_bogeys_ranking=most_bogeys_ranking,
-        consistency_ranking=consistency_ranking,
+        on_target_ranking=on_target_ranking,
         comeback_ranking=comeback_ranking,
+        fall_ranking=fall_ranking,
         # Max values for mini-graph scaling
         max_birdie_streak=max_birdie_streak,
         max_bogey_streak=max_bogey_streak,
         max_birdie_count=max_birdie_count,
+        max_on_target_percentage=max_on_target_percentage,
         max_bogey_count=max_bogey_count,
         max_average_abs=max_average_abs,
         max_comeback_improvement=max_comeback_improvement,
-        max_stdev=max_stdev,
+        max_fall_worsening=max_fall_worsening,
     )
 
 
