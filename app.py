@@ -175,6 +175,7 @@ def _get_sid() -> str:
     sid = session.get("sid")
     if not sid:
         sid = uuid4().hex
+        logging.info(f"New session created with SID: {sid}")
         session["sid"] = sid
         session.permanent = True
     return sid
@@ -186,6 +187,7 @@ def _get_state() -> dict:
     gs = _storage_get(sid)
     if not gs:
         gs: dict = _fresh_state() # type: ignore
+        logging.info(f"No state found for SID {sid}. Creating fresh state.")
         _storage_set(sid, gs)
     # Defensive: ensure playoff_round_scores is always a dictionary
     if not isinstance(gs.get('playoff_round_scores'), dict):
@@ -257,6 +259,7 @@ def _merge_recent(existing: list[str], new_names: list[str], cap: int = 24) -> l
 # --------------------- Routes ---------------------
 @app.route('/')
 def index():
+    logging.debug(f"Route: GET / - Rendering main page.")
     gs = _get_state()
     
     # Retrieve and clear any player list from a failed form submission
@@ -268,6 +271,7 @@ def index():
 
     # Build final standings if we just entered final_ranking
     if gs['phase'] == 'final_ranking' and not gs['final_standings']:
+        logging.info("Phase is 'final_ranking'. Computing and persisting final standings.")
         gs['rounds_played'] = _compute_rounds_played(gs)
         ordered = _final_order_players(gs)
         standings = []
@@ -292,11 +296,13 @@ def index():
 # NEW: tolerate GET /start (prefetches / SW / crawlers) by redirecting home
 @app.route('/start', methods=['GET'])
 def start_game_get():
+    logging.debug("Route: GET /start - Redirecting to index.")
     return redirect(url_for('index'))
 
 
 @app.route('/start', methods=['POST'])
 def start_game():
+    logging.info("Route: POST /start - Starting new game.")
     gs_prev = _get_state()
     # allow carrying settings chosen in setup (holes/buttons)
     preserved_holes = int(gs_prev.get('holes', DEFAULT_HOLES))
@@ -307,12 +313,14 @@ def start_game():
     players = [n.strip() for n in players_raw.split(',') if n and n.strip()]
     if not players:
         session['previous_players_input'] = players_raw
+        logging.warning("Start game failed: No player names entered.")
         flash("Please enter at least one player name.", "warning")
         return redirect(url_for('index'))
 
     lowered = [p.lower() for p in players]
     if len(set(lowered)) != len(lowered):
         dups = sorted({name for name in players if lowered.count(name.lower()) > 1})
+        logging.warning(f"Start game failed: Duplicate player names detected: {dups}")
         session['previous_players_input'] = ','.join([p for p in players if p.lower() not in [d.lower() for d in dups]])
         flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "warning")
         return redirect(url_for('index'))
@@ -321,6 +329,7 @@ def start_game():
     long_names = [p for p in players if len(p) > 14]
     if long_names:
         session['previous_players_input'] = players_raw
+        logging.warning(f"Start game failed: Player name too long: '{long_names[0]}'")
         flash(f"Player names cannot exceed 14 characters. Offending name: '{long_names[0]}'", "warning")
         return redirect(url_for('index'))
 
@@ -337,6 +346,7 @@ def start_game():
     gs['phase'] = 'playing'
     gs['recent_names'] = updated_recent
     _persist(gs)
+    logging.info(f"New game started with players: {players}, Holes: {gs['holes']}")
     return redirect(url_for('index'))
 
 
@@ -345,6 +355,7 @@ def record_score():
     """
     Records a score change via a form submission (non-API).
     """
+    logging.debug("Route: POST /score - Recording score.")
     gs = _get_state()
     score_change = int(request.form.get('score'))
     _apply_score(gs, score_change)
@@ -357,6 +368,7 @@ def undo_last_move():
     """
     Undoes the last score move via a form submission (non-API).
     """
+    logging.debug("Route: POST /undo - Undoing last move.")
     gs = _get_state()
     _apply_undo(gs)
     _persist(gs)
@@ -365,6 +377,7 @@ def undo_last_move():
 
 @app.route('/restart', methods=['POST'])
 def restart():
+    logging.info("Route: POST /restart - Restarting game, preserving settings.")
     gs = _get_state()
     # Preserve recent names, holes, and score buttons across game restarts
     # This ensures a smoother UX when starting a new game.
@@ -389,9 +402,11 @@ def api_score():
     """
     API endpoint to record a score change.
     """
+    logging.debug("Route: POST /api/score - API score request.")
     # 1. Get the current state
     gs = _get_state()
     data = request.get_json(force=True, silent=True) or {}
+    logging.debug(f"API score data: {data}")
     score_change = int(data.get('score', 0))
     # 2. Modify the state in-place
     _apply_score(gs, score_change)
@@ -405,6 +420,7 @@ def api_undo():
     """
     API endpoint to undo the last score move.
     """
+    logging.debug("Route: POST /api/undo - API undo request.")
     # 1. Get the current state
     gs = _get_state()
     # 2. Modify the state in-place
@@ -421,7 +437,9 @@ def api_end_after_round():
     API endpoint to toggle the 'end_after_round' flag.
     """
     if gs['phase'] == 'playing':
-        gs['end_after_round'] = not bool(gs.get('end_after_round', False))
+        new_flag_state = not bool(gs.get('end_after_round', False))
+        gs['end_after_round'] = new_flag_state
+        logging.info(f"API: Toggled 'end_after_round' to {new_flag_state}")
         _persist(gs)
     return jsonify({'ok': True, 'game': gs})
 
@@ -433,8 +451,10 @@ def api_settings():
     - holes: only allowed in setup phase (to prevent corruption mid-game)
     - score_buttons: allowed anytime
     """
+    logging.debug("Route: POST /api/settings - API settings update request.")
     gs = _get_state()
     data = request.get_json(force=True, silent=True) or {}
+    logging.debug(f"API settings data: {data}")
     changed = False
 
     # Score buttons
@@ -456,6 +476,7 @@ def api_settings():
                         norm.append(b)
                 if 2 <= len(norm) <= 11:
                     gs['score_buttons'] = norm
+                    logging.info(f"Settings updated: score_buttons set to {norm}")
                     changed = True
         except Exception:
             pass
@@ -466,6 +487,7 @@ def api_settings():
             level = int(data['rudeness_level'])
             if 0 <= level < len(RUDENESS_LABELS):
                 gs['rudeness_level'] = level
+                logging.info(f"Settings updated: rudeness_level set to {level}")
                 changed = True
         except (ValueError, TypeError):
             pass
@@ -477,6 +499,7 @@ def api_settings():
             if MIN_HOLES <= holes <= MAX_HOLES:
                 gs['holes'] = holes
                 gs['round_history'] = [{} for _ in range(holes)]
+                logging.info(f"Settings updated: holes set to {holes}")
                 changed = True
         except Exception:
             pass
@@ -492,12 +515,15 @@ def api_load_saved():
     Replace server state with a previously saved client copy (4).
     Accept only whitelisted keys to avoid injection of arbitrary data.
     """
+    logging.info("Route: POST /api/load_saved - Loading state from client.")
     client = request.get_json(force=True, silent=True) or {}
     allowed = set(_fresh_state().keys())
     filtered = {k: v for k, v in client.items() if k in allowed}
     if not isinstance(filtered.get('players', []), list):
+        logging.error("API load_saved failed: invalid payload.")
         return jsonify({'ok': False, 'error': 'invalid payload'}), 400
     sid = _get_sid()
+    logging.info(f"Successfully loaded and replaced state for SID {sid}.")
     _storage_set(sid, filtered)
     return jsonify({'ok': True})
 
@@ -507,6 +533,7 @@ def api_clear_recents():
     """
     Clears the list of recent player names.
     """
+    logging.info("Route: POST /api/clear_recents - Clearing recent names.")
     gs = _get_state()
     gs['recent_names'] = []
     _persist(gs)
@@ -565,7 +592,7 @@ def _apply_score(gs: dict, score_change: int):
     Applies a score change to the current game state, handling player turns,
     round progression, and initiating playoffs if conditions are met.
     """
-    logging.debug(f"[_apply_score] Before score: {gs.get('playoff_round_scores')}, current_player_index: {gs.get('current_player_index')}")
+    logging.debug(f"[_apply_score] Phase: {gs['phase']}. Current player index: {gs.get('current_player_index')}")
     holes = int(gs.get('holes', 20))
     if gs['phase'] == 'playing':
         player = gs['players'][gs['current_player_index']]
@@ -577,6 +604,7 @@ def _apply_score(gs: dict, score_change: int):
         was_last_in_round = (gs['current_player_index'] == last_index)
 
         if was_last_in_round and gs.get('end_after_round'):
+            logging.info("End of round and 'end_after_round' is set. Initiating playoffs.")
             initiate_playoffs(gs)
             return
 
@@ -586,12 +614,13 @@ def _apply_score(gs: dict, score_change: int):
             gs['current_round'] += 1
 
         if gs['current_round'] > holes:
+            logging.info(f"Final round ({gs['current_round']-1}) complete. Initiating playoffs.")
             initiate_playoffs(gs)
 
     elif gs['phase'] == 'playoff':
         # In playoff mode, current_player_index iterates over the ACTIVE tie subgroup only
         player = gs['playoff_group'][gs['current_player_index']]
-        app.logger.debug(f"[_apply_score] Playoff phase: player={player}, current_playoff_round_scores_before_assign={gs.get('playoff_round_scores')}")
+        logging.debug(f"[_apply_score] Playoff score for {player}: {score_change}")
         gs['playoff_round_scores'][player] = score_change
         logging.debug(f"[_apply_score] After adding score for {player}: {gs.get('playoff_round_scores')}")
         gs['current_player_index'] += 1
@@ -607,10 +636,12 @@ def _apply_undo(gs: dict):
     """
     # Undo applies only during main play (not in playoff phase)
     if gs['phase'] != 'playing' or not gs['undo_history']:
+        logging.warning(f"[_apply_undo] Undo skipped. Phase: {gs['phase']}, History empty: {not gs['undo_history']}")
         return
 
     last_move = gs['undo_history'].pop()
     prev_idx = (gs['current_player_index'] - 1 + len(gs['players'])) % len(gs['players'])
+    logging.info(f"[_apply_undo] Reverting move for player index {prev_idx}. Score change: {last_move['score_change']}")
     gs['current_player_index'] = prev_idx
 
     if prev_idx == len(gs['players']) - 1:
@@ -628,6 +659,7 @@ def initiate_playoffs(gs: dict):
     Initiates the playoff phase by identifying tied players and setting up
     the initial playoff groups.
     """
+    logging.info("Initiating playoffs: identifying tied players.")
     gs['end_after_round'] = False
 
     # Group players by base total score; only ties (len > 1) need playoffs
@@ -638,9 +670,11 @@ def initiate_playoffs(gs: dict):
     gs['pending_playoffs'] = []
     for base_score, players in scores_to_players.items():
         if len(players) > 1:
+            logging.info(f"Tie detected at score {base_score} for players: {players}")
             gs['pending_playoffs'].append({'score': base_score, 'players': players})
 
     # Resolve from worst totals to best totals (higher total is worse)
+    logging.debug(f"Pending playoffs sorted by score (desc): {gs['pending_playoffs']}")
     gs['pending_playoffs'].sort(key=lambda p: p['score'], reverse=True)
     start_next_playoff(gs)
 
@@ -652,6 +686,7 @@ def start_next_playoff(gs: dict):
     """
     if gs['pending_playoffs']:
         nxt = gs['pending_playoffs'].pop(0)
+        logging.info(f"Starting next playoff for score {nxt['score']} with players {nxt['players']}")
         gs['phase'] = 'playoff'
         gs['playoff_pool'] = list(nxt['players'])
         gs['playoff_group'] = list(nxt['players'])
@@ -662,6 +697,7 @@ def start_next_playoff(gs: dict):
         gs['playoff_history'] = []
     else:
         # No more ties to resolve; produce final ranking
+        logging.info("All playoffs resolved. Transitioning to final ranking.")
         gs['phase'] = 'final_ranking'
         gs['rounds_played'] = _compute_rounds_played(gs)
         ordered = _final_order_players(gs)
@@ -719,6 +755,7 @@ def resolve_playoff_round(gs: dict):
 
     while True:
         worst_players = worst_subgroup_in_pool()
+        logging.debug(f"Worst subgroup in current pool {gs['playoff_pool']}: {worst_players}")
         if not worst_players:
             start_next_playoff(gs)
             return
@@ -726,12 +763,14 @@ def resolve_playoff_round(gs: dict):
         if len(worst_players) == 1:
             loser = worst_players[0]
             _finalize_player_from_current_tie(gs, loser)
+            logging.info(f"Player '{loser}' has been finalized and removed from the playoff pool.")
             if not gs['playoff_pool']:
                 start_next_playoff(gs)
                 return
             continue
         else:
             gs['playoff_group'] = worst_players
+            logging.info(f"Tie continues between {worst_players}. Starting new playoff round {gs['playoff_round'] + 1}.")
             gs['playoff_round'] += 1
             return
 
