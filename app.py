@@ -124,6 +124,12 @@ def _storage_get(sid: str) -> dict | None:
         logging.debug(f"[_storage_get] (In-memory) Loaded state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores') if gs else 'N/A'}")
         return gs
 
+    # In-memory fallback
+    gs = _games.get(sid)
+    if gs:
+        logging.debug(f"[_storage_get] (In-memory) Loaded state for SID {sid}.")
+    return gs
+
 
 def _storage_set(sid: str, gs: dict) -> None:
     """
@@ -133,6 +139,7 @@ def _storage_set(sid: str, gs: dict) -> None:
         sid: The session ID.
         gs: The game state dictionary to store.
     """
+    """    
     logging.debug(f"[_storage_set] Saving state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores')}")
     if _redis:
         _redis.set(_storage_key(sid), json.dumps(gs))
@@ -142,6 +149,7 @@ def _storage_set(sid: str, gs: dict) -> None:
 
 def _storage_reset(sid: str) -> None:
     """Resets (deletes) game state for a given session ID."""
+    logging.debug(f"[_storage_reset] Resetting state for SID {sid}")
     if _redis:
         _redis.delete(_storage_key(sid))
     _games.pop(sid, None)
@@ -913,4 +921,8 @@ def stats():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    # For production, debug mode should be off.
+    # It can be enabled for local development by setting the DEBUG environment variable.
+    is_debug = os.environ.get("DEBUG", "0").lower() in ("1", "true", "yes")
+    app.logger.info(f"Starting Flask server on 0.0.0.0:{port} (Debug: {is_debug})")
+    app.run(debug=is_debug, host='0.0.0.0', port=port)
