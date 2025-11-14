@@ -40,14 +40,6 @@ try:
     import redis  # type: ignore
     REDIS_URL = os.environ.get("REDIS_URL")
     if REDIS_URL:
-# /Users/ed.northeyvyse/Library/CloudStorage/OneDrive-Fremantle/Documents/GitHub/dartsgolf_home_github2/Untitled/app.py
-app.config.update(
-    # ...
-    SESSION_COOKIE_SECURE=bool(int(os.environ.get("SESSION_COOKIE_SECURE", "0"))),  # set 1 in prod
-    # ...
-)
-# /Users/ed.northeyvyse/Library/CloudStorage/OneDrive-Fremantle/Documents/GitHub/dartsgolf_home_github2/Untitled/app.py
-app.secret_key = os.environ.get("SECRET_KEY", "fe4391553dfd7386fae6514c389a8bdd195736fde0b1a05c")
         logging.info("REDIS_URL found, attempting to connect to Redis...")
         _redis = redis.from_url(REDIS_URL, decode_responses=True)
         _redis.ping() # Check connection
