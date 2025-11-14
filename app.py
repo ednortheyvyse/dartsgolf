@@ -151,12 +151,14 @@ def _storage_set(sid: str, gs: dict) -> None:
 def _get_sid() -> str:
     """Retrieves or generates a unique session ID for the current user."""
     sid = session.get("sid")
-    if not sid:
+    # If there's no SID in the session cookie, create one.
+    # This should only happen once for a new visitor.
+    if not sid: 
         sid = uuid4().hex
         logging.info(f"New session created with SID: {sid}")
         session["sid"] = sid
         session.permanent = True
-    return sid
+    return sid # Return the existing or newly created SID.
 
 
 def _get_state() -> dict:
@@ -164,11 +166,12 @@ def _get_state() -> dict:
     sid = _get_sid()
     gs = _storage_get(sid)
     if not gs:
-        gs: dict = _fresh_state() # type: ignore
+        # If no game state is found in storage for this session,
+        # create a fresh one and save it immediately.
+        gs = _fresh_state()
         logging.info(f"No state found for SID {sid}. Creating fresh state.")
         _storage_set(sid, gs)
-    # Defensive: ensure playoff_round_scores is always a dictionary
-    if not isinstance(gs.get('playoff_round_scores'), dict):
+    elif not isinstance(gs.get('playoff_round_scores'), dict):
         gs['playoff_round_scores'] = {}
         _storage_set(sid, gs) # Persist this correction
     return gs
@@ -305,8 +308,7 @@ def start_game():
     gs['round_history'] = [{} for _ in range(gs['holes'])]
     gs['phase'] = 'playing'
     gs['recent_names'] = updated_recent
-    _persist(gs)
-    _storage_set(_get_sid(), gs) # Explicitly save the new state to the session
+    _storage_set(_get_sid(), gs) # Overwrite the state for the current session with the new game
     logging.info(f"New game started with players: {players}, Holes: {gs['holes']}")
     return redirect(url_for('index'))
 
