@@ -139,7 +139,6 @@ def _storage_set(sid: str, gs: dict) -> None:
         sid: The session ID.
         gs: The game state dictionary to store.
     """
-    """    
     logging.debug(f"[_storage_set] Saving state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores')}")
     if _redis:
         _redis.set(_storage_key(sid), json.dumps(gs))
