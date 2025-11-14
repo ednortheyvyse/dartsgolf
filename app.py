@@ -147,14 +147,6 @@ def _storage_set(sid: str, gs: dict) -> None:
         _games[sid] = gs
 
 
-def _storage_reset(sid: str) -> None:
-    """Resets (deletes) game state for a given session ID."""
-    logging.debug(f"[_storage_reset] Resetting state for SID {sid}")
-    if _redis:
-        _redis.delete(_storage_key(sid))
-    _games.pop(sid, None)
-
-
 # -------------- Game accessors --------------
 def _get_sid() -> str:
     """Retrieves or generates a unique session ID for the current user."""
@@ -183,8 +175,9 @@ def _get_state() -> dict:
 
 
 def _reset_state():
+    """Resets the game state for the current session to a fresh state."""
     sid = _get_sid()
-    _storage_set(sid, _fresh_state())
+    _storage_set(sid, _fresh_state()) # Overwrite with a fresh state, don't delete the key
 
 
 def _persist(gs: dict) -> None:
@@ -303,8 +296,7 @@ def start_game():
 
     updated_recent = _merge_recent(gs_prev.get('recent_names', []), players)
 
-    _reset_state()
-    gs = _get_state()
+    gs = _fresh_state() # Start with a fresh dictionary
     gs['players'] = players
     gs['scores'] = {p: 0 for p in players}
     gs['holes'] = max(1, int(preserved_holes))
