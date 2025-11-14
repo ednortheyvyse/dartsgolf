@@ -1,21 +1,30 @@
-# Use an official Python image as the base
-FROM python:3.10-slim
+# --- Build Stage ---
+FROM python:3.11-slim as builder
 
-# Set the working directory in the container
-WORKDIR /app
+WORKDIR /usr/src/app
 
-# Copy the requirements file into the container at /app
-COPY requirements.txt ./
+# Install build dependencies
+RUN pip install --upgrade pip
 
-# Install Python dependencies from requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy and install Python requirements
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir /usr/src/app/wheels -r requirements.txt
 
-# Copy the rest of the application code into the container
+
+# --- Final Stage ---
+FROM python:3.11-slim
+
+WORKDIR /usr/src/app
+
+# Copy pre-built wheels and application code
+COPY --from=builder /usr/src/app/wheels /wheels
 COPY . .
 
-# Expose the port that the app will run on. Flask's default is 5000.
-EXPOSE 5000
+# Install Python dependencies from wheels
+RUN pip install --no-index --find-links=/wheels -r requirements.txt
 
-# Command to run the application using a production-grade WSGI server (Gunicorn)
-# Gunicorn is already in your requirements.txt.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Expose the port Gunicorn will run on
+EXPOSE 8000
+
+# Run the app with Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "app:app"]

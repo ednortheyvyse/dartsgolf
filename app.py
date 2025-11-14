@@ -362,6 +362,36 @@ def restart():
 
 
 # ---------- JSON APIs ----------
+@app.post('/api/score')
+def api_score():
+    """
+    API endpoint to record a score change.
+    """
+    # 1. Get the current state
+    gs = _get_state()
+    data = request.get_json(force=True, silent=True) or {}
+    score_change = int(data.get('score', 0))
+    # 2. Modify the state in-place
+    _apply_score(gs, score_change)
+    # 3. Persist the MODIFIED state
+    _persist(gs)
+    return jsonify({'ok': True, 'game': gs})
+
+
+@app.post('/api/undo')
+def api_undo():
+    """
+    API endpoint to undo the last score move.
+    """
+    # 1. Get the current state
+    gs = _get_state()
+    # 2. Modify the state in-place
+    _apply_undo(gs)
+    # 3. Persist the MODIFIED state
+    _persist(gs)
+    return jsonify({'ok': True, 'game': gs})
+
+
 @app.post('/api/end')
 def api_end_after_round():
     gs = _get_state()

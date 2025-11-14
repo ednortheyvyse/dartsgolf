@@ -1020,6 +1020,118 @@
       }, 64);
     }
 
+    async function sendScore(val){
+      const snapshot = window.__gameCache ? JSON.parse(JSON.stringify(window.__gameCache)) : null;
+      const opId = ++__opCounter;
+
+      try{
+        // Optimistic
+        if (window.__gameCache){
+          const isPlayoff = window.__gameCache.phase === 'playoff';
+          const playerToAnimate = isPlayoff ? window.__gameCache.playoff_group[window.__gameCache.current_player_index] : window.__gameCache.players[window.__gameCache.current_player_index];
+          const playerIndexToAnimate = window.__gameCache.current_player_index; // For main game logic
+
+          const g = JSON.parse(JSON.stringify(window.__gameCache));
+          if (g.phase === 'playing'){
+            const pIdx = g.current_player_index;
+            const player = g.players[pIdx];
+            const roundI = g.current_round - 1;
+
+            g.round_history[roundI] = g.round_history[roundI] || {};
+            g.scores[player] = (g.scores[player] || 0) + val;
+            g.round_history[roundI][player] = val;
+
+            g.undo_history = g.undo_history || [];
+            g.undo_history.push({ player_index: pIdx, score_change: val });
+
+            const lastIndex = g.players.length - 1;
+            const wasLast   = pIdx === lastIndex;
+            if (!(wasLast && g.end_after_round)) {
+              g.current_player_index = wasLast ? 0 : pIdx + 1;
+              if (wasLast) g.current_round += 1;
+            }
+          } else if (g.phase === 'playoff'){
+            const pIdx = g.current_player_index;
+            const player = g.playoff_group[pIdx];
+            g.playoff_round_scores = g.playoff_round_scores || {};
+            g.playoff_round_scores[player] = val;
+            // Only advance the index if it's not the last player in the group.
+            const isLastPlayerOfRound = (pIdx === g.playoff_group.length - 1);
+            if (isLastPlayerOfRound) {
+              // Round is over. Server will resolve it. Optimistically reset for next round.
+              g.playoff_round_scores = {};
+              g.playoff_group = []; // The server will send the new, smaller group.
+              g.current_player_index = 0;
+            } else {
+              g.current_player_index = pIdx + 1;
+            }
+          }
+          window.__gameCache = g;
+          saveLocal(g);
+          renderGame(g);
+          triggerDeltaAnimation(playerToAnimate, val, isPlayoff);
+        }
+
+        const res = await fetch('{{ url_for("api_score") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({score:val}) });
+        if (!res.ok){ if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Couldn’t save score — connection error', 'error'); return; }
+        const data = await res.json();
+        if (!data.ok){ if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Couldn’t save score — server rejected', 'error'); return; }
+
+        if (data.game.phase === 'final_ranking') { location.reload(); return; }
+
+        const force = (data.game.phase !== 'playing' || window.__gameCache.phase !== 'playing');
+        scheduleApplyFromServer(data.game, opId, force);
+      }catch(e){
+        if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; }
+        showToast('Couldn’t save score — offline?', 'error');
+        console.error('Score sync failed', e);
+      }
+    }
+
+    async function undo(){
+      const g0 = window.__gameCache;
+      if (!g0 || g0.phase !== 'playing'){ showToast('Undo not available now', 'warning', 1400); return; }
+      if (!g0.undo_history || !g0.undo_history.length){ showToast('Nothing to undo', 'warning', 1400); return; }
+
+      const snapshot = JSON.parse(JSON.stringify(g0));
+      const opId = ++__opCounter;
+
+      try{
+        const g = JSON.parse(JSON.stringify(g0));
+        const n = g.players.length;
+
+        const last_move = g.undo_history.pop();
+        const prev_idx = (g.current_player_index - 1 + n) % n;
+        g.current_player_index = prev_idx;
+
+        if (prev_idx === n - 1){
+          g.current_round = Math.max(1, g.current_round - 1);
+        }
+
+        const player_to_undo = g.players[prev_idx];
+        const current_round_index = g.current_round - 1;
+        g.scores[player_to_undo] = (g.scores[player_to_undo] || 0) - (last_move.score_change || 0);
+        g.round_history[current_round_index] = g.round_history[current_round_index] || {};
+        delete g.round_history[current_round_index][player_to_undo];
+
+        window.__gameCache = g;
+        saveLocal(g);
+        renderGame(g);
+
+        const res = await fetch('{{ url_for("api_undo") }}', { method:'POST' });
+        if (!res.ok){ if (__opCounter === opId){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Undo failed — connection error', 'error'); return; }
+        const data = await res.json();
+        if (!data.ok){ if (__opCounter === opId){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Undo failed — server rejected', 'error'); return; }
+
+        const force = (data.game.phase !== 'playing' || window.__gameCache.phase !== 'playing');
+        scheduleApplyFromServer(data.game, opId, force);
+      }catch(e){
+        if (__opCounter === opId){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; }
+        showToast('Undo failed — offline?', 'error');
+        console.error('Undo sync failed', e);
+      }
+    }
+
     async function toggleEnd(){
       if (!END_ACTIVE) {
         const ok = await window.showConfirmModal({ title: 'End', message: 'The game will end after ALL players finish THIS round. Continue?', okText: 'End', cancelText: 'Cancel' });
@@ -1033,234 +1145,6 @@
       window.__gameCache = data.game;
       saveLocal(data.game);
       renderGame(data.game);
-    }
-
-    // =====================================================================
-    // CLIENT-SIDE GAME LOGIC (Ported from Python)
-    // =====================================================================
-
-    function _applyScore(g, scoreChange) {
-      const holes = g.holes || 20;
-      if (g.phase === 'playing') {
-        const player = g.players[g.current_player_index];
-        g.scores[player] = (g.scores[player] || 0) + scoreChange;
-        g.round_history[g.current_round - 1] = g.round_history[g.current_round - 1] || {};
-        g.round_history[g.current_round - 1][player] = scoreChange;
-        g.undo_history.push({ player_index: g.current_player_index, score_change: scoreChange });
-
-        const wasLastInRound = g.current_player_index === g.players.length - 1;
-
-        // Condition 1: Game ends if end_after_round is true and it's the last player of the round
-        if (wasLastInRound && g.end_after_round) {
-          _initiatePlayoffs(g);
-          return;
-        }
-
-        // Advance player turn
-        g.current_player_index++;
-        if (g.current_player_index >= g.players.length) {
-          g.current_player_index = 0;
-          g.current_round++;
-        }
-        // Condition 2: Game ends if current_round now exceeds total holes
-        if (g.current_round > holes) {
-          _initiatePlayoffs(g);
-        }
-      } else if (g.phase === 'playoff') {
-        const player = g.playoff_group[g.current_player_index];
-        g.playoff_round_scores[player] = scoreChange;
-        g.current_player_index++;
-
-        if (g.current_player_index >= g.playoff_group.length) {
-          _resolvePlayoffRound(g);
-        }
-      }
-    }
-
-    function _applyUndo(g) {
-      if (g.phase !== 'playing' || !g.undo_history || !g.undo_history.length) {
-        return;
-      }
-
-      const lastMove = g.undo_history.pop();
-      const n = g.players.length;
-      const prevIdx = (g.current_player_index - 1 + n) % n;
-      g.current_player_index = prevIdx;
-
-      if (prevIdx === n - 1) {
-        g.current_round = Math.max(1, g.current_round - 1);
-      }
-
-      const playerToUndo = g.players[prevIdx];
-      g.scores[playerToUndo] -= lastMove.score_change;
-      if (g.round_history[g.current_round - 1]) {
-        delete g.round_history[g.current_round - 1][playerToUndo];
-      }
-    }
-
-    function _initiatePlayoffs(g) {
-      g.end_after_round = false;
-      const scoresToPlayers = {};
-      for (const p of g.players) {
-        const s = g.scores[p] || 0;
-        if (!scoresToPlayers[s]) scoresToPlayers[s] = [];
-        scoresToPlayers[s].push(p);
-      }
-
-      g.pending_playoffs = [];
-      for (const score in scoresToPlayers) {
-        if (scoresToPlayers[score].length > 1) {
-          g.pending_playoffs.push({ score: parseInt(score), players: scoresToPlayers[score] });
-        }
-      }
-
-      g.pending_playoffs.sort((a, b) => b.score - a.score); // Higher score (worse) first
-      _startNextPlayoff(g);
-    }
-
-    function _startNextPlayoff(g) {
-      if (g.pending_playoffs && g.pending_playoffs.length > 0) {
-        const next = g.pending_playoffs.shift();
-        g.phase = 'playoff';
-        g.playoff_pool = [...next.players];
-        g.playoff_group = [...next.players];
-        g.playoff_base_score = next.score;
-        g.current_player_index = 0;
-        g.playoff_round = 1;
-        g.playoff_round_scores = {};
-        g.playoff_history = [];
-      } else {
-        g.phase = 'final_ranking';
-        // Sync with server and then reload to render the final page from server template
-        saveLocal(g);
-        // Send the final state to the server
-        fetch('{{ url_for("api_load_saved") }}', { // Reusing api_load_saved to sync client state
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(g)
-        }).then(res => {
-          if (res.ok) {
-            location.reload(); // Reload the page to get the server-rendered final standings
-          } else {
-            console.error('Failed to sync final game state with server. Reloading anyway.');
-            location.reload(); // Fallback: reload anyway, but user might see old state or setup
-          }
-        }).catch(e => {
-          console.error('Network error during final game state sync:', e);
-          location.reload(); // Fallback: reload anyway
-        });
-      }
-    }
-
-    function _resolvePlayoffRound(g) {
-      const scores = g.playoff_round_scores;
-      g.playoff_history.push({ ...scores });
-
-      for (const p in scores) {
-        if (!g.all_playoff_history[p]) g.all_playoff_history[p] = [];
-        g.all_playoff_history[p].push(scores[p]);
-      }
-
-      g.playoff_round_scores = {};
-      g.current_player_index = 0;
-
-      const _tbSequenceForPlayer = (player) => {
-        const seq = [];
-        for (const round of g.playoff_history) {
-          if (player in round) {
-            seq.push(round[player]);
-          }
-        }
-        return seq;
-      };
-
-      const _finalizePlayer = (player) => {
-        const seq = _tbSequenceForPlayer(player);
-        g.final_playoff_scores[player] = seq.length > 0 ? seq[seq.length - 1] : 0;
-        const index = g.playoff_pool.indexOf(player);
-        if (index > -1) {
-          g.playoff_pool.splice(index, 1);
-        }
-      };
-
-      const _worstSubgroupInPool = () => {
-        const pool = g.playoff_pool;
-        if (!pool || pool.length === 0) return [];
-
-        const seqs = {};
-        pool.forEach(p => { seqs[p] = _tbSequenceForPlayer(p); });
-
-        let worstSeq = [];
-        for (const p in seqs) {
-            // Lexicographical comparison for "max" sequence
-            if (JSON.stringify(seqs[p]) > JSON.stringify(worstSeq)) {
-                worstSeq = seqs[p];
-            }
-        }
-
-        return Object.keys(seqs).filter(p => JSON.stringify(seqs[p]) === JSON.stringify(worstSeq));
-      };
-
-      while (true) {
-        const worstPlayers = _worstSubgroupInPool();
-        if (!worstPlayers || worstPlayers.length === 0) {
-          _startNextPlayoff(g);
-          return;
-        }
-
-        if (worstPlayers.length === 1) {
-          const loser = worstPlayers[0];
-          _finalizePlayer(loser);
-          if (g.playoff_pool.length === 0) {
-            _startNextPlayoff(g);
-            return;
-          }
-          continue;
-        } else {
-          g.playoff_group = worstPlayers;
-          g.playoff_round++;
-          return;
-        }
-      }
-    }
-
-    // =====================================================================
-    // UPDATED CLIENT-SIDE ACTIONS
-    // =====================================================================
-
-    function sendScore(val) {
-      const g = window.__gameCache;
-      if (!g) return;
-
-      const isPlayoff = g.phase === 'playoff';
-      const playerToAnimate = isPlayoff ? g.playoff_group[g.current_player_index] : g.players[g.current_player_index];
-
-      // Apply logic directly to the cached game state
-      _applyScore(g, val);
-
-      // Persist and re-render
-      saveLocal(g);
-      renderGame(g);
-
-      // Trigger UI animations
-      triggerDeltaAnimation(playerToAnimate, val, isPlayoff);
-    }
-
-    function undo() {
-      const g = window.__gameCache;
-      if (!g || g.phase !== 'playing') {
-        showToast('Undo not available now', 'warning', 1400);
-        return;
-      }
-      if (!g.undo_history || !g.undo_history.length) {
-        showToast('Nothing to undo', 'warning', 1400);
-        return;
-      }
-
-      _applyUndo(g);
-
-      saveLocal(g);
-      renderGame(g);
     }
 
     function renderGame(g){
@@ -1587,7 +1471,13 @@
       let x = rect ? rect.left + (rect.width / 2) : window.innerWidth / 2;
       let y = rect ? rect.top - 6 : window.innerHeight - 80;
 
-      // The rest of your showBubbleFor function...
+      // Adjust x to prevent overflow
+      x = Math.max(x, (bubbleWidth / 2) + margin); // Keep left edge on screen
+      x = Math.min(x, window.innerWidth - (bubbleWidth / 2) - margin); // Keep right edge on screen
+
+      bubble.style.left = `${x}px`; // The CSS transform will handle the centering
+      bubble.style.top = `${y}px`;
+      bubble.addEventListener('animationend', () => bubble.remove());
     }
 
     // --- Init on load ---
