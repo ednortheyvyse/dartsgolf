@@ -40,9 +40,15 @@ try:
     import redis  # type: ignore
     REDIS_URL = os.environ.get("REDIS_URL")
     if REDIS_URL:
+        logging.info("REDIS_URL found, attempting to connect to Redis...")
         _redis = redis.from_url(REDIS_URL, decode_responses=True)
-except Exception:
+        _redis.ping() # Check connection
+        logging.info("Redis connection successful.")
+    else:
+        logging.warning("REDIS_URL not set. Falling back to in-memory storage.")
+except Exception as e:
     _redis = None
+    logging.error(f"Redis connection failed: {e}. Falling back to in-memory storage.")
 
 _games: dict[str, dict] = {}  # in-memory fallback
 
@@ -139,10 +145,11 @@ def _storage_set(sid: str, gs: dict) -> None:
         sid: The session ID.
         gs: The game state dictionary to store.
     """
-    logging.debug(f"[_storage_set] Saving state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores')}")
     if _redis:
+        logging.debug(f"[_storage_set] (Redis) Saving state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores')}")
         _redis.set(_storage_key(sid), json.dumps(gs))
     else:
+        logging.debug(f"[_storage_set] (In-memory) Saving state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores')}")
         _games[sid] = gs
 
 
