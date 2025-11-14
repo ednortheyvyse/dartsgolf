@@ -230,6 +230,13 @@ def _final_order_players(gs: dict) -> list[str]:
     return sorted(gs['players'], key=key)
 
 
+def _inject_template_data(gs: dict) -> None:
+    """Injects computed values needed for rendering into the game state."""
+    # Inject the correct score labels based on the current rudeness level
+    level = gs.get('rudeness_level', 0)
+    gs['score_labels'] = RUDENESS_LABELS[level]
+
+
 # --------------------- Routes ---------------------
 @app.route('/')
 def index():
@@ -239,10 +246,7 @@ def index():
     # Retrieve and clear any player list from a failed form submission
     previous_players = session.pop('previous_players_input', None)
 
-    # Inject the correct score labels based on the current rudeness level
-    level = gs.get('rudeness_level', 0)
-    gs['score_labels'] = RUDENESS_LABELS[level]
-
+    _inject_template_data(gs)
     # Build final standings if we just entered final_ranking
     if gs['phase'] == 'final_ranking' and not gs['final_standings']:
         logging.info("Phase is 'final_ranking'. Computing and persisting final standings.")
@@ -365,6 +369,7 @@ def restart():
     gs['holes'] = prev_holes
     gs['score_buttons'] = prev_buttons # This is a fresh state, so gs is the one we just created.
     gs['rudeness_level'] = prev_rudeness
+    _inject_template_data(gs)
     _persist(gs)
     return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
