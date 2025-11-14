@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from pathlib import Path
 from uuid import uuid4
 from collections import defaultdict
@@ -12,6 +13,9 @@ from flask import (
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
 import logging
+
+# Get app start time for cache-busting static assets
+app_start_time = int(time.time())
 
 # Configure logging to show DEBUG messages from all loggers
 logging.basicConfig(level=logging.DEBUG)
@@ -26,6 +30,11 @@ app = Flask(
 
 # Tell Flask it's behind a proxy (e.g., Cloudflare) and to trust X-Forwarded-Proto
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# Make the app_start_time available to all templates
+@app.context_processor
+def inject_app_start_time():
+    return dict(app_start_time=app_start_time)
 
 # Security / cookie hardening (10)
 app.secret_key = os.environ.get("SECRET_KEY", "change-this-to-a-secure-random-string-in-production")

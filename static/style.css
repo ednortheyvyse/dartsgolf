@@ -9,9 +9,6 @@
   --primary-color:#E3292E;   /* RED (current turn & stats) */
   --secondary-color:#309F6A; /* GREEN (negative deltas) */
 
-  --accent-color:#F9DFBC;    /* SCORE CELL BACKGROUND */
-  --accent-text-color:#000;  /* Running total text in cells */
-
   /* Live-tuned by JS to ensure content isn't hidden under controls */
   --controls-h: 96px;             /* fallback */
   --controls-extra-bottom: 0px;   /* kept for compatibility; forced to 0 via JS */
@@ -63,7 +60,7 @@ body::after{
   overscroll-behavior:contain;        /* stop bounce from bubbling */
   padding:15px 5px;
   /* Keep last rows clear of the bottom controls + iOS safe area */
-  padding-bottom: calc(25px + var(--controls-h) + env(safe-area-inset-bottom));
+  padding-bottom: calc(15px + 160px + env(safe-area-inset-bottom)); /* 160px is a safe, fixed height for the controls */
   -ms-overflow-style:none; scrollbar-width:none;
 }
 .container::-webkit-scrollbar{ display:none; }
@@ -81,7 +78,7 @@ body::after{
   z-index: 19;
 
   /* Fix A: regular visual padding only (no safe-area here) */
-  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  padding: 10px 10px calc(env(safe-area-inset-bottom) + 10px);
 
 }
 
