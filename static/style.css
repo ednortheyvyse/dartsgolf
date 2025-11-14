@@ -9,6 +9,9 @@
   --primary-color:#E3292E;   /* RED (current turn & stats) */
   --secondary-color:#309F6A; /* GREEN (negative deltas) */
 
+  --accent-color:#F9DFBC;    /* SCORE CELL BACKGROUND */
+  --accent-text-color:#000;  /* Running total text in cells */
+
   /* Live-tuned by JS to ensure content isn't hidden under controls */
   --controls-h: 96px;             /* fallback */
   --controls-extra-bottom: 0px;   /* kept for compatibility; forced to 0 via JS */
