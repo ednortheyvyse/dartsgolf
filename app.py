@@ -667,9 +667,7 @@ def _tb_sequence_for_player_in_current_tie(gs: dict, player: str) -> list[int]:
 
 def _finalize_player_from_current_tie(gs: dict, player: str):
     """
-    Finalizes a player's standing in the current tie-breaker, removing them
-    from the active playoff pool.
-    """
+    Finalizes a player's standing in the current tie-breaker, removing them from the active playoff pool."""
     seq = _tb_sequence_for_player_in_current_tie(gs, player)
     if seq:
         gs['final_playoff_scores'][player] = seq[-1]
