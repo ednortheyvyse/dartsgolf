@@ -8,3 +8,4 @@ numpy>=1.20,<2
 Werkzeug==3.0.3
 gunicorn>=21,<22
 Pillow>=10,<12
+redis>=5,<6
