@@ -2,7 +2,7 @@ import os
 import json
 import time
 from pathlib import Path
-from uuid import uuid4
+import random
 from collections import defaultdict
 import statistics
 import numpy as np
@@ -92,7 +92,43 @@ RUDENESS_LABELS = [
     },
 ]
 
+# Word list for generating human-readable SIDs
+EASY_WORDS = [
+    "apple", "baker", "candy", "delta", "eagle", "fancy", "giant", "happy",
+    "igloo", "joker", "kilo", "lemon", "magic", "noble", "ocean", "piano",
+    "queen", "robot", "salsa", "tiger", "ultra", "viper", "wagon", "xenon",
+    "yacht", "zebra", "arrow", "beach", "cloud", "dream", "ember", "frost",
+    "globe", "honey", "ivory", "juice", "koala", "lunar", "mango", "noodle",
+    "olive", "pearl", "quest", "river", "sunny", "tulip", "unity", "velvet",
+    "watch", "x-ray", "yield", "zesty", "amber", "bravo", "coral", "dusk",
+    "echo", "flame", "grape", "haven", "index", "jade", "karma", "laser",
+    "melon", "nexus", "orbit", "prism", "quark", "relic", "shadow", "torch",
+    "umbra", "vortex", "windy", "year", "zenith", "aqua", "bliss", "comet",
+    "dew", "elf", "fable", "gem", "halo", "iris", "jolt", "kite", "lava",
+    "mist", "neon", "opal", "pulse", "rain", "spark", "tide", "union",
+    "vivid", "wave", "yarn", "zone", "ace", "blue", "cat", "dog", "egg",
+    "fox", "gem", "hat", "ink", "jet", "key", "log", "map", "net", "owl",
+    "pin", "quiz", "rat", "sun", "top", "urn", "van", "web", "zip"
+]
 
+
+def _generate_readable_sid(k: int = 3, sep: str = '-') -> str:
+    """
+    Generates a human-readable session ID from a list of simple words.
+    Example: 'happy-tiger-beach'
+
+    Args:
+        k: The number of words to include in the ID.
+        sep: The separator to use between words.
+
+    Returns:
+        A human-readable string to be used as a session ID.
+    """
+    if not EASY_WORDS:
+        # Fallback to a simple random hex string if word list is empty
+        return ''.join(random.choices('0123456789abcdef', k=12))
+    
+    return sep.join(random.choices(EASY_WORDS, k=k))
 
 
 def _fresh_state() -> dict:
@@ -173,7 +209,7 @@ def _get_sid() -> str:
     # If there's no SID in the session cookie, create one.
     # This should only happen once for a new visitor.
     if not sid: 
-        sid = uuid4().hex
+        sid = _generate_readable_sid()
         logging.info(f"New session created with SID: {sid}")
         session["sid"] = sid
         session.permanent = True
