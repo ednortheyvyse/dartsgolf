@@ -130,12 +130,6 @@ def _storage_get(sid: str) -> dict | None:
         logging.debug(f"[_storage_get] (In-memory) Loaded state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores') if gs else 'N/A'}")
         return gs
 
-    # In-memory fallback
-    gs = _games.get(sid)
-    if gs:
-        logging.debug(f"[_storage_get] (In-memory) Loaded state for SID {sid}.")
-    return gs
-
 
 def _storage_set(sid: str, gs: dict) -> None:
     """
@@ -228,24 +222,6 @@ def _final_order_players(gs: dict) -> list[str]:
         tb_seq = gs['all_playoff_history'].get(player, [])
         return (base, *tb_seq)
     return sorted(gs['players'], key=key)
-
-
-def _compute_rounds_played(gs: dict) -> int:
-    return sum(1 for r in gs.get('round_history', []) if r)
-
-
-def _merge_recent(existing: list[str], new_names: list[str], cap: int = 24) -> list[str]:
-    out: list[str] = [] # cap is already a parameter, so no need to change this line.
-    seen_lower = set()
-    for name in new_names + existing:
-        k = name.lower()
-        if k in seen_lower:
-            continue
-        out.append(name)
-        seen_lower.add(k)
-        if len(out) >= RECENT_NAMES_CAP: # Use the new constant here
-            break
-    return out
 
 
 # --------------------- Routes ---------------------
