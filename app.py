@@ -390,6 +390,23 @@ def api_score():
     _apply_score(gs, score_change)
     # 3. Persist the MODIFIED state
     _persist(gs)
+<head>
+    ...
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    ...
+</head>
+body {
+    /*
+     * Adds padding to the bottom of the body to account for the safe area
+     * on mobile devices when installed as a PWA.
+     * The `max()` function ensures there's always a minimum padding
+     * even on devices that don't support `env()`.
+     */
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+.fixed-bottom-bar {
+    padding-bottom: env(safe-area-inset-bottom);
+}
     _inject_template_data(gs)
     return jsonify({'ok': True, 'game': gs})
 

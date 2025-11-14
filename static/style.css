@@ -63,7 +63,7 @@ body::after{
   overscroll-behavior:contain;        /* stop bounce from bubbling */
   padding:15px 5px;
   /* Keep last rows clear of the bottom controls + iOS safe area */
-  padding-bottom: calc(15px + var(--controls-h));
+  padding-bottom: calc(25px + var(--controls-h) + env(safe-area-inset-bottom));
   -ms-overflow-style:none; scrollbar-width:none;
 }
 .container::-webkit-scrollbar{ display:none; }
@@ -81,24 +81,8 @@ body::after{
   z-index: 19;
 
   /* Fix A: regular visual padding only (no safe-area here) */
-  padding: 10px 10px; /*calc(0px + env(safe-area-inset-bottom));*/
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
 
-}
-
-/* Extend the bar’s background into the home-indicator area
-   without moving the buttons */
-.controls::after{
-  content:"";
-  display:block;
-  height: 0 /*env(safe-area-inset-bottom);*/
-}
-
-/* iOS-only tweak */
-@supports (-webkit-touch-callout: none) {
-  .controls{
-    /* Reduce the bottom padding so the buttons sit lower */
-    padding-bottom: calc(max(0px, env(safe-area-inset-bottom) - 10px));
-  }
 }
 
 
