@@ -10,6 +10,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
     session, send_from_directory, abort
 )
+from werkzeug.middleware.proxy_fix import ProxyFix
 import logging
 
 # Configure logging to show DEBUG messages from all loggers
@@ -22,6 +23,9 @@ app = Flask(
     template_folder=str(BASE_DIR / "templates"),
     static_folder=str(BASE_DIR / "static"),
 )
+
+# Tell Flask it's behind a proxy (e.g., Cloudflare) and to trust X-Forwarded-Proto
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Security / cookie hardening (10)
 app.secret_key = os.environ.get("SECRET_KEY", "change-this-to-a-secure-random-string-in-production")
