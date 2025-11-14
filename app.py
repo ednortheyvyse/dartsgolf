@@ -306,6 +306,7 @@ def start_game():
     gs['phase'] = 'playing'
     gs['recent_names'] = updated_recent
     _persist(gs)
+    _storage_set(_get_sid(), gs) # Explicitly save the new state to the session
     logging.info(f"New game started with players: {players}, Holes: {gs['holes']}")
     return redirect(url_for('index'))
 
