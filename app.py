@@ -34,6 +34,12 @@ app.config.update(
     SESSION_COOKIE_SECURE=bool(int(os.environ.get("SESSION_COOKIE_SECURE", "0"))),  # set 1 in prod
     SESSION_COOKIE_HTTPONLY=True,
     PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 30,  # 30 days
+    # Explicitly set the server name for cookie domain security
+    SERVER_NAME=os.environ.get("SERVER_NAME", None),
+)
+
+app.before_request(
+    lambda: setattr(g, 'url_scheme', 'https' if app.config['SESSION_COOKIE_SECURE'] else 'http')
 )
 
 # Optional Redis persistence (10)
@@ -265,7 +271,7 @@ def index():
 @app.route('/start', methods=['GET'])
 def start_game_get():
     logging.debug("Route: GET /start - Redirecting to index.")
-    return redirect(url_for('index'))
+    return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
 
 @app.route('/start', methods=['POST'])
@@ -283,7 +289,7 @@ def start_game():
         session['previous_players_input'] = players_raw
         logging.warning("Start game failed: No player names entered.")
         flash("Please enter at least one player name.", "warning")
-        return redirect(url_for('index'))
+        return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
     lowered = [p.lower() for p in players]
     if len(set(lowered)) != len(lowered):
@@ -291,7 +297,7 @@ def start_game():
         logging.warning(f"Start game failed: Duplicate player names detected: {dups}")
         session['previous_players_input'] = ','.join([p for p in players if p.lower() not in [d.lower() for d in dups]])
         flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "warning")
-        return redirect(url_for('index'))
+        return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
     # Check for names longer than 14 characters
     long_names = [p for p in players if len(p) > 14]
@@ -299,7 +305,7 @@ def start_game():
         session['previous_players_input'] = players_raw
         logging.warning(f"Start game failed: Player name too long: '{long_names[0]}'")
         flash(f"Player names cannot exceed 14 characters. Offending name: '{long_names[0]}'", "warning")
-        return redirect(url_for('index'))
+        return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
     updated_recent = _merge_recent(gs_prev.get('recent_names', []), players)
 
@@ -314,7 +320,7 @@ def start_game():
     gs['recent_names'] = updated_recent
     _storage_set(_get_sid(), gs) # Overwrite the state for the current session with the new game
     logging.info(f"New game started with players: {players}, Holes: {gs['holes']}")
-    return redirect(url_for('index'))
+    return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
 
 @app.route('/score', methods=['POST'])
@@ -327,7 +333,7 @@ def record_score():
     score_change = int(request.form.get('score'))
     _apply_score(gs, score_change)
     _persist(gs)
-    return redirect(url_for('index'))
+    return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
 
 @app.route('/undo', methods=['POST'])
@@ -339,7 +345,7 @@ def undo_last_move():
     gs = _get_state()
     _apply_undo(gs)
     _persist(gs)
-    return redirect(url_for('index')) # _apply_undo modifies gs, so this is correct.
+    return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
 
 @app.route('/restart', methods=['POST'])
@@ -360,7 +366,7 @@ def restart():
     gs['score_buttons'] = prev_buttons # This is a fresh state, so gs is the one we just created.
     gs['rudeness_level'] = prev_rudeness
     _persist(gs)
-    return redirect(url_for('index'))
+    return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
 
 # ---------- JSON APIs ----------
