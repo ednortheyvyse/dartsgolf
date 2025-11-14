@@ -390,6 +390,7 @@ def api_score():
     _apply_score(gs, score_change)
     # 3. Persist the MODIFIED state
     _persist(gs)
+    _inject_template_data(gs)
     return jsonify({'ok': True, 'game': gs})
 
 
@@ -405,6 +406,7 @@ def api_undo():
     _apply_undo(gs)
     # 3. Persist the MODIFIED state
     _persist(gs)
+    _inject_template_data(gs)
     return jsonify({'ok': True, 'game': gs})
 
 
@@ -419,6 +421,7 @@ def api_end_after_round():
         gs['end_after_round'] = new_flag_state
         logging.info(f"API: Toggled 'end_after_round' to {new_flag_state}")
         _persist(gs)
+    _inject_template_data(gs)
     return jsonify({'ok': True, 'game': gs})
 
 
@@ -484,6 +487,7 @@ def api_settings():
 
     if changed:
         _persist(gs)
+    _inject_template_data(gs)
     return jsonify({'ok': True, 'game': gs, 'changed': changed})
 
 
@@ -515,6 +519,7 @@ def api_clear_recents():
     gs = _get_state()
     gs['recent_names'] = []
     _persist(gs)
+    _inject_template_data(gs)
     return jsonify({'ok': True, 'game': gs})
 
 
