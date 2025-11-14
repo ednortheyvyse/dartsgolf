@@ -133,11 +133,11 @@ def _storage_get(sid: str) -> dict | None:
     if _redis:
         data = _redis.get(_storage_key(sid))
         gs = json.loads(data) if data else None # type: ignore
-        logging.debug(f"[_storage_get] (Redis) Loaded state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores') if gs else 'N/A'}")
+        logging.debug(f"[_storage_get] (Redis) Loaded state for SID {sid}. Phase: {gs.get('phase') if gs else 'N/A'}, Round: {gs.get('current_round') if gs else 'N/A'}")
         return gs
     else:
         gs = _games.get(sid)
-        logging.debug(f"[_storage_get] (In-memory) Loaded state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores') if gs else 'N/A'}")
+        logging.debug(f"[_storage_get] (In-memory) Loaded state for SID {sid}. Phase: {gs.get('phase') if gs else 'N/A'}, Round: {gs.get('current_round') if gs else 'N/A'}")
         return gs
 
 
@@ -150,10 +150,10 @@ def _storage_set(sid: str, gs: dict) -> None:
         gs: The game state dictionary to store.
     """
     if _redis:
-        logging.debug(f"[_storage_set] (Redis) Saving state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores')}")
+        logging.debug(f"[_storage_set] (Redis) Saving state for SID {sid}. Phase: {gs.get('phase')}, Round: {gs.get('current_round')}")
         _redis.set(_storage_key(sid), json.dumps(gs))
     else:
-        logging.debug(f"[_storage_set] (In-memory) Saving state for SID {sid}. Playoff round scores: {gs.get('playoff_round_scores')}")
+        logging.debug(f"[_storage_set] (In-memory) Saving state for SID {sid}. Phase: {gs.get('phase')}, Round: {gs.get('current_round')}")
         _games[sid] = gs
 
 
@@ -565,10 +565,11 @@ def _apply_score(gs: dict, score_change: int):
     Applies a score change to the current game state, handling player turns,
     round progression, and initiating playoffs if conditions are met.
     """
-    logging.debug(f"[_apply_score] Phase: {gs['phase']}. Current player index: {gs.get('current_player_index')}")
     holes = int(gs.get('holes', 20))
     if gs['phase'] == 'playing':
         player = gs['players'][gs['current_player_index']]
+        logging.debug(f"[_apply_score] Applying score of {score_change} for player '{player}' in round {gs['current_round']}.")
+
         gs['scores'][player] += score_change
         gs['round_history'][gs['current_round'] - 1][player] = score_change
         gs['undo_history'].append({'player_index': gs['current_player_index'], 'score_change': score_change})
@@ -613,8 +614,9 @@ def _apply_undo(gs: dict):
         return
 
     last_move = gs['undo_history'].pop()
-    prev_idx = (gs['current_player_index'] - 1 + len(gs['players'])) % len(gs['players'])
-    logging.info(f"[_apply_undo] Reverting move for player index {prev_idx}. Score change: {last_move['score_change']}")
+    prev_idx = last_move['player_index']
+    player_to_undo = gs['players'][prev_idx]
+    logging.info(f"[_apply_undo] Reverting score of {last_move['score_change']} for player '{player_to_undo}'.")
     gs['current_player_index'] = prev_idx
 
     if prev_idx == len(gs['players']) - 1:
@@ -622,7 +624,6 @@ def _apply_undo(gs: dict):
         if gs['current_round'] < 1:
             gs['current_round'] = 1
 
-    player_to_undo = gs['players'][prev_idx]
     gs['scores'][player_to_undo] -= last_move['score_change']
     gs['round_history'][gs['current_round'] - 1].pop(player_to_undo, None)
 
