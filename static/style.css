@@ -714,7 +714,7 @@ body::after{
 /* Unified class for all main action buttons to ensure consistent height.
    Using a more specific selector to override the default button styles.
    This targets buttons that are direct children or inside links. */
-.controls .button-grid > .main-action-btn, .controls .button-grid a > .main-action-btn {
+.controls .button-grid .main-action-btn {
   white-space: nowrap; font-size: clamp(16px, 4.5vw, 28px); padding: clamp(12px, 3.5vw, 20px) 0;
 }
 
@@ -778,6 +778,17 @@ body::after{
   margin: 0;
   padding: 0;
 }
+/* Apply a 3-column grid to each stat line in the player stats modal */
+.player-stats-grid .stat-block ol li {
+  display: grid;
+  grid-template-columns: 1fr auto auto; /* Name | Value | Delta */
+  align-items: baseline;
+  gap: 8px;
+}
+/* Right-align the stat value */
+.player-stats-grid .stat-block ol li .stat-right {
+  justify-self: end;
+}
 .stat-title{
   font-weight:900; font-size:1.2em; color:#e5e5e5;
   margin:0 0 10px; letter-spacing:.02em;
@@ -799,6 +810,7 @@ body::after{
 .stat-player{
   font-weight:800; color:var(--primary-color); /* red on stats */
   display:inline-block;
+  transition: color 0.2s ease;
 }
 .stat-right > span { /* Original stat-right text styling */
   font-weight:900;
@@ -867,7 +879,7 @@ body::after{
   background: #333;
   padding: 4px 10px;
   border-radius: 6px;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
   display: inline-block;
 }
 .stat-player-link:hover .stat-player {

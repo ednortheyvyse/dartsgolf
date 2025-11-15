@@ -383,6 +383,28 @@ def _update_persistent_player_stats(gs: dict):
             stats["total_score_all_games"] += game_score
             stats["total_rounds_all_games"] += game_rounds_played
             stats["total_on_target_rounds_all_games"] += game_on_target_rounds
+
+            # Update best/worst game scores
+            if 'best_game_score' not in stats:
+                stats['best_game_score'] = game_score
+            else:
+                stats['best_game_score'] = min(stats['best_game_score'], game_score)
+
+            if 'worst_game_score' not in stats:
+                stats['worst_game_score'] = game_score
+            else:
+                stats['worst_game_score'] = max(stats['worst_game_score'], game_score)
+
+            # Calculate deltas for best/worst scores
+            # Note: For min/max, a delta is only meaningful if a new record is set.
+            # We'll calculate the change from the *previous* record.
+            old_best = stats.get('best_game_score_before_this_game', game_score)
+            old_worst = stats.get('worst_game_score_before_this_game', game_score)
+            if game_score < old_best:
+                stat_deltas[player_name]['best_game_score_delta'] = game_score - old_best
+            if game_score > old_worst:
+                stat_deltas[player_name]['worst_game_score_delta'] = game_score - old_worst
+
             stats["last_game_deltas"] = stat_deltas[player_name]
     return stat_deltas
 
@@ -1178,9 +1200,9 @@ def api_calculate_game_stats():
     on_target_ranking = [{'name': p, 'percentage': on_target_percentages.get(p, 0)} for p in on_target_order]
 
     best_comebacks = _best_comebacks_by_player(cumulative_per)
-    comeback_ranking = sorted(best_comebacks.values(), key=lambda d: d['improvement'], reverse=True)
+    comeback_ranking = sorted(list(best_comebacks.values()), key=lambda d: d['improvement'], reverse=True)
     biggest_falls = _biggest_falls_by_player(cumulative_per)
-    fall_ranking = sorted(biggest_falls.values(), key=lambda d: d['worsening'], reverse=True)
+    fall_ranking = sorted(list(biggest_falls.values()), key=lambda d: d['worsening'], reverse=True)
 
     max_birdie_streak = max(birdie_streaks.values(), default=0)
     max_bogey_streak = max(bogey_streaks.values(), default=0)
@@ -1269,6 +1291,20 @@ def api_player_stats(player_name):
         deltas['average_score_delta'] = stats['average_score'] - prev_avg_score
         deltas['on_target_percentage_delta'] = stats['on_target_percentage'] - prev_on_target_perc
         
+        # Calculate deltas for best/worst scores
+        # A delta is the difference between the new record and the previous one.
+        if 'best_game_score_delta' in deltas:
+            # The delta is already negative, representing the improvement
+            pass
+        if 'worst_game_score_delta' in deltas:
+            # The delta is positive, representing the increase
+            pass
+
+        # For display, we need the previous best/worst to show the change from.
+        # These are not currently stored, so we'll just show the new record for now.
+        # A future improvement could be to store the previous best/worst.
+
+
         # Put the updated deltas back into the stats object
         stats['last_game_deltas'] = deltas
 
