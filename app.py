@@ -94,6 +94,7 @@ RUDENESS_LABELS = [
 
 # Word list for generating human-readable SIDs
 EASY_WORDS = [
+    # Original 146 Words
     "apple", "baker", "candy", "delta", "eagle", "fancy", "giant", "happy",
     "igloo", "joker", "kilo", "lemon", "magic", "noble", "ocean", "piano",
     "queen", "robot", "salsa", "tiger", "ultra", "viper", "wagon", "xenon",
@@ -108,7 +109,29 @@ EASY_WORDS = [
     "mist", "neon", "opal", "pulse", "rain", "spark", "tide", "union",
     "vivid", "wave", "yarn", "zone", "ace", "blue", "cat", "dog", "egg",
     "fox", "gem", "hat", "ink", "jet", "key", "log", "map", "net", "owl",
-    "pin", "quiz", "rat", "sun", "top", "urn", "van", "web", "zip"
+    "pin", "quiz", "rat", "sun", "top", "urn", "van", "web", "zip",
+
+    # Added 146 Unique Words (Total: 292)
+    "abyss", "blaze", "chime", "dance", "elate", "ferry", "groove", "hatch",
+    "ideal", "jewel", "knoll", "light", "morph", "notch", "oaken", "pixel",
+    "quake", "ridge", "slate", "thorn", "unite", "vault", "whirl", "yodel",
+    "zest", "alert", "braid", "crush", "diner", "enact", "flake", "gloom",
+    "heave", "iron", "joust", "kiosk", "loft", "marsh", "novel", "outer",
+    "panel", "quill", "roast", "snare", "train", "usher", "value", "vibe",
+    "widow", "yawn", "zodiac", "angle", "blimp", "crave", "donor", "essay",
+    "foyer", "grill", "heron", "inlet", "jelly", "knack", "lodge", "merit",
+    "nomad", "offend", "patio", "quarry", "rally", "sniff", "tramp", "utter",
+    "venue", "vowel", "wager", "wrist", "zillion", "apron", "bacon", "chase",
+    "drive", "epoch", "fiber", "gorge", "hasty", "insert", "jungle", "kettle",
+    "lasso", "minor", "neigh", "opera", "pouch", "quiver", "radio", "scoop",
+    "tinsel", "uncle", "vixen", "wisp", "xylitol", "yummy", "zircon", "almond",
+    "bronze", "carpet", "daisy", "eject", "forage", "glider", "heir", "infant",
+    "jockey", "kindle", "liner", "muffin", "ninth", "organ", "parade", "quinoa",
+    "reign", "sprint", "tundra", "upward", "vacuum", "wallet", "yearly",
+    "zipper", "agile", "breeze", "canyon", "deluxe", "endorse", "ferret",
+    "giggle", "humor", "imprint", "jigsaw", "krypton", "lattice", "mercury",
+    "nostril", "oyster", "pelican", "quantum", "resume", "sapphire", "tether",
+    "upgrade", "venom", "wander", "youth", "zither"
 ]
 
 
@@ -229,6 +252,9 @@ def _get_state() -> dict:
     elif not isinstance(gs.get('playoff_round_scores'), dict):
         gs['playoff_round_scores'] = {}
         _storage_set(sid, gs) # Persist this correction
+
+    # Always inject the current SID for display purposes
+    gs['sid'] = sid
     return gs
 
 
@@ -612,6 +638,16 @@ def apple_touch_icon():
     if png_180.exists():
         return send_from_directory(app.static_folder, 'icons/dartboard-180.png')
     abort(404)
+
+
+@app.route('/logout')
+def logout():
+    """
+    Clears the user's session cookie and redirects to the homepage.
+    This effectively logs them out and starts a new session.
+    """
+    session.clear()
+    return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
 
 # ----------------- Game logic -----------------

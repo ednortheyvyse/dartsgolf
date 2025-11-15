@@ -334,7 +334,7 @@
         <!-- =========================
              PLAYING PHASE
              ========================= -->
-        <div class="info-bar" id="info-bar" aria-live="polite" role="status">
+        <div class="info-bar {{ 'ending' if game.end_after_round else '' }}" id="info-bar" aria-live="polite" role="status">
           <div class="round-count">
             <span class="round-label">ROUND</span>
             <span class="round-number-wrapper">
@@ -343,15 +343,9 @@
             </span>
             <span class="round-total">/ {{ game.holes }}</span>
           </div>
-          <div class="turn-info">{{ game.players[game.current_player_index] }}'s Turn</div>
-
-          {% if game.end_after_round %}
-            <div class="end-banner-wrap">
-              <div class="end-banner">
-                Game will end after this round. Finish all players this round to finalize and run tie-breakers.
-              </div>
-            </div>
-          {% endif %}
+          <div class="turn-info">
+            {% if game.end_after_round %}FINAL ROUND{% else %}{{ game.players[game.current_player_index] }}'s Turn{% endif %}
+          </div>
         </div>
 
         <table class="scoreboard playing" id="scoreboard">
@@ -590,7 +584,14 @@
                     {% set hist = game.all_playoff_history.get(st.name, []) %}
                     {% if i <= hist|length %}
                       {% set v = hist[i-1] %}
-                      <td>{% if v>0 %}+{% endif %}{{ v }}</td>
+                      <td>
+                        <div class="cell">
+                          <span class="total-pill">{{ v>0 and '+' or '' }}{{ v }}</span>
+                          <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+                            {{ v>0 and '+' or '' }}{{ v }}
+                          </span>
+                        </div>
+                      </td>
                     {% else %}
                       <td>-</td>
                     {% endif %}
@@ -646,17 +647,11 @@
   <!-- Settings Modal (with Add to Home Screen button) -->
   <div id="settingsOverlay" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <h3 id="settingsTitle">Settings</h3>
+      <div class="modal-header">
+        <h3 id="settingsTitle">Settings</h3>
+        <div id="sidDisplay" class="sid-display"></div>
+      </div>
       <div class="settings-grid">
-
-
-        <div class="settings-group">
-          <label style="display:flex; align-items:center; gap:10px; font-weight:700;">
-            <input id="hapticsToggle" type="checkbox">
-            Haptic feedback
-          </label>
-          <div class="settings-help">Android: vibration · iOS: subtle tap sound</div>
-        </div>
 
         <!-- Rudeness Slider -->
         <div class="settings-group" id="rudenessSettingsRow">
@@ -691,19 +686,28 @@
           </button>
         </div>
         <!-- Add to Home Screen button (shown when eligible) -->
-        <div class="settings-group">
+        <div class="settings-group" id="installPromptGroup" style="display: none;">
           <button type="button" id="installBtnSettings" class="btn btn-confirm" style="display:none;">
             ➕ Add to Home Screen
           </button>
           <div class="settings-help">Install this app as a shortcut on your device.</div>
         </div>
+        <div class="settings-group" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <label style="font-weight: 700;">Clear Cache</label>
+            <div class="settings-help">Forces the app to reload all its files from the server.</div>
+          </div>
+          <button type="button" id="clearCacheBtn" class="btn btn-cancel" title="Clear Cache & Refresh" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 12px 16px; font-size: 1.2em; line-height: 1;">
+            ✕
+          </button>
+        </div>
       </div>
-      <div class="modal-actions" style="margin-top:12px;">
-        <button type="button" class="btn btn-cancel" onclick="closeSettings()">Close</button>
-        <button type="button" class="btn btn-confirm" onclick="saveSettings()">Save</button>
-      </div>
-      <div class="settings-help" style="margin-top:8px;">
-        Current: <b id="settingsSummary"></b>
+      <div class="modal-footer">
+        <div class="modal-actions">
+          <button type="button" class="btn btn-cancel" onclick="closeSettings()">Close</button>
+          <button type="button" class="btn btn-confirm" onclick="saveSettings()">Save</button>
+        </div>
+        <div class="settings-help" style="margin-top:8px;">Current: <b id="settingsSummary"></b></div>
       </div>
     </div>
   </div>
@@ -871,6 +875,7 @@
        ========================================================= -->
   <script>
     (function(){
+      const installPromptGroup = document.getElementById('installPromptGroup');
       const installBtn  = document.getElementById('installBtnSettings');
       const iosOverlay  = document.getElementById('iosInstallOverlay');
       let deferredPrompt = null;
@@ -881,7 +886,14 @@
       function isIOS(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent); }
       function isSafari(){ return isIOS() && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent); }
 
-      function showInstallBtn(){ if (installBtn) installBtn.style.display = 'inline-block'; }
+      function showInstallBtn(){
+        // First, check if we are on a mobile device before showing anything.
+        const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (!isMobile) return;
+
+        if (installPromptGroup) installPromptGroup.style.display = 'grid';
+        if (installBtn) installBtn.style.display = 'inline-block';
+      }
       function hideInstallBtn(){ if (installBtn) installBtn.style.display = 'none'; }
 
       function openIosInstall(){
@@ -1215,21 +1227,23 @@
       const roundLabelSpan = roundCountDiv.querySelector('.round-label');
       const roundTotalSpan = roundCountDiv.querySelector('.round-total');
       const turnInfoDiv = infoBar.querySelector('.turn-info');
-      let endBannerWrap = infoBar.querySelector('.end-banner-wrap');
 
       // Determine current round number and label based on phase
       let currentRoundValue;
       let roundLabelText;
       let roundTotalText = '';
+      let turnInfoText = '';
 
       if (g.phase === 'playing') {
         currentRoundValue = g.current_round;
         roundLabelText = 'ROUND';
         roundTotalText = `/ ${g.holes}`;
+        turnInfoText = g.end_after_round ? 'FINAL ROUND' : `${g.players[g.current_player_index]}'s Turn`;
       } else if (g.phase === 'playoff') {
         currentRoundValue = g.playoff_round;
         roundLabelText = 'TIE-BREAKER';
         roundTotalText = ''; // No total rounds in playoff
+        turnInfoText = `${g.playoff_group[g.current_player_index]}'s Turn`;
       } else {
         return; // Not in a phase that uses this info bar
       }
@@ -1303,26 +1317,13 @@
       }
 
       // 3. Update Turn Info
-      let currentPlayerName;
-      if (g.phase === 'playing') {
-        currentPlayerName = g.players[g.current_player_index];
-      } else if (g.phase === 'playoff') {
-        currentPlayerName = g.playoff_group[g.current_player_index];
-      }
-      turnInfoDiv.textContent = currentPlayerName + "'s Turn";
+      turnInfoDiv.textContent = turnInfoText;
 
-      // 4. Update End Banner (only for playing phase)
-      if (g.phase === 'playing' && g.end_after_round) {
-        if (!endBannerWrap) {
-          endBannerWrap = document.createElement('div');
-          endBannerWrap.className = 'end-banner-wrap';
-          endBannerWrap.innerHTML = '<div class="end-banner"></div>';
-          infoBar.appendChild(endBannerWrap);
-        }
-        endBannerWrap.querySelector('.end-banner').textContent = 'Game will end after this round. Finish all players this round to finalize and run tie-breakers.';
-        endBannerWrap.style.display = '';
+      // 4. Update the info bar's appearance based on the 'ending' state
+      if (g.end_after_round) {
+        infoBar.classList.add('ending');
       } else {
-        if (endBannerWrap) endBannerWrap.style.display = 'none';
+        infoBar.classList.remove('ending');
       }
     }
 
@@ -1440,7 +1441,6 @@
       }
 
     function hit(val, el){
-      haptic('light');
       if (el) { // Only animate and position bubble if an element is provided
         popButton(el);
         showBubbleFor(val, el);
@@ -1894,6 +1894,12 @@
        (blocks page rubber-band; only .container scrolls)
        ========================================================= -->
   <script>
+    // Helper to check if any modal is active
+    function isModalActive() {
+      return !!document.querySelector('.modal-overlay.show');
+    }
+  </script>
+  <script>
     (function(){
       const scrollArea = document.querySelector('.container'); // only scrollable region
       let startY = 0;
@@ -1914,6 +1920,9 @@
       }, { passive: true });
 
       document.addEventListener('touchmove', (e) => {
+        // If a modal is open, do not interfere with scrolling.
+        if (isModalActive()) return;
+
         if (!scrollArea) { e.preventDefault(); return; }
 
         // If touch is outside the scroll area, block it outright.
@@ -1933,7 +1942,11 @@
 
       // Block wheel/trackpad page scroll (iPadOS / desktop Safari)
       document.addEventListener('wheel', (e) => {
-        if (!isInsideScrollable(e.target)) e.preventDefault();
+        // If a modal is open, or if the event is inside the main scrollable area, do not interfere.
+        if (isModalActive() || isInsideScrollable(e.target)) {
+          return;
+        }
+        e.preventDefault();
       }, { passive: false });
 
       // Also hard-lock explicitly marked regions (e.g., bottom controls)
@@ -2045,7 +2058,8 @@
     const rudenessLabel   = document.getElementById('rudenessLabel');
     const settingsSummary = document.getElementById('settingsSummary');
     const clearRecentsBtn = document.getElementById('clearRecentsBtn');    
-    
+    const sidDisplay      = document.getElementById('sidDisplay');
+
     // --- Custom Rudeness Slider Logic ---
     const RUDENESS_MAP = ['Serious', 'Medium', 'Rude'];
     const rudenessThumb = rudenessSlider.querySelector('.slider-thumb');
@@ -2112,10 +2126,10 @@
 
     function openSettings(){
       const g = window.__gameCache;
-      hapticsToggle.checked = window.hapticsPref.isOn();
       holesInput.value = g.holes || 20;
       setRudenessSlider(g.rudeness_level || 0);
 
+      sidDisplay.innerHTML = `SID: <span style="color:#fff;">${g.sid || '...'}</span>`;
       // Only show the holes/rounds setting during the setup phase
       if (g.phase === 'setup') {
         holesRow.style.display = 'grid';
@@ -2134,11 +2148,9 @@
     }
     function updateSettingsSummary() {
       const g = window.__gameCache;
-      const hapticsStatus = window.hapticsPref.isOn() ? 'on' : 'off';
       const rudeness = RUDENESS_MAP[g.rudeness_level || 0];
-      let summary = `haptics ${hapticsStatus}, ${rudeness}`;
+      let summary = `${rudeness}`;
       if (g.phase === 'setup') {
-
         summary += `, ${holesInput.value} rounds`;
       } else {
         summary += `, ${g.holes} rounds`;
@@ -2151,8 +2163,6 @@
       document.body.style.overflow = '';
     }
     async function saveSettings(){
-      window.hapticsPref.set(!!hapticsToggle.checked);
-
       const payload = {};
 
       payload.rudeness_level = rudenessLevel;
@@ -2190,8 +2200,8 @@
         const data = await res.json();
         if (data.ok && data.game) {
           window.__gameCache = data.game;
-          // Update the local recentNames variable before re-rendering
-          window.recentNames = data.game.recent_names || [];
+          // Update the correct local variable before re-rendering
+          allRecentNames = data.game.recent_names || [];
           if (typeof saveLocal === 'function') saveLocal(data.game);
           showToast('Recent players cleared', 'success');
           // Re-render the recent players list on the setup screen if it exists
@@ -2200,6 +2210,30 @@
           }
         }
       } catch (e) { showToast('Could not clear recent players', 'error'); }
+    });
+
+    // --- Clear Cache & Refresh Logic ---
+    const clearCacheBtn = document.getElementById('clearCacheBtn');
+    clearCacheBtn.addEventListener('click', async () => {
+      const ok = await window.showConfirmModal({
+        title: 'Clear Cache & Refresh',
+        message: 'This will log you out of the current game, unregister the service worker, and force a full refresh. Are you sure?',
+        okText: 'Clear & Refresh',
+        cancelText: 'Cancel'
+      });
+      if (!ok) return;
+
+      try {
+        // 1. Unregister service workers
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) { await registration.unregister(); }
+        // 2. Clear all Cache Storage
+        const keys = await caches.keys();
+        await Promise.all(keys.map(key => caches.delete(key)));
+        // 3. Clear local storage backup and navigate to the logout route to clear the session
+        localStorage.clear();
+        window.location.href = '{{ url_for("logout") }}';
+      } catch (e) { showToast('Failed to clear cache.', 'error'); console.error(e); }
     });
   </script>
 
