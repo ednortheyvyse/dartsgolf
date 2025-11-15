@@ -337,6 +337,7 @@ body::after{
   color: var(--primary-color) !important; /* Red text for emphasis */
   font-weight:bold;
 }
+
 /* Animation for current player header */
 @keyframes pulseHighlight {
   0% { background-color: transparent; }
@@ -701,7 +702,7 @@ body::after{
 .stat-block ol li:last-child{ border-bottom:none; }
 
 /* Helpers for “from…to…” under name */
-.stat-left{ display:flex; flex-direction:column; gap:2px; min-width:170px; }
+.stat-left{ display:flex; flex-direction:column; gap:2px; min-width:170px; flex-shrink: 0; }
 .stat-sub{ color:#ccc; opacity:0.95; margin-left:0; }
 .stat-right{ font-weight:900; white-space:nowrap; color:#fff; }
 

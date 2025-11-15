@@ -57,9 +57,7 @@
   <div class="container">
     <!-- Flash message container (moved to global scope) -->
     <div class="flash-container">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, msg in messages %}
+      {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, msg in messages %}
             <div class="flash {{ category or 'info' }}" role="alert">{{ msg }}</div>
           {% endfor %}
         {% endif %}
@@ -584,7 +582,7 @@
                     {% set hist = game.all_playoff_history.get(st.name, []) %}
                     {% if i <= hist|length %}
                       {% set v = hist[i-1] %}
-                      <td>
+                    <td>
                         <div class="cell">
                           <span class="total-pill">{{ v>0 and '+' or '' }}{{ v }}</span>
                           <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
@@ -1058,9 +1056,13 @@
 
             const lastIndex = g.players.length - 1;
             const wasLast   = pIdx === lastIndex;
-            if (!(wasLast && g.end_after_round)) {
+            const isGameOver = wasLast && (g.current_round >= g.holes || g.end_after_round);
+
+            if (!isGameOver) {
               g.current_player_index = wasLast ? 0 : pIdx + 1;
               if (wasLast) g.current_round += 1;
+            } else {
+              // Game is over, don't change round or player. Server will send final state.
             }
           } else if (g.phase === 'playoff'){
             const pIdx = g.current_player_index;
@@ -1243,7 +1245,11 @@
         currentRoundValue = g.playoff_round;
         roundLabelText = 'TIE-BREAKER';
         roundTotalText = ''; // No total rounds in playoff
-        turnInfoText = `${g.playoff_group[g.current_player_index]}'s Turn`;
+        if (g.playoff_group && g.playoff_group.length > 0) {
+          turnInfoText = `${g.playoff_group[g.current_player_index]}'s Turn`;
+        } else {
+          turnInfoText = 'Resolving...'; // Show a generic message while waiting for the server
+        }
       } else {
         return; // Not in a phase that uses this info bar
       }
