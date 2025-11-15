@@ -6,6 +6,8 @@ import random
 from collections import defaultdict
 import statistics
 import numpy as np
+import uuid
+from fuzzywuzzy import process
 
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
@@ -70,6 +72,7 @@ except Exception as e:
     logging.error(f"Redis connection failed: {e}. Falling back to in-memory storage.")
 
 _games: dict[str, dict] = {}  # in-memory fallback
+_player_stats_fallback: dict[str, dict] = {} # in-memory fallback for player stats
 
 
 # --- Constants ---
@@ -308,6 +311,103 @@ def _inject_template_data(gs: dict) -> None:
     gs['score_labels'] = RUDENESS_LABELS[level]
 
 
+def _update_persistent_player_stats(gs: dict):
+    """
+    At the end of a game, update the persistent, long-term stats for each player in Redis.
+    """
+    stat_deltas = {} # To store the changes for each player
+
+    standings = gs.get('final_standings', [])
+    if not standings:
+        return stat_deltas
+
+    logging.info(f"Updating persistent stats for {len(standings)} players.")
+    for player_standing in standings:
+        player_name = player_standing['name']
+        birdies = sum(1 for r in gs['round_history'] if r.get(player_name, 1) < 0)
+        bogeys = sum(1 for r in gs['round_history'] if r.get(player_name, -1) > 0)
+        # New stats for overall average and on-target percentage
+        game_score = player_standing.get('score', 0)
+        game_rounds_played = sum(1 for r in gs['round_history'] if player_name in r)
+        game_on_target_rounds = sum(1 for r in gs['round_history'] if r.get(player_name, 1) <= 0)
+
+        # Store deltas for animation
+        stat_deltas[player_name] = {
+            'games_played': 1,
+            'wins': 1 if player_standing['rank'] == 1 else 0,
+            'total_birdies': birdies,
+            'total_bogeys': bogeys,
+            'total_score_all_games': game_score,
+            'total_rounds_all_games': game_rounds_played,
+            'total_on_target_rounds_all_games': game_on_target_rounds,
+        }
+
+        if _redis:
+            player_key = f"player_stats:{player_name}"
+            # Use a pipeline for atomic updates
+            pipe = _redis.pipeline()
+            pipe.hincrby(player_key, "games_played", 1)
+            if player_standing['rank'] == 1:
+                pipe.hincrby(player_key, "wins", 1)
+            pipe.hincrby(player_key, "total_birdies", birdies)
+            pipe.hincrby(player_key, "total_bogeys", bogeys)
+            pipe.hincrby(player_key, "total_score_all_games", game_score)
+            pipe.hincrby(player_key, "total_rounds_all_games", game_rounds_played)
+            pipe.hincrby(player_key, "total_on_target_rounds_all_games", game_on_target_rounds)
+            # Store the deltas temporarily for frontend animation
+            delta_key = f"player_stats_delta:{player_name}"
+            pipe.set(delta_key, json.dumps(stat_deltas[player_name]), ex=300) # Expire after 5 minutes
+
+            pipe.execute()
+        else:
+            # Fallback to in-memory dictionary for local development
+            if player_name not in _player_stats_fallback:
+                _player_stats_fallback[player_name] = {
+                    "games_played": 0,
+                    "wins": 0,
+                    "total_birdies": 0,
+                    "total_bogeys": 0,
+                    "total_score_all_games": 0,
+                    "total_rounds_all_games": 0,
+                    "total_on_target_rounds_all_games": 0,
+                    # In-memory fallback for deltas
+                    "last_game_deltas": {},
+                }
+            
+            stats = _player_stats_fallback[player_name]
+            stats["games_played"] += 1
+            if player_standing['rank'] == 1:
+                stats["wins"] += 1
+            stats["total_birdies"] += birdies
+            stats["total_bogeys"] += bogeys
+            stats["total_score_all_games"] += game_score
+            stats["total_rounds_all_games"] += game_rounds_played
+            stats["total_on_target_rounds_all_games"] += game_on_target_rounds
+            stats["last_game_deltas"] = stat_deltas[player_name]
+    return stat_deltas
+
+def _get_all_player_stats():
+    """
+    Fetches all player stats from Redis or the in-memory fallback.
+    Returns a list of player stat dictionaries.
+    """
+    all_stats = []
+    if _redis:
+        # Use SCAN to iterate over player stat keys without blocking the server
+        for key in _redis.scan_iter("player_stats:*"):
+            stats_raw = _redis.hgetall(key)
+            if stats_raw:
+                player_name = key.split(":", 1)[1]
+                stats = {k: int(v) for k, v in stats_raw.items()}
+                stats['name'] = player_name
+                all_stats.append(stats)
+    else:
+        # Use the in-memory fallback
+        for player_name, stats_raw in _player_stats_fallback.items():
+            stats = stats_raw.copy()
+            stats['name'] = player_name
+            all_stats.append(stats)
+    return all_stats
 # --------------------- Routes ---------------------
 @app.route('/')
 def index():
@@ -337,6 +437,7 @@ def index():
 
         gs['final_standings'] = standings
         gs['max_playoff_rounds'] = max((len(h) for h in gs['all_playoff_history'].values()), default=0)
+        gs['stat_deltas'] = _update_persistent_player_stats(gs) # Update persistent stats at game end
         _persist(gs)
 
     return render_template('index.html', game=gs, show_stats=False, previous_players=previous_players)
@@ -358,35 +459,25 @@ def start_game():
     preserved_buttons = list(gs_prev.get('score_buttons', DEFAULT_SCORE_BUTTONS))
     preserved_rudeness = int(gs_prev.get('rudeness_level', 0))
 
-    players_raw = request.form.get('players', '')
-    players = [n.strip() for n in players_raw.split(',') if n and n.strip()]
-    if not players:
-        session['previous_players_input'] = players_raw
+    player_ids_raw = request.form.get('players', '')
+    player_ids = [pid.strip() for pid in player_ids_raw.split(',') if pid and pid.strip()]
+    if not player_ids:
+        session['previous_players_input'] = player_ids_raw
         logging.warning("Start game failed: No player names entered.")
         flash("Please enter at least one player name.", "warning")
         return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
-    lowered = [p.lower() for p in players]
-    if len(set(lowered)) != len(lowered):
-        dups = sorted({name for name in players if lowered.count(name.lower()) > 1})
-        logging.warning(f"Start game failed: Duplicate player names detected: {dups}")
-        session['previous_players_input'] = ','.join([p for p in players if p.lower() not in [d.lower() for d in dups]])
-        flash(f"Duplicate player name(s) not allowed: {', '.join(dups)}. Please enter unique names.", "warning")
-        return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
+    # Look up player objects from the database using the received IDs
+    player_db = get_player_db()
+    player_objects = [player_db.get(pid) for pid in player_ids if pid in player_db]
+    player_names = [p['name'] for p in player_objects]
 
-    # Check for names longer than 14 characters
-    long_names = [p for p in players if len(p) > 14]
-    if long_names:
-        session['previous_players_input'] = players_raw
-        logging.warning(f"Start game failed: Player name too long: '{long_names[0]}'")
-        flash(f"Player names cannot exceed 14 characters. Offending name: '{long_names[0]}'", "warning")
-        return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
-
-    updated_recent = _merge_recent(gs_prev.get('recent_names', []), players)
+    # Update recent names list
+    updated_recent = _merge_recent(gs_prev.get('recent_names', []), player_names)
 
     gs = _fresh_state() # Start with a fresh dictionary
-    gs['players'] = players
-    gs['scores'] = {p: 0 for p in players}
+    gs['players'] = player_names # For now, we still store names for compatibility with game logic
+    gs['scores'] = {p: 0 for p in player_names}
     gs['holes'] = max(1, int(preserved_holes))
     gs['score_buttons'] = preserved_buttons[:]
     gs['rudeness_level'] = preserved_rudeness
@@ -394,7 +485,7 @@ def start_game():
     gs['phase'] = 'playing'
     gs['recent_names'] = updated_recent
     _storage_set(_get_sid(), gs) # Overwrite the state for the current session with the new game
-    logging.info(f"New game started with players: {players}, Holes: {gs['holes']}")
+    logging.info(f"New game started with players: {player_names}, Holes: {gs['holes']}")
     return redirect(url_for('index', _scheme=g.get('url_scheme', 'http')))
 
 
@@ -593,6 +684,97 @@ def api_clear_recents():
     _inject_template_data(gs)
     return jsonify({'ok': True, 'game': gs})
 
+def get_player_db():
+    """
+    Gets the player database from the session.
+    For local testing, this simulates a simple DB.
+    In production, you would replace this with your Redis calls.
+    """
+    if 'players' not in session:
+        # Initialize with a few example players if desired
+        session['players'] = {} # Stored as {player_id: {'id': ..., 'name': ...}}
+    return session['players']
+
+@app.route('/api/resolve-player/<string:name>')
+def resolve_player(name):
+    """
+    Finds players with exact or similar names.
+    This is used for the "Did you mean...?" feature.
+    """
+    player_db = get_player_db()
+    all_players = list(player_db.values())
+    all_player_names = [p['name'] for p in all_players]
+    
+    # 1. Find an exact (case-insensitive) match
+    exact_match_obj = next((p for p in all_players if p['name'].lower() == name.lower()), None)
+
+    # 2. Find fuzzy suggestions, excluding the exact match if found
+    suggestions = []
+    # Only search for suggestions if there isn't an exact match, to avoid ambiguity.
+    if not exact_match_obj:
+        similar_matches = process.extract(name, all_player_names, limit=5)
+        for found_name, score in similar_matches:
+            # We use a higher threshold here to only suggest likely typos
+            if score > 80:
+                player = next((p for p in all_players if p['name'] == found_name), None)
+                if player:
+                    suggestions.append(player)
+
+    return jsonify(ok=True, exact_match=exact_match_obj, suggestions=suggestions)
+
+@app.route('/api/create-player', methods=['POST'])
+def create_player():
+    """
+    Creates a new player and adds them to the database.
+    """
+    data = request.get_json()
+    if not data or 'name' not in data:
+        return jsonify(ok=False, error="Player name is required."), 400
+
+    name = data['name'].strip()
+    if not name or len(name) > 14:
+        return jsonify(ok=False, error="Invalid player name."), 400
+
+    player_db = get_player_db()
+
+    new_player = {
+        'id': str(uuid.uuid4()),
+        'name': name
+    }
+    player_db[new_player['id']] = new_player
+    session.modified = True # Make sure the session is saved
+    
+    # Also add the new player to the list of recent names to ensure they can be added to a game
+    gs = _get_state()
+    gs['recent_names'] = _merge_recent(gs.get('recent_names', []), [name])
+    _persist(gs)
+
+    return jsonify(ok=True, player=new_player)
+
+@app.route('/api/players')
+def get_all_players():
+    """
+    Returns a list of all players in the database.
+    """
+    player_db = get_player_db()
+    all_players = sorted(list(player_db.values()), key=lambda p: p['name'].lower())
+    return jsonify(ok=True, players=all_players)
+
+@app.route('/leaderboard')
+def leaderboard():
+    """
+    Renders a global leaderboard page, ranking all players by games played.
+    """
+    gs = _get_state() # Get session state for context
+    all_player_stats = _get_all_player_stats()
+
+    # Sort players by games_played (desc), then by name (asc) as a tie-breaker
+    leaderboard_data = sorted(
+        all_player_stats,
+        key=lambda p: (-p.get('games_played', 0), p.get('name', '').lower())
+    )
+
+    return render_template('index.html', game=gs, show_leaderboard=True, leaderboard=leaderboard_data)
 
 # ---------- Service worker at root (explicit, no-cache) ----------
 @app.route('/sw.js')
@@ -668,19 +850,20 @@ def _apply_score(gs: dict, score_change: int):
         last_index = len(gs['players']) - 1
         was_last_in_round = (gs['current_player_index'] == last_index)
 
-        if was_last_in_round and gs.get('end_after_round'):
-            logging.info("End of round and 'end_after_round' is set. Initiating playoffs.")
-            initiate_playoffs(gs)
-            return
+        # Check if the game should end
+        is_game_over = was_last_in_round and (gs['current_round'] >= holes or gs.get('end_after_round'))
 
-        gs['current_player_index'] += 1
-        if gs['current_player_index'] >= len(gs['players']):
-            gs['current_player_index'] = 0
-            gs['current_round'] += 1
-
-        if gs['current_round'] > holes:
-            logging.info(f"Final round ({gs['current_round']-1}) complete. Initiating playoffs.")
+        if is_game_over:
+            logging.info(f"Final round ({gs['current_round']}) complete. Initiating playoffs.")
             initiate_playoffs(gs)
+            # If playoffs immediately resolve to final_ranking, include stat deltas
+            if gs.get('phase') == 'final_ranking':
+                gs['stat_deltas'] = _update_persistent_player_stats(gs)
+        else:
+            # Advance to the next player/round
+            gs['current_player_index'] = (gs['current_player_index'] + 1) % len(gs['players'])
+            if was_last_in_round:
+                gs['current_round'] += 1
 
     elif gs['phase'] == 'playoff':
         # In playoff mode, current_player_index iterates over the ACTIVE tie subgroup only
@@ -767,6 +950,7 @@ def start_next_playoff(gs: dict):
         gs['rounds_played'] = _compute_rounds_played(gs)
         ordered = _final_order_players(gs)
         gs['winner'] = ordered[0] if ordered else None
+        gs['stat_deltas'] = _update_persistent_player_stats(gs)
 
 
 def _tb_sequence_for_player_in_current_tie(gs: dict, player: str) -> list[int]:
@@ -847,14 +1031,8 @@ def stats():
     Renders the statistics page, calculating various player metrics.
     """
     gs = _get_state()
-
-    def _extract_per_player_sequences(gs: dict) -> dict[str, list[int]]:
-        rp = _compute_rounds_played(gs)
-        rh = gs.get('round_history', [])[:rp]
-        per: dict[str, list[int]] = {}
-        for p in gs.get('players', []):
-            per[p] = [ (rh[i].get(p, 0) if i < len(rh) else 0) for i in range(rp) ]
-        return per
+    # The stats are now pre-calculated and stored in the session.
+    game_stats = session.get('game_stats_cache', {})
 
     def _longest_streak(seq: list[int], predicate) -> int:
         best = cur = 0
@@ -866,6 +1044,29 @@ def stats():
             else:
                 cur = 0
         return best
+
+    return render_template(
+        'index.html',
+        show_stats=True,
+        game=gs,
+        **game_stats
+    )
+
+@app.route('/api/game-stats-status')
+def api_game_stats_status():
+    """
+    Checks if the game stats have been calculated and are in the session.
+    """
+    is_ready = 'game_stats_cache' in session
+    return jsonify({'ready': is_ready})
+
+@app.route('/api/calculate-game-stats', methods=['POST'])
+def api_calculate_game_stats():
+    """
+    Calculates the detailed game stats and stores them in the session.
+    This is called in the background from the final standings page.
+    """
+    gs = _get_state()
 
     def _best_comebacks_by_player(cumulative_per: dict[str, list[int]]) -> dict:
         out = {}
@@ -883,10 +1084,10 @@ def stats():
                     out[p] = {
                         'player': p,
                         'improvement': int(max_improvement),
-                        'from_score': seq[from_idx],
-                        'to_score': seq[to_idx],
-                        'from_round': from_idx + 1,
-                        'to_round': to_idx + 1,
+                        'from_score': int(seq[from_idx]),
+                        'to_score': int(seq[to_idx]),
+                        'from_round': int(from_idx) + 1,
+                        'to_round': int(to_idx) + 1,
                     }
         return out
 
@@ -908,23 +1109,40 @@ def stats():
                     out[p] = {
                         'player': p,
                         'worsening': int(max_worsening),
-                        'from_score': seq[from_idx],
-                        'to_score': seq[to_idx],
-                        'from_round': from_idx + 1,
-                        'to_round': to_idx + 1,
+                        'from_score': int(seq[from_idx]),
+                        'to_score': int(seq[to_idx]),
+                        'from_round': int(from_idx) + 1,
+                        'to_round': int(to_idx) + 1,
                     }
         return out
 
-    per = _extract_per_player_sequences(gs)
+    # --- Start of heavy calculation logic ---
+    def _extract_per_player_sequences(gs: dict) -> dict[str, list[int]]:
+        rp = _compute_rounds_played(gs)
+        rh = gs.get('round_history', [])[:rp]
+        per: dict[str, list[int]] = {}
+        for p in gs.get('players', []):
+            per[p] = [ (rh[i].get(p, 0) if i < len(rh) else 0) for i in range(rp) ]
+        return per
 
+    def _longest_streak(seq: list[int], predicate) -> int:
+        best = cur = 0
+        for v in seq:
+            if predicate(v):
+                cur += 1
+                if cur > best:
+                    best = cur
+            else:
+                cur = 0
+        return best
+
+    per = _extract_per_player_sequences(gs)
     birdie_streaks = {}
     bogey_streaks = {}
     birdie_counts = {}
     bogey_counts = {}
-    # Calculate cumulative scores for comeback/fall stats
     cumulative_per = {p: np.cumsum(seq).tolist() for p, seq in per.items()}
     on_target_percentages = {}
-
     avgs = {}
     rounds_counts = {}
 
@@ -934,8 +1152,6 @@ def stats():
         birdie_counts[p] = sum(1 for v in seq if v < 0)
         bogey_counts[p] = sum(1 for v in seq if v > 0)
         if seq:
-            avg = statistics.mean(seq)
-            # Calculate on target percentage
             on_target_rounds = sum(1 for v in seq if v <= 0)
             on_target_percentages[p] = (on_target_rounds / len(seq)) * 100 if len(seq) > 0 else 0
             avgs[p] = statistics.mean(seq)
@@ -944,65 +1160,28 @@ def stats():
             on_target_percentages[p] = 0
             avgs[p] = 0.0
             rounds_counts[p] = 0
-    players_with_data = [p for p in gs.get('players', []) if rounds_counts.get(p, 0) > 0] # type: ignore
 
-    birdie_streak_order = sorted(
-        players_with_data,
-        key=lambda p: (-birdie_streaks[p], -birdie_counts[p], avgs[p])
-    )
-    bogey_streak_order = sorted(
-        players_with_data,
-        key=lambda p: (-bogey_streaks[p], -bogey_counts[p], -avgs[p])
-    )
-    average_order = sorted(
-        players_with_data,
-        key=lambda p: (avgs[p], -rounds_counts[p])
-    )
-    most_birdies_order = sorted(
-        players_with_data,
-        key=lambda p: (-birdie_counts[p], avgs[p])
-    )
-    most_bogeys_order = sorted(
-        players_with_data,
-        key=lambda p: (-bogey_counts[p], -avgs[p])
-    )
+    players_with_data = [p for p in gs.get('players', []) if rounds_counts.get(p, 0) > 0]
 
-    on_target_order = sorted(
-        players_with_data,
-        key=lambda p: (-on_target_percentages.get(p, 0), avgs.get(p, 0)) # Higher percentage is better
-    )
+    birdie_streak_order = sorted(players_with_data, key=lambda p: (-birdie_streaks[p], -birdie_counts[p], avgs[p]))
+    bogey_streak_order = sorted(players_with_data, key=lambda p: (-bogey_streaks[p], -bogey_counts[p], -avgs[p]))
+    average_order = sorted(players_with_data, key=lambda p: (avgs[p], -rounds_counts[p]))
+    most_birdies_order = sorted(players_with_data, key=lambda p: (-birdie_counts[p], avgs[p]))
+    most_bogeys_order = sorted(players_with_data, key=lambda p: (-bogey_counts[p], -avgs[p]))
+    on_target_order = sorted(players_with_data, key=lambda p: (-on_target_percentages.get(p, 0), avgs.get(p, 0)))
 
+    birdie_streak_ranking = [{'name': p, 'streak': birdie_streaks[p], 'count': birdie_counts[p], 'average': avgs[p]} for p in birdie_streak_order]
+    bogey_streak_ranking = [{'name': p, 'streak': bogey_streaks[p], 'count': bogey_counts[p], 'average': avgs[p]} for p in bogey_streak_order]
+    average_ranking = [{'name': p, 'average': avgs[p], 'rounds': rounds_counts[p]} for p in average_order]
+    most_birdies_ranking = [{'name': p, 'count': birdie_counts[p], 'average': avgs[p]} for p in most_birdies_order]
+    most_bogeys_ranking = [{'name': p, 'count': bogey_counts[p], 'average': avgs[p]} for p in most_bogeys_order]
+    on_target_ranking = [{'name': p, 'percentage': on_target_percentages.get(p, 0)} for p in on_target_order]
 
-    birdie_streak_ranking = [
-        {'name': p, 'streak': birdie_streaks[p], 'count': birdie_counts[p], 'average': avgs[p]}
-        for p in birdie_streak_order
-    ]
-    bogey_streak_ranking = [
-        {'name': p, 'streak': bogey_streaks[p], 'count': bogey_counts[p], 'average': avgs[p]}
-        for p in bogey_streak_order
-    ]
-    average_ranking = [
-        {'name': p, 'average': avgs[p], 'rounds': rounds_counts[p]}
-        for p in average_order
-    ]
-    most_birdies_ranking = [
-        {'name': p, 'count': birdie_counts[p], 'average': avgs[p]}
-        for p in most_birdies_order
-    ]
-    most_bogeys_ranking = [
-        {'name': p, 'count': bogey_counts[p], 'average': avgs[p]}
-        for p in most_bogeys_order
-    ]
-    on_target_ranking = [
-        {'name': p, 'percentage': on_target_percentages.get(p, 0)} for p in on_target_order
-    ]
     best_comebacks = _best_comebacks_by_player(cumulative_per)
     comeback_ranking = sorted(best_comebacks.values(), key=lambda d: d['improvement'], reverse=True)
-
     biggest_falls = _biggest_falls_by_player(cumulative_per)
     fall_ranking = sorted(biggest_falls.values(), key=lambda d: d['worsening'], reverse=True)
 
-    # Calculate max values for bar scaling in the template
     max_birdie_streak = max(birdie_streaks.values(), default=0)
     max_bogey_streak = max(bogey_streaks.values(), default=0)
     max_on_target_percentage = max(on_target_percentages.values(), default=0)
@@ -1011,29 +1190,89 @@ def stats():
     max_average_abs = max((abs(a) for a in avgs.values()), default=0)
     max_comeback_improvement = max((cb['improvement'] for cb in best_comebacks.values()), default=0)
     max_fall_worsening = max((f['worsening'] for f in biggest_falls.values()), default=0)
-    return render_template(
-        'index.html',
-        show_stats=True,
-        game=gs,
-        birdie_streak_ranking=birdie_streak_ranking,
-        bogey_streak_ranking=bogey_streak_ranking,
-        average_ranking=average_ranking,
-        most_birdies_ranking=most_birdies_ranking,
-        most_bogeys_ranking=most_bogeys_ranking,
-        on_target_ranking=on_target_ranking,
-        comeback_ranking=comeback_ranking,
-        fall_ranking=fall_ranking,
-        # Max values for mini-graph scaling
-        max_birdie_streak=max_birdie_streak,
-        max_bogey_streak=max_bogey_streak,
-        max_birdie_count=max_birdie_count,
-        max_on_target_percentage=max_on_target_percentage,
-        max_bogey_count=max_bogey_count,
-        max_average_abs=max_average_abs,
-        max_comeback_improvement=max_comeback_improvement,
-        max_fall_worsening=max_fall_worsening,
-    )
 
+    # Store the calculated stats in the session
+    session['game_stats_cache'] = {
+        "birdie_streak_ranking": birdie_streak_ranking,
+        "bogey_streak_ranking": bogey_streak_ranking,
+        "average_ranking": average_ranking,
+        "most_birdies_ranking": most_birdies_ranking,
+        "most_bogeys_ranking": most_bogeys_ranking,
+        "on_target_ranking": on_target_ranking,
+        "comeback_ranking": comeback_ranking,
+        "fall_ranking": fall_ranking,
+        "max_birdie_streak": max_birdie_streak,
+        "max_bogey_streak": max_bogey_streak,
+        "max_birdie_count": max_birdie_count,
+        "max_on_target_percentage": max_on_target_percentage,
+        "max_bogey_count": max_bogey_count,
+        "max_average_abs": max_average_abs,
+        "max_comeback_improvement": max_comeback_improvement,
+        "max_fall_worsening": max_fall_worsening,
+    }
+    session.modified = True
+
+    return jsonify(ok=True)
+
+@app.route('/api/player/<player_name>')
+def api_player_stats(player_name):
+    """
+    Returns historical stats for a single player as JSON.
+    """
+    if _redis:
+        player_key = f"player_stats:{player_name}"
+        stats_raw = _redis.hgetall(player_key)
+        stats = {k: int(v) for k, v in stats_raw.items()}
+        
+        # Also fetch the temporary deltas
+        delta_key = f"player_stats_delta:{player_name}"
+        delta_raw = _redis.get(delta_key)
+        if delta_raw:
+            stats['last_game_deltas'] = json.loads(delta_raw)
+            _redis.delete(delta_key) # Consume the delta so it's only shown once
+    else:
+        # Fallback to in-memory dictionary
+        stats = _player_stats_fallback.get(player_name, {})
+        # For in-memory, we pop the deltas to simulate consumption
+        stats['last_game_deltas'] = stats.pop('last_game_deltas', {})
+
+    if not stats:
+        return jsonify({'ok': False, 'error': 'No stats found'}), 404
+
+    # Calculate derived stats
+    games_played = stats.get('games_played', 0)
+    wins = stats.get('wins', 0)
+    total_rounds = stats.get('total_rounds_all_games', 0)
+    total_score = stats.get('total_score_all_games', 0)
+    total_on_target = stats.get('total_on_target_rounds_all_games', 0)
+
+    # Calculate current derived stats
+    stats['win_percentage'] = (wins / games_played) * 100 if games_played > 0 else 0
+    stats['average_score'] = total_score / total_rounds if total_rounds > 0 else 0
+    stats['on_target_percentage'] = (total_on_target / total_rounds) * 100 if total_rounds > 0 else 0
+
+    # If there are deltas, calculate the previous state to show the change
+    deltas = stats.get('last_game_deltas', {})
+    if deltas:
+        prev_games = games_played - deltas.get('games_played', 0)
+        prev_wins = wins - deltas.get('wins', 0)
+        prev_total_rounds = total_rounds - deltas.get('total_rounds_all_games', 0)
+        prev_total_score = total_score - deltas.get('total_score_all_games', 0)
+        prev_total_on_target = total_on_target - deltas.get('total_on_target_rounds_all_games', 0)
+
+        prev_win_perc = (prev_wins / prev_games) * 100 if prev_games > 0 else 0
+        prev_avg_score = prev_total_score / prev_total_rounds if prev_total_rounds > 0 else 0
+        prev_on_target_perc = (prev_total_on_target / prev_total_rounds) * 100 if prev_total_rounds > 0 else 0
+
+        # Add the change to the deltas dict
+        deltas['win_percentage_delta'] = stats['win_percentage'] - prev_win_perc
+        deltas['average_score_delta'] = stats['average_score'] - prev_avg_score
+        deltas['on_target_percentage_delta'] = stats['on_target_percentage'] - prev_on_target_perc
+        
+        # Put the updated deltas back into the stats object
+        stats['last_game_deltas'] = deltas
+
+    return jsonify({'ok': True, 'player_name': player_name, 'stats': stats})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

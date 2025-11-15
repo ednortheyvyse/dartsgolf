@@ -93,13 +93,13 @@ body::after{
 .button-grid.single{ grid-template-columns:1fr; }
 .button-grid.two{ grid-template-columns:repeat(2,1fr); }
 .button-grid.three{ grid-template-columns:repeat(3,1fr); }
-/* Reduce gap on the final screen for better balance */
+/* Special layout for the final screen to accommodate the confetti button */
 .button-grid.final-controls {
   display: grid;
   grid-template-columns: 1fr auto 1fr; /* Stats | Confetti | New Game */
   gap: 10px;
 }
-.button-grid.final-controls #confettiBtn {
+.button-grid.final-controls .confetti-btn {
   padding: 20px; /* Make it more square */
 }
 
@@ -126,21 +126,24 @@ body::after{
 .score-btn.zero{  background:#616161; color:#fff; }
 
 /* Utility buttons */
-.undo-btn{ background:#ff9800; color:#000; }
-.confetti-btn{ background:#ff9800; color:#000; }
-.restart-btn{ background:#f44336; color:#fff; }
-.export-btn{ background:#2196f3; color:#fff; }
-.end-btn{ background:#2196f3; color:#fff; }
+.undo-btn{ background:#ff9800; color:#000; } /* Orange/Yellow */
+.confetti-btn{ background:#ff9800; color:#000; } /* Unused, but kept for reference */
+.restart-btn{ background:#E3292E; color:#fff; } /* Red */
+.export-btn{ background:#2196f3; color:#fff; } /* Blue */
+.end-btn{ background:#2196f3; color:#fff; } /* Blue */
 .settings-btn{
-  background:#555; color:#fff;
-  font-size:1.1em; padding:12px 16px; border-radius:8px; border:none; cursor:pointer;
+  background:#2196f3; color:#fff; /* Blue */
+  font-size:1.1em; padding:12px 16px; border-radius:8px; border:none; cursor:pointer; /* Base styles */
 }
 
 /* ------------------------------
    Forms / Input ergonomics
    ------------------------------ */
 .settings-input,
-.settings-text,
+.settings-text {
+  font-size:18px;
+  box-sizing: border-box;
+}
 #nameField { font-size:18px; }
 
 .setup-section {
@@ -171,6 +174,7 @@ body::after{
   font-size: clamp(44px, 12vw, 90px); /* Adjust size for the new font */
   letter-spacing: .03em;
   color: #fff;
+  text-transform: uppercase;
 }
 .title-sub {
   font-family: 'Galada', cursive;
@@ -179,6 +183,35 @@ body::after{
   margin-top: -1.4rem; /* Reduced overlap */
   letter-spacing: .08em; /* Increased letter spacing */
   text-shadow: 0 2px 4px rgba(0,0,0,0.5); /* Add shadow for readability */
+}
+.settings-icon-btn {
+  background: #333;
+  border: 1px solid var(--border-color);
+  color: #fff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  /* Make it square by matching aspect ratio */
+  aspect-ratio: 1 / 1;
+  padding: 0 !important; /* Override more general button padding */
+}
+/* New grid layout for the setup page controls */
+.button-grid.setup-controls {
+  display: grid;
+  /* 1st col is square, rest share space */
+  grid-template-columns: auto 1fr 1fr;
+  gap: 10px;
+}
+.button-grid.setup-controls .settings-icon-btn {
+  grid-column: 1;
+  background-color: #309F6A; /* Green */
+  border: none;
+}
+.settings-icon-btn svg {
+  width: 24px;
+  height: 24px;
 }
 .setup-screen .section-title {
   font-size: 1.4em;
@@ -362,8 +395,14 @@ body::after{
   background: #3b1111; /* Dark red background */
   border-color: #8c4343;
 }
-.round-count{ display:flex; align-items:flex-end; justify-content:center; gap:0; line-height:1; margin-top:4px; flex-wrap:nowrap; }
-.round-label{ font-size:clamp(28px, 7vw, 56px); font-weight:900; letter-spacing:0; margin-right: -0.1em; /* Pull number closer */ }
+.round-count{ display:flex; align-items:center; justify-content:center; gap:0; line-height:1; margin-top:4px; flex-wrap:nowrap; }
+.round-label{
+  font-family: 'Rye', serif;
+  font-weight: 400;
+  font-size:clamp(28px, 7vw, 56px);
+  letter-spacing:.03em;
+  text-transform: uppercase;
+}
 
 /* Rolling number animation styles */
 .round-number-wrapper {
@@ -474,9 +513,12 @@ body::after{
 
 /* Winner banner (final page) */
 .winner-banner{
-  color:var(--primary-color); font-weight:900; text-align:center;
+  font-family: 'Rye', serif;
+  font-weight: 400;
+  color:var(--primary-color); text-align:center;
   font-size:clamp(32px, 8.5vw, 64px);
-  margin:8px auto 14px; letter-spacing:.02em;
+  margin:8px auto 14px;
+  letter-spacing:.03em; text-transform: uppercase;
 }
 
 #final-capture{ overflow:visible; }
@@ -486,10 +528,10 @@ body::after{
    ------------------------------ */
 .modal-overlay{
   position:fixed; inset:0; background:rgba(0,0,0,.55);
-  display:none; align-items:center; justify-content:center; z-index:10000; padding:20px;  /* Add transitions for fade in/out */
+  display:flex; align-items:center; justify-content:center; z-index:10000; padding:20px;  /* Add transitions for fade in/out */
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 /* Ensure the confirm modal always appears on top of other modals */
 #confirmOverlay {
@@ -499,17 +541,17 @@ body::after{
 .modal-overlay.show { /* New class to trigger visibility */
   opacity: 1;
   visibility: visible;
-  display: flex;
 }
 .modal{
   background:#111; border:1px solid var(--border-color); border-radius:12px;
   max-width:560px; width:100%; padding:18px; box-shadow:0 12px 36px rgba(0,0,0,.6);
-  margin: 20px 0; /* Add vertical margin to the modal */
-  /* New styles for scrollable modal */
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 80px); /* Adjust max-height for new margin */
-  overflow: hidden; /* Hide overflow on the modal itself */
+  max-height: calc(100vh - 40px); /* Adjust max-height for new margin */
+  overflow: hidden;
+  /* Animation properties */
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 .modal-header {
   display: flex;
@@ -518,7 +560,16 @@ body::after{
   margin-bottom: 12px; /* Space between header and settings grid */
   flex-shrink: 0; /* Prevent header from shrinking */
 }
-.modal h3{ margin:0; font-size:1.3em; }
+.modal-overlay.show .modal {
+  opacity: 1;
+}
+.modal h3{
+  margin:0;
+  font-size:1.3em;
+  font-family: 'Rye', serif;
+  font-weight: 400;
+  text-transform: uppercase;
+}
 .modal p{ margin:0 0 16px; color:#ddd; }
 .modal-footer {
   margin-top: 12px; /* Space between grid and footer */
@@ -547,6 +598,64 @@ body::after{
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: #fff;
+}
+.spinner {
+  width: 56px;
+  height: 56px;
+  border: 6px solid #555;
+  border-top-color: var(--secondary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+.loading-text {
+  font-size: 1.2em;
+  font-weight: 700;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.stat-delta-container {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.stat-delta-item {
+  background: rgba(20, 20, 20, 0.9);
+  border: 1px solid #555;
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  width: 280px;
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.stat-delta-item .player-name {
+  font-weight: 900;
+  font-size: 1.2em;
+  color: var(--primary-color);
+  text-align: center;
+  margin-bottom: 8px;
+}
+.delta-line { display: flex; justify-content: space-between; font-weight: 700; }
+.delta-line.good span { color: var(--secondary-color); }
+.delta-line.bad span { color: var(--primary-color); }
 .settings-grid::-webkit-scrollbar { display: none; /* Chrome, Safari, and Opera */ }
 .sid-display {
   font-family: monospace;
@@ -598,6 +707,17 @@ body::after{
 .button-grid.two.playing button{
   white-space:nowrap; font-size:clamp(16px, 4.5vw, 28px); padding:clamp(12px, 3.5vw, 20px) 0;
 }
+/* Apply the same responsive padding to the stats page controls */
+.button-grid.two:not(.playing) button {
+  white-space:nowrap; font-size:clamp(16px, 4.5vw, 28px); padding:clamp(12px, 3.5vw, 20px) 0;
+}
+/* Unified class for all main action buttons to ensure consistent height.
+   Using a more specific selector to override the default button styles.
+   This targets buttons that are direct children or inside links. */
+.controls .button-grid > .main-action-btn, .controls .button-grid a > .main-action-btn {
+  white-space: nowrap; font-size: clamp(16px, 4.5vw, 28px); padding: clamp(12px, 3.5vw, 20px) 0;
+}
+
 
 /* ------------------------------
   Toasts
@@ -644,9 +764,19 @@ body::after{
   max-width: 900px;
   margin-left: auto;
   margin-right: auto;
+  font-family: 'Rye', serif;
+  font-weight: 400;
+  letter-spacing: .03em;
+  text-transform: uppercase;
 }
 .stat-block{
   background:#111; border:1px solid var(--border-color); border-radius:12px; padding:14px 16px; margin:12px auto; max-width:900px;
+}
+/* Remove border and margin when inside the player stats modal for a cleaner look */
+.player-stats-grid .stat-block {
+  border: none;
+  margin: 0;
+  padding: 0;
 }
 .stat-title{
   font-weight:900; font-size:1.2em; color:#e5e5e5;
@@ -688,10 +818,7 @@ body::after{
   transition: width 0.3s ease-out;
   width: 0; /* Start at 0 width for animation */
   flex-shrink: 0; /* Prevent shrinking */
-  will-change: width; /* Hint to browser for smoother animation. */
-}
-.stat-bar.visible {
-  width: var(--target-width) !important; /* Use !important to ensure this overrides inline styles. */
+  will-change: width;
 }
 .stat-bar.bad {
   background-color: var(--primary-color); /* Red for bad things */
@@ -700,11 +827,133 @@ body::after{
   background-color: #666; /* Grey for averages around zero */
 }
 .stat-block ol li:last-child{ border-bottom:none; }
+.stat-bar.visible {
+  width: var(--target-width, 0px);
+}
+.player-resolution-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 250px;
+  overflow-y: auto;
+}
+.player-resolution-list li {
+  padding: 14px 12px;
+  background: #2a2a2a;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: background-color 0.2s ease;
+}
+.player-resolution-list li:hover {
+  background: #3a3a3a;
+}
+/* Style for players selected for comparison on the leaderboard */
+#leaderboardList li.selected-for-compare .stat-player-link {
+  background: #ff9800; /* undo-btn yellow */
+  color: #000;
+  font-weight: 900;
+}
+/* Ensure the text inside the link also changes color */
+#leaderboardList li.selected-for-compare .stat-player-link .stat-player {
+  color: #000;
+  font-weight: 900;
+}
+
+.stat-player-link {
+  text-decoration: none;
+  color: #fff;
+  background: #333;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+  display: inline-block;
+}
+.stat-player-link:hover .stat-player {
+  text-decoration: none; /* Remove underline on hover */
+}
+.stat-player-link:hover {
+  background-color: #444;
+}
+.stat-right {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.stat-delta {
+  font-size: 0.8em;
+  font-weight: 700;
+}
+.stat-delta.good { color: var(--secondary-color); }
+.stat-delta.bad { color: var(--primary-color); }
 
 /* Helpers for “from…to…” under name */
-.stat-left{ display:flex; flex-direction:column; gap:2px; min-width:170px; flex-shrink: 0; }
+.stat-left{ display:flex; flex-direction:column; gap:2px; min-width:170px; flex-shrink: 0; align-items: flex-start; }
 .stat-sub{ color:#ccc; opacity:0.95; margin-left:0; }
 .stat-right{ font-weight:900; white-space:nowrap; color:#fff; }
+
+/* Player Comparison Modal Styles */
+.comparison-select-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.comparison-select-wrap .vs-text {
+  font-weight: 900;
+  font-size: 1.2em;
+  color: var(--primary-color);
+}
+.comparison-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+.comparison-results-table th,
+.comparison-results-table td {
+  padding: 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+}
+.comparison-results-table th {
+  font-weight: 700;
+  color: #ccc;
+  font-size: 0.9em;
+}
+.comparison-results-table td {
+  font-weight: 900;
+  font-size: 1.1em;
+}
+.comparison-results-table .stat-name {
+  text-align: left;
+  font-weight: 700;
+  color: #fff;
+}
+.comparison-results-table .delta {
+  font-size: 0.9em;
+  font-weight: 700;
+}
+.comparison-results-table .delta.good { color: var(--secondary-color); }
+.comparison-results-table .delta.bad { color: var(--primary-color); }
+
+/* Initial Loading Screen */
+.initial-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-color);
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.initial-loading-overlay.hidden {
+  opacity: 0;
+}
 
 /* ------------------------------
    Scroll-control utility class hooks (optional)
