@@ -73,6 +73,7 @@ except Exception as e:
 
 _games: dict[str, dict] = {}  # in-memory fallback
 _player_stats_fallback: dict[str, dict] = {} # in-memory fallback for player stats
+_players_db_fallback: dict[str, dict] = {} # in-memory fallback for the player "database"
 
 
 # --- Constants ---
@@ -748,14 +749,25 @@ def api_clear_recents():
 
 def get_player_db():
     """
-    Gets the player database from the session.
-    For local testing, this simulates a simple DB.
-    In production, you would replace this with your Redis calls.
+    Gets the player database from Redis or the in-memory fallback.
+    The data is stored in a Redis Hash called 'players_db'.
     """
-    if 'players' not in session:
-        # Initialize with a few example players if desired
-        session['players'] = {} # Stored as {player_id: {'id': ..., 'name': ...}}
-    return session['players']
+    if _redis:
+        players_raw = _redis.hgetall('players_db')
+        # Deserialize the JSON strings back into player objects
+        return {player_id: json.loads(player_json) for player_id, player_json in players_raw.items()}
+    else:
+        # Use the global in-memory fallback for local dev
+        return _players_db_fallback
+
+def save_player_to_db(player: dict):
+    """Saves a single player object to the persistent database."""
+    if not player or 'id' not in player:
+        return
+    if _redis:
+        _redis.hset('players_db', player['id'], json.dumps(player))
+    else:
+        _players_db_fallback[player['id']] = player
 
 @app.route('/api/resolve-player/<string:name>')
 def resolve_player(name):
@@ -803,8 +815,7 @@ def create_player():
         'id': str(uuid.uuid4())[:8], # Generate a shorter 8-character ID
         'name': name
     }
-    player_db[new_player['id']] = new_player
-    session.modified = True # Make sure the session is saved
+    save_player_to_db(new_player)
     
     # Also add the new player to the list of recent names to ensure they can be added to a game
     gs = _get_state()
@@ -1156,6 +1167,10 @@ def stats():
     """
     gs = _get_state()
     # The stats are now pre-calculated and stored in the session.
+    # We need to ensure the player_map from the game state is available.
+    if 'player_map' not in gs:
+        gs['player_map'] = get_player_db()
+
     game_stats = session.get('game_stats_cache', {})
 
     def _longest_streak(seq: list[int], predicate) -> int:
@@ -1190,6 +1205,7 @@ def api_calculate_game_stats():
     Calculates the detailed game stats and stores them in the session.
     This is called in the background from the final standings page.
     """
+    player_db = get_player_db() # Get the persistent player database
     gs = _get_state()
 
     def _best_comebacks_by_player(cumulative_per: dict[str, list[int]]) -> dict:
@@ -1292,7 +1308,7 @@ def api_calculate_game_stats():
     players_with_data = [pid for pid in gs.get('players', []) if rounds_counts.get(pid, 0) > 0]
     player_map = gs.get('player_map', {})
     def get_name(pid):
-        return player_map.get(pid, {}).get('name', 'Unknown')
+        return player_db.get(pid, {}).get('name', 'Unknown Player')
 
     birdie_streak_order = sorted(players_with_data, key=lambda p: (-birdie_streaks[p], -birdie_counts[p], avgs[p]))
     bogey_streak_order = sorted(players_with_data, key=lambda p: (-bogey_streaks[p], -bogey_counts[p], -avgs[p]))
@@ -1422,8 +1438,8 @@ def rename_player(player_id):
     try:
         # Update the name in the central player database (session)
         if player_to_rename:
-            player_to_rename['name'] = new_name
-            session.modified = True
+            player_to_rename['name'] = new_name # Modify the dict
+            save_player_to_db(player_to_rename) # Save it back to the DB
 
         # Update the name in the recent players list for all sessions
         _update_recent_names_after_rename(old_name, new_name)

@@ -63,6 +63,10 @@
       display: flex;
       align-items: center;
       gap: 4px;
+      border: 1px solid var(--border-color);
+      padding: 4px 8px;
+      border-radius: 8px;
+      background-color: #101010;
     }
     .sort-controls .icon-btn {
       background: none;
@@ -90,6 +94,33 @@
       border-color: #F9DFBC;
       box-shadow: 0 0 8px rgba(249, 223, 188, 0.6);
     }
+    .leaderboard-controls-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    #leaderboardList {
+      transition: opacity 0.15s ease-in-out;
+    }
+    #leaderboardSortTitle {
+      transition: opacity 0.15s ease-in-out;
+    }
+    .floating-help-btn {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      z-index: 1100; /* Above other content but below modals */
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: rgba(40, 40, 40, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 1.5em;
+      font-weight: bold;
+      cursor: pointer;
+    }
   </style>
   <style>
     /* Add padding for the numbered list */
@@ -102,6 +133,11 @@
        GLOBAL CANVAS FOR CONFETTI
        ========================================================= -->
   <canvas id="confettiCanvas"></canvas>
+
+  <!-- Help button - only shown during gameplay -->
+  {% if game.phase in ['playing', 'playoff'] %}
+    <button type="button" id="helpBtn" class="floating-help-btn" aria-label="How to play" title="How to play" onclick="openHelpModal()">?</button>
+  {% endif %}
 
   <!-- =========================================================
        INITIAL LOADING OVERLAY
@@ -157,8 +193,10 @@
       <!-- =====================================================
            LEADERBOARD VIEW
            ===================================================== -->
-      <div class="leaderboard-header">
-        <h1 class="main-title" style="font-family: 'Rye', serif;">LEADERBOARD</h1>
+      <h1 class="main-title" style="font-family: 'Rye', serif; margin-bottom: 20px; text-align: left;">LEADERBOARD</h1>
+
+      <div class="leaderboard-controls-header">
+        <div id="leaderboardSortTitle" class="leaderboard-sort-title" style="font-weight: bold; color: #E3292E; font-family: var(--sans-serif);">Number of Games</div>
         <div class="sort-controls">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style="margin-right: 8px; opacity: 0.7;"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
           <button type="button" data-sort="games_played" class="sort-btn icon-btn {{ 'active' if sort_by == 'games_played' else '' }}" title="Sort by Games Played">🎲</button>
@@ -166,9 +204,8 @@
           <button type="button" data-sort="on_target" class="sort-btn icon-btn {{ 'active' if sort_by == 'on_target' else '' }}" title="Sort by On Target %">🎯</button>
         </div>
       </div>
-      <div id="leaderboardSortTitle" class="leaderboard-sort-title" style="font-weight: bold; color: #E3292E; font-family: var(--sans-serif);">Number of Games</div>
       
-      <div class="stat-block">
+      <div>
         <input type="search" id="leaderboardSearch" placeholder="Find a player..." class="settings-input" style="width: 100%; margin-bottom: 12px; padding: 12px; box-sizing: border-box; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;">
         {% if leaderboard %}
           <ol id="leaderboardList" style="list-style-type: none; padding-left: 0;">
@@ -199,6 +236,7 @@
       <!-- =====================================================
            STATS VIEW
            ===================================================== -->
+      <div class="stats-view-container">
       <h1 class="main-title" style="font-family: 'Rye', serif;">GAME STATS</h1>
 
 
@@ -405,6 +443,7 @@
           <small>No score worsening detected.</small>
         {% endif %}
       </div>
+      </div>
 
     {% else %}
       <!-- =====================================================
@@ -481,7 +520,7 @@
           </div>
           <div class="turn-info">
             {% set current_player_id = game.players[game.current_player_index] %}
-            {% set current_player_name = game.player_map[current_player_id].name %}
+            {% set current_player_name = game.player_map.get(current_player_id, {}).get('name', 'Unknown Player') %}
             {% if game.end_after_round %}FINAL ROUND{% else %}{{ current_player_name }}'s Turn{% endif %}
           </div>
         </div>
@@ -944,6 +983,49 @@
     </div>
   </div>
 
+  <!-- Help Modal -->
+  <div id="helpOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="modal-header">
+        <h3 id="helpTitle">How to Play Darts Golf</h3>
+      </div>
+      <div class="settings-grid" style="padding: 0; text-align: left; max-height: 60vh; overflow-y: auto;">
+          <p style="margin-top: 0;">Darts Golf is played like the game 'Around the World'. The goal is to have the <strong>lowest score</strong> at the end. In Round 1, all players aim for the number 1. In Round 2, they aim for 2, and so on. Your best score out of three darts is recorded for each round.</p>
+          <h4>Scoring</h4>
+          <ul style="padding-left: 20px; margin-top: 0;">
+              <li><strong>-3 points:</strong> Hitting the <strong>Triple</strong> ring of the target number.</li>
+              <li><strong>-2 points:</strong> Hitting the <strong>Double</strong> ring of the target number.</li>
+              <li><strong>-1 point:</strong> Hitting the <strong>Inner Single</strong> (between the bullseye and triple).</li>
+              <li><strong>0 points:</strong> Hitting the <strong>Outer Single</strong> (between the triple and double).</li>
+              <li style="margin-top: 8px;"><strong>+1 point:</strong> Hitting a number directly next to the target, or the outer bullseye.</li>
+              <li><strong>+2 points:</strong> Hitting anywhere else (including the inner bullseye, off the board, or two numbers away from the target).</li>
+          </ul>
+          <h4>Tie-Breakers</h4>
+          <p style="margin-top: 0;">If players are tied at the end of the game, they enter a sudden-death playoff. Tied players start over from Round 1. After each completed round, if one player has a lower total score, they are the winner. If scores remain tied, players advance to the next round (2, 3, etc.) until a winner is decided.</p>
+      </div>
+      <div class="modal-footer">
+        <div class="modal-actions">
+          <button type="button" class="btn btn-confirm" onclick="closeHelpModal()">Got it!</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- New Prompt Modal for Renaming -->
+  <div id="promptOverlay" class="modal-overlay" aria-hidden="true" style="background: rgba(0,0,0,0.8);">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
+      <h3 id="promptTitle">Rename Player</h3>
+      <p id="promptMessage" style="margin-bottom: 16px;">Enter a new name:</p>
+      <input id="promptInput" type="text" class="settings-input" style="width: 100%; box-sizing: border-box; padding: 12px; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;" maxlength="14" autocomplete="off">
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" id="promptCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-confirm" id="promptOkBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+
   <!-- New container for stat delta animations -->
   <div id="statDeltaHost" class="stat-delta-container"></div>
 
@@ -999,6 +1081,45 @@
     })();
   </script>
 
+  <!-- =========================================================
+       SCRIPT: PROMPT HELPER (for renaming)
+       ========================================================= -->
+  <script>
+    (function(){
+      const overlay = document.getElementById('promptOverlay');
+      const titleEl = document.getElementById('promptTitle');
+      const msgEl   = document.getElementById('promptMessage');
+      const inputEl = document.getElementById('promptInput');
+      const okBtn   = document.getElementById('promptOkBtn');
+      const cancelBtn = document.getElementById('promptCancelBtn');
+      let resolvePromise = null;
+
+      function openModal(opts){
+        const { title='Rename Player', message='Enter a new name:', value='', okText='Save', cancelText='Cancel' } = opts || {};
+        titleEl.textContent = title;
+        msgEl.textContent   = message;
+        inputEl.value       = value;
+        okBtn.textContent   = okText;
+        cancelBtn.textContent = cancelText;
+        overlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+        setTimeout(() => { inputEl.focus(); inputEl.select(); }, 100);
+        return new Promise(resolve => { resolvePromise = resolve; });
+      }
+      function closeModal(result){
+        overlay.classList.remove('show');
+        document.body.style.overflow = '';
+        if (resolvePromise){ const r = resolvePromise; resolvePromise = null; r(result); }
+      }
+      
+      okBtn.addEventListener('click', () => closeModal(inputEl.value));
+      cancelBtn.addEventListener('click', () => closeModal(null));
+      overlay.addEventListener('click', (e) => { if(e.target === overlay) closeModal(null); });
+      window.addEventListener('keydown', (e) => { if (overlay.classList.contains('show') && e.key === 'Escape') closeModal(null); });
+      inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); okBtn.click(); }});
+      window.showPromptModal = openModal;
+    })();
+  </script>
   <!-- =========================================================
        SCRIPT: TOAST HELPERS
        ========================================================= -->
@@ -2196,139 +2317,43 @@
   <!-- =========================================================
        SCRIPT: CONFETTI ON WINNER
        ========================================================= -->
-  <script id="confetti-script">
-    (function(){
-      const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (prefersReduced) return;
-
-      const canvas = document.getElementById('confettiCanvas');
-      const ctx = canvas.getContext('2d');
-      let W, H, raf = null;
-      let pieces = [];
-      function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
-      window.addEventListener('resize', resize); resize();
-
-      function spawn(n){
-        for(let i=0;i<n;i++){
-          pieces.push({
-            x: Math.random() * W, y: -20 - Math.random() * 20, // Start from just above the top, across the whole width
-            vx: (Math.random()-0.5)*1, vy: 2+Math.random()*3,
-            size: 5+Math.random()*8, rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.2,
-            shape: Math.random()<0.5?'rect':'tri',
-            life: 2.0,
-            fade: 0.002 + Math.random() * 0.005 // Make them last longer to reach the bottom
-          });
-        }
-      }
-      function step(){
-        ctx.clearRect(0,0,W,H);
-        let i = pieces.length;
-        while (i--) {
-          const p = pieces[i];
-          p.life -= p.fade;
-          if (p.life <= 0) {
-            pieces.splice(i, 1);
-            continue;
-          }
-          p.vy += 0.02; p.x += p.vx; p.y += p.vy; p.rot += p.vr; // A little more gravity
-          ctx.save();
-          ctx.globalAlpha = p.life;
-          ctx.translate(p.x, p.y);
-          ctx.rotate(p.rot);
-          ctx.fillStyle = ['#E3292E','#309F6A','#F9DFBC','#ffffff','#ffd54f'][Math.floor(Math.random()*5)];
-          if (p.shape==='rect'){ ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.6); }
-          else {
-            ctx.beginPath();
-            ctx.moveTo(0,-p.size/2); ctx.lineTo(p.size/2,p.size/2); ctx.lineTo(-p.size/2,p.size/2); ctx.closePath(); ctx.fill();
-          }
-          ctx.restore();
-        }
-
-        if (pieces.length > 0) {
-          raf = requestAnimationFrame(step);
-        } else {
-          ctx.clearRect(0,0,W,H); // Final clear
-          cancelAnimationFrame(raf);
-          raf = null;
-        }
-      }
-      spawn(300); // A bigger initial burst on page load
-      if (!raf) raf = requestAnimationFrame(step);
-
-      // Expose a function to trigger more confetti
-      window.triggerConfetti = () => {
-        let counter = 0;
-        const streamInterval = setInterval(() => {
-          spawn(20); // Spawn a small burst every 50ms
-          if (!raf) raf = requestAnimationFrame(step);
-          counter++;
-          if (counter >= 20) clearInterval(streamInterval); // Stream for 1 second
-        }, 50);
-      };
-    })();
-  </script>
   <script>
     // On the final ranking page, trigger background stat calculation.
     document.addEventListener('DOMContentLoaded', () => {
-      // Use a flag to ensure this only runs once per page load
-      if (!window.statsCalculationStarted) {
-        console.log('Final ranking page loaded. Kicking off background stat calculation...');
-        window.statsCalculationStarted = true;
-        apiFetch('{{ url_for("api_calculate_game_stats") }}', { method: 'POST' })
-          .then(data => {
-            if (data.ok) {
-              console.log('Successfully initiated stat calculation.', data);
-            } else {
-              console.error('Server responded, but failed to start stat calculation.', data);
-            }
-          })
-          .catch(err => console.error("API call to start stat calculation failed:", err));
+      // Trigger the winner confetti on page load
+      if (typeof window.initWinnerConfetti === 'function') {
+        window.initWinnerConfetti();
       }
-
       const statsBtnLink = document.querySelector('a[href="{{ url_for("stats") }}"]');
       if (statsBtnLink) {
         statsBtnLink.addEventListener('click', async (e) => {
           e.preventDefault(); // Stop immediate navigation
           const loadingOverlay = document.getElementById('loadingOverlay');
-          const loadingText = loadingOverlay ? loadingOverlay.querySelector('.loading-text') : null;
           
           // Function to check if stats are ready
           const checkStats = async () => {
             try {
               const res = await apiFetch('{{ url_for("api_game_stats_status") }}');
-              console.log('Stats status check response:', res); // Log the full response
-              if (loadingText && res.message) {
-                loadingText.textContent = res.message; // Display status message from backend
-              }
-              return res; // Return the full response object
+              return res.ready;
             } catch {
-              return { ready: false, message: 'Error checking status...' };
+              return false;
             }
           };
 
-          let status = await checkStats();
-          if (!status.ready) {
+          let isReady = await checkStats();
+          if (!isReady) {
             if (loadingOverlay) loadingOverlay.classList.add('show');
-            
-            const maxWaitTime = 15000; // 15 seconds
-            const pollInterval = 300; // ms
-            const startTime = Date.now();
+            // First, trigger the calculation
+            await apiFetch('{{ url_for("api_calculate_game_stats") }}', { method: 'POST' });
 
-            while (!status.ready && (Date.now() - startTime < maxWaitTime)) {
-              await new Promise(resolve => setTimeout(resolve, pollInterval));
-              status = await checkStats();
-            }
-
-            if (!status.ready) {
-              showToast('Stats calculation timed out. Please try again.', 'error', 4000);
-              console.error('Stats calculation timed out. Last received status:', status);
+            // Now, poll until ready
+            while (!isReady) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+              isReady = await checkStats();
             }
             if (loadingOverlay) loadingOverlay.classList.remove('show');
           }
-          // Only navigate if stats are ready
-          if (status.ready) {
-            window.location.href = statsBtnLink.href;
-          }
+          window.location.href = statsBtnLink.href; // Navigate now that stats are ready
         });
       }
     });
@@ -3036,6 +3061,7 @@
 
         const sortBy = button.dataset.sort;
         const leaderboardList = document.getElementById('leaderboardList');
+        const sortTitleElement = document.getElementById('leaderboardSortTitle');
 
         // 1. Update button active states
         sortContainer.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
@@ -3043,17 +3069,19 @@
 
         // 2. Animate out the old list
         leaderboardList.style.opacity = '0';
+        if (sortTitleElement) sortTitleElement.style.opacity = '0';
 
         try {
           // 3. Fetch new sorted data
           const data = await apiFetch(`{{ url_for('api_leaderboard') }}?sort_by=${sortBy}`);
           if (!data.ok) throw new Error('Failed to load sorted data.');
 
-          // 4. Wait for fade-out, then render new list
+          // 4. Wait for fade-out, then render new list and title
           setTimeout(() => {
             renderLeaderboard(data.leaderboard, sortBy);
-            // 5. Animate in the new list
+            // 5. Animate in the new list and title
             leaderboardList.style.opacity = '1';
+            if (sortTitleElement) sortTitleElement.style.opacity = '1';
           }, 150); // Matches the CSS transition duration
 
         } catch (error) {
@@ -3125,8 +3153,11 @@
   </script>
   <script>
     async function renamePlayer(playerId, oldName) {
-      const newName = prompt(`Enter a new name for "${oldName}":`, oldName);
-
+      const newName = await window.showPromptModal({
+        title: `Rename ${oldName}`,
+        message: 'Enter a new name:',
+        value: oldName
+      });
       if (!newName || newName.trim() === '' || newName.trim() === oldName) {
         return; // User cancelled or entered the same name
       }
@@ -3193,6 +3224,21 @@
     }
   </script>
   {% endif %}
+
+  <!-- =========================================================
+       SCRIPT: HELP MODAL
+       ========================================================= -->
+  <script>
+    const helpOverlay = document.getElementById('helpOverlay');
+    function openHelpModal() {
+      if (helpOverlay) helpOverlay.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeHelpModal() {
+      if (helpOverlay) helpOverlay.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+  </script>
 
   <!-- =========================================================
        SCRIPT: AUTO-HIDE FLASH MESSAGES (RUNS LAST)
