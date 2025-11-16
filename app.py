@@ -1236,6 +1236,41 @@ def api_calculate_game_stats():
 
     return jsonify(ok=True)
 
+@app.route('/api/player/<player_name>', methods=['DELETE'])
+def delete_player_stats(player_name):
+    """
+    Deletes all statistics for a given player from Redis or the in-memory fallback.
+    This is a destructive operation and cannot be undone.
+    """
+    if not player_name:
+        return jsonify(ok=False, error="Player name is required."), 400
+
+    logging.info(f"Attempting to delete stats for player: {player_name}")
+
+    try:
+        if _redis:
+            player_key = f"player_stats:{player_name}"
+            # Check if the player exists before attempting to delete
+            if not _redis.exists(player_key):
+                return jsonify(ok=False, error="Player not found in Redis."), 404
+            
+            # Delete the player's stats hash
+            _redis.delete(player_key)
+            logging.info(f"Deleted Redis key: {player_key}")
+
+        else: # In-memory fallback
+            if player_name not in _player_stats_fallback:
+                return jsonify(ok=False, error="Player not found in in-memory stats."), 404
+            
+            del _player_stats_fallback[player_name]
+            logging.info(f"Deleted '{player_name}' from in-memory stats.")
+
+        return jsonify(ok=True, message=f"Stats for player '{player_name}' deleted successfully.")
+
+    except Exception as e:
+        logging.error(f"Error deleting player stats for {player_name}: {e}")
+        return jsonify(ok=False, error="An internal server error occurred."), 500
+
 @app.route('/api/player/<player_name>')
 def api_player_stats(player_name):
     """

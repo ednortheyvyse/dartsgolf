@@ -115,14 +115,18 @@
         {% if leaderboard %}
           <ol id="leaderboardList">
             {% for player in leaderboard %}
-              <li data-leaderboard-name="{{ player.name | lower }}">
+              <li data-leaderboard-name="{{ player.name | lower }}" style="align-items: center;">
+                <button type="button" class="btn btn-cancel" aria-label="Delete stats for {{ player.name }}" title="Delete player stats" 
+                        style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 8px; font-size: 1.2em; line-height: 1; width: 36px; height: 36px; margin-right: 12px;"
+                        onclick="deletePlayerStats('{{ player.name }}', this)">✕
+                </button>
                 <div class="stat-left" style="min-width: 0;" data-player-name="{{ player.name }}">
                   <a href="#" onclick="event.preventDefault();" class="stat-player-link">
                     <span class="stat-player">{{ player.name }}</span>
                   </a>
                 </div>
                 <div class="stat-right">
-                  <span>{{ player.games_played }} games</span>
+                  <span>{{ player.games_played }} Games</span>
                 </div>
               </li>
             {% endfor %}
@@ -2856,6 +2860,31 @@
         });
       });
     });
+  </script>
+  <script>
+    async function deletePlayerStats(playerName, buttonElement) {
+      const ok = await window.showConfirmModal({
+        title: 'Delete Player Stats',
+        message: `Are you sure you want to permanently delete all stats for "${playerName}"? This cannot be undone.`,
+        okText: 'Delete',
+        cancelText: 'Cancel'
+      });
+
+      if (!ok) return;
+
+      try {
+        const data = await apiFetch(`/api/player/${encodeURIComponent(playerName)}`, { method: 'DELETE' });
+        if (data.ok) {
+          showToast(`Stats for ${playerName} have been deleted.`, 'success');
+          // Remove the list item from the DOM
+          buttonElement.closest('li').remove();
+        } else {
+          throw new Error(data.error || 'Server rejected the request.');
+        }
+      } catch (e) {
+        showToast(`Error: ${e.message}`, 'error');
+      }
+    }
   </script>
   {% endif %}
 
