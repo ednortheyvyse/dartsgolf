@@ -43,58 +43,6 @@
        GLOBAL STYLES (CSS) - Externalized
        ========================================================= -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=app_start_time) }}">
-
-  <style>
-    .leaderboard-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      flex-wrap: wrap; /* Allow wrapping for the new row */
-    }
-    .leaderboard-header .leaderboard-subtitle {
-      width: 100%; /* Make subtitle take full width */
-      margin-top: -10px; /* Pull it up closer to the title */
-    }
-    .leaderboard-header .main-title {
-      margin: 0;
-    }
-    .sort-controls {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .sort-controls .icon-btn {
-      background: none;
-      border: none;
-      padding: 6px;
-      border-radius: 50%;
-      cursor: pointer;
-      font-size: 1.4em;
-      line-height: 1;
-      opacity: 0.5;
-      transition: all 0.2s ease;
-    }
-    .sort-controls .icon-btn.active {
-      opacity: 1;
-      background-color: rgba(255, 255, 255, 0.1);
-    }
-    /* Add transition to all chips for smooth color changes */
-    .chip {
-      transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-    }
-    /* Style for chips selected for comparison */
-    #leaderboardList li.selected-for-compare .chip {
-      background-color: #F9DFBC; /* Use the lighter yellow from confetti */
-      color: #101010; /* Dark text for readability */
-      border-color: #F9DFBC;
-      box-shadow: 0 0 8px rgba(249, 223, 188, 0.6);
-    }
-  </style>
-  <style>
-    /* Add padding for the numbered list */
-    #leaderboardList { list-style-type: decimal; padding-left: 25px; }
-  </style>
 </head>
 
 <body>
@@ -157,37 +105,26 @@
       <!-- =====================================================
            LEADERBOARD VIEW
            ===================================================== -->
-      <div class="leaderboard-header">
-        <h1 class="main-title" style="font-family: 'Rye', serif;">LEADERBOARD</h1>
-        <div class="sort-controls">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style="margin-right: 8px; opacity: 0.7;"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
-          <button type="button" data-sort="games_played" class="sort-btn icon-btn {{ 'active' if sort_by == 'games_played' else '' }}" title="Sort by Games Played">🎲</button>
-          <button type="button" data-sort="win_rate" class="sort-btn icon-btn {{ 'active' if sort_by == 'win_rate' else '' }}" title="Sort by Win Rate">🏆</button>
-          <button type="button" data-sort="on_target" class="sort-btn icon-btn {{ 'active' if sort_by == 'on_target' else '' }}" title="Sort by On Target %">🎯</button>
-        </div>
-      </div>
-      <div id="leaderboardSortTitle" class="leaderboard-sort-title" style="font-weight: bold; color: #E3292E; font-family: var(--sans-serif);">Number of Games</div>
+      <h1 class="main-title" style="margin-bottom: 20px;">LEADERBOARD</h1>
       
       <div class="stat-block">
         <input type="search" id="leaderboardSearch" placeholder="Find a player..." class="settings-input" style="width: 100%; margin-bottom: 12px; padding: 12px; box-sizing: border-box; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;">
         {% if leaderboard %}
-          <ol id="leaderboardList" style="list-style-type: none; padding-left: 0;">
-            {% for p in leaderboard %}
-              <li data-leaderboard-name="{{ p.name | lower }}" style="align-items: center;" data-player-id="{{ p.id }}">
-                <div class="stat-left" style="min-width: 0;" data-player-name="{{ p.name }}" data-player-id="{{ p.id }}">
-                  <div class="chip" style="cursor: pointer;">
-                    <span class="chip-index">{{ loop.index }}</span><span class="chip-name">{{ p.name }}</span>
-                  </div>
+          <ol id="leaderboardList">
+            {% for player in leaderboard %}
+              <li data-leaderboard-name="{{ player.name | lower }}" style="align-items: center;">
+                <button type="button" class="btn btn-cancel" aria-label="Delete stats for {{ player.name }}" title="Delete player stats"
+                        style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 0; font-size: 1em; line-height: 1; width: 27px; height: 27px; margin-right: 10px;"
+                        onclick="deletePlayerStats('{{ player.name }}', this)">✕
+                </button>
+                <div class="stat-left" style="min-width: 0;" data-player-name="{{ player.name }}">
+                  <a href="#" onclick="event.preventDefault();" class="stat-player-link">
+                    <span class="stat-player">{{ player.name }}</span>
+                  </a>
                 </div>
-                <div class="stat-right"><span>
-                    {% if sort_by == 'win_rate' %}
-                      {{ "%.1f"|format(p.win_rate) }}%
-                    {% elif sort_by == 'on_target' %}
-                      {{ "%.1f"|format(p.on_target_percentage) }}%
-                    {% else %}
-                      {{ p.games_played }} Game{{ 's' if p.games_played != 1 else '' }}
-                    {% endif %}
-                  </span></div>
+                <div class="stat-right">
+                  <span>{{ player.games_played }} Games</span>
+                </div>
               </li>
             {% endfor %}
           </ol>
@@ -199,7 +136,7 @@
       <!-- =====================================================
            STATS VIEW
            ===================================================== -->
-      <h1 class="main-title" style="font-family: 'Rye', serif;">GAME STATS</h1>
+      <h1>GAME STATS</h1>
 
 
       <div class="stat-block">
@@ -208,10 +145,11 @@
         {% if birdie_streak_ranking %}
           <ol>
             {% for row in birdie_streak_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <a href="#" onclick="event.preventDefault(); openPlayerStats('{{ row.name }}', true)" class="stat-player-link" data-player-name="{{ row.name }}">
+                    <span class="stat-player">{{ row.name }}</span>
+                  </a>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.streak }}</span>
@@ -232,10 +170,11 @@
         {% if bogey_streak_ranking %}
           <ol>
             {% for row in bogey_streak_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <a href="#" onclick="event.preventDefault(); openPlayerStats('{{ row.name }}', true)" class="stat-player-link" data-player-name="{{ row.name }}">
+                    <span class="stat-player">{{ row.name }}</span>
+                  </a>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.streak }}</span>
@@ -256,10 +195,11 @@
         {% if most_birdies_ranking %}
           <ol>
             {% for row in most_birdies_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <a href="#" onclick="event.preventDefault(); openPlayerStats('{{ row.name }}', true)" class="stat-player-link" data-player-name="{{ row.name }}">
+                    <span class="stat-player">{{ row.name }}</span>
+                  </a>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.count }}</span>
@@ -280,10 +220,11 @@
         {% if most_bogeys_ranking %}
           <ol>
             {% for row in most_bogeys_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <a href="#" onclick="event.preventDefault(); openPlayerStats('{{ row.name }}', true)" class="stat-player-link" data-player-name="{{ row.name }}">
+                    <span class="stat-player">{{ row.name }}</span>
+                  </a>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.count }}</span>
@@ -304,10 +245,11 @@
         {% if on_target_ranking %}
           <ol>
             {% for row in on_target_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <a href="#" onclick="event.preventDefault(); openPlayerStats('{{ row.name }}', true)" class="stat-player-link" data-player-name="{{ row.name }}">
+                    <span class="stat-player">{{ row.name }}</span>
+                  </a>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.percentage | round | int }}%</span>
@@ -330,10 +272,11 @@
         {% if average_ranking %}
           <ol>
             {% for row in average_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <a href="#" onclick="event.preventDefault(); openPlayerStats('{{ row.name }}', true)" class="stat-player-link" data-player-name="{{ row.name }}">
+                    <span class="stat-player">{{ row.name }}</span>
+                  </a>
                   <small class="stat-sub">(over {{ row.rounds }} rounds)</small>
                 </div>
                 <div class="stat-right">
@@ -356,10 +299,11 @@
         {% if comeback_ranking %}
           <ol>
             {% for cb in comeback_ranking %}
-              {% set player_id = cb.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ cb.player }}">
+                  <a href="#" onclick="event.preventDefault(); openPlayerStats('{{ cb.player }}', true)" class="stat-player-link" data-player-name="{{ cb.player }}">
+                    <span class="stat-player">{{ cb.player }}</span>
+                  </a>
                   <small class="stat-sub">
                     from {{ "%+d"|format(cb.from_score) }} on Round {{ cb.from_round }}
                     to {{ "%+d"|format(cb.to_score) }} on Round {{ cb.to_round }}
@@ -384,10 +328,11 @@
         {% if fall_ranking %}
           <ol>
             {% for fall in fall_ranking %}
-              {% set player_id = fall.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ fall.player }}">
+                  <a href="#" onclick="event.preventDefault(); openPlayerStats('{{ fall.player }}', true)" class="stat-player-link" data-player-name="{{ fall.player }}">
+                    <span class="stat-player">{{ fall.player }}</span>
+                  </a>
                   <small class="stat-sub">
                     from {{ "%+d"|format(fall.from_score) }} on Round {{ fall.from_round }}
                     to {{ "%+d"|format(fall.to_score) }} on Round {{ fall.to_round }}
@@ -480,22 +425,20 @@
             <span class="round-total">/ {{ game.holes }}</span>
           </div>
           <div class="turn-info">
-            {% set current_player_id = game.players[game.current_player_index] %}
-            {% set current_player_name = game.player_map[current_player_id].name %}
-            {% if game.end_after_round %}FINAL ROUND{% else %}{{ current_player_name }}'s Turn{% endif %}
+            {% if game.end_after_round %}FINAL ROUND{% else %}{{ game.players[game.current_player_index] }}'s Turn{% endif %}
           </div>
         </div>
 
         <table class="scoreboard playing" id="scoreboard">
           <thead>
             <tr><th scope="col">&nbsp;</th>
-              {% for player_id in game.players %}
-                {% set is_cur = (player_id == game.players[game.current_player_index]) %}
+              {% for p in game.players %}
+                {% set is_cur = (p == game.players[game.current_player_index]) %}
                 <th scope="col" class="{{ 'current-player-header' if is_cur else '' }}">
                   {% if game.players|length > 4 %}
-                    {{ game.player_map[player_id].name.split(' ')|map('first')|join('')|upper }}
+                    {{ p.split(' ')|map('first')|join('')|upper }}
                   {% else %}
-                    {{ game.player_map[player_id].name }}
+                    {{ p }}
                   {% endif %}
                 </th>
               {% endfor %}
@@ -504,21 +447,21 @@
           <tbody>
             <tbody>
   <tr class="total-row"><th>Total</th>
-    {% for player_id in game.players %}
-      {% set s = game.scores.get(player_id, 0) %} {# This is a data cell, not a header #}
+    {% for p in game.players %}
+      {% set s = game.scores.get(p, 0) %} {# This is a data cell, not a header #}
       <td>{% if s > 0 %}+{% endif %}{{ s }}</td>
     {% endfor %}
   </tr>
 
   <!-- ✅ Current round being played -->
   <tr class="current-row"><th>{{ "%02d"|format(game.current_round) }}</th>
-    {% for player_id in game.players %}
-      {% set v = game.round_history[game.current_round - 1].get(player_id) %} {# This is a data cell, not a header #}
+    {% for p in game.players %}
+      {% set v = game.round_history[game.current_round - 1].get(p) %} {# This is a data cell, not a header #}
       {% set is_cur_cell = (loop.index0 == game.current_player_index) %}
       {% if v is not none %}
         {% set ns = namespace(total=0) %}
         {% for r in range(game.current_round) %}
-          {% set ns.total = ns.total + (game.round_history[r].get(player_id, 0)) %}
+          {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
         {% endfor %}
         <td>
           <div class="cell">
@@ -541,14 +484,13 @@
 
   <!-- 🔁 Previous rounds (from latest to earliest) -->
   {% for i in range(game.current_round - 1) | reverse %}
-    <tr>
-      <th>{{ "%02d"|format(i + 1) }}</th>
-      {% for player_id in game.players %} {# This is a data cell, not a header #}
-        {% set v = game.round_history[i].get(player_id) %}
+    <tr><th>{{ "%02d"|format(i + 1) }}</th>
+      {% for p in game.players %} {# This is a data cell, not a header #}
+        {% set v = game.round_history[i].get(p) %}
         {% if v is not none %}
           {% set ns = namespace(total=0) %}
           {% for r in range(i + 1) %}
-            {% set ns.total = ns.total + (game.round_history[r].get(player_id, 0)) %}
+            {% set ns.total = ns.total + (game.round_history[r].get(p, 0)) %}
           {% endfor %}
           <td>
             <div class="cell">
@@ -564,6 +506,7 @@
       {% endfor %}
     </tr>
   {% endfor %}
+</tbody>
 
         </table>
 
@@ -579,8 +522,7 @@
             </span>
           </div>
           <div class="turn-info">
-            {% set current_player_id = game.playoff_group[game.current_player_index] if game.playoff_group else None %}
-            {% if current_player_id %}{{ game.player_map[current_player_id].name }}'s Turn{% endif %}
+            {% if game.playoff_group %}{{ game.playoff_group[game.current_player_index] }}'s Turn{% endif %}
           </div>
         </div>
                 <table class="scoreboard" id="scoreboard">
@@ -591,14 +533,14 @@
 
           <thead>
             <tr><th scope="col">&nbsp;</th>
-              {% for player_id in tie_players %}
+              {% for p in tie_players %}
                 {# highlight only if this header is the current shooter #}
-                {% set is_cur = (game.playoff_group and player_id == game.playoff_group[game.current_player_index]) %}
-                <th scope="col" class="{{ 'current-player-header' if is_cur else '' }}" data-player-id="{{ player_id }}" data-player-name="{{ game.player_map[player_id].name }}">
+                {% set is_cur = (game.playoff_group and p == game.playoff_group[game.current_player_index]) %}
+                <th scope="col" class="{{ 'current-player-header' if is_cur else '' }}" data-player-name="{{ p }}">
                   {% if tie_players|length > 4 %}
-                    {{ game.player_map[player_id].name.split(' ')|map('first')|join('')|upper }}
+                    {{ p.split(' ')|map('first')|join('')|upper }}
                   {% else %}
-                    {{ game.player_map[player_id].name }}
+                    {{ p }}
                   {% endif %}
                 </th>
               {% endfor %}
@@ -618,9 +560,9 @@
             <!-- ✅ Current TB round being played (use stable columns) -->
             <tr class="current-row">
               <th scope="row">TB {{ "%02d"|format(game.playoff_round) }}</th>
-              {% for player_id in tie_players %}
-                {% set v = game.playoff_round_scores.get(player_id) %}
-                {% set is_current = (game.playoff_group and player_id == game.playoff_group[game.current_player_index]) %}
+              {% for p in tie_players %}
+                {% set v = game.playoff_round_scores.get(p) %}
+                {% set is_current = (game.playoff_group and p == game.playoff_group[game.current_player_index]) %}
                 {% if v is not none %}
                   <td>
                     <div class="cell">
@@ -647,8 +589,8 @@
     {% set tb_num = total_tb - loop.index0 %}
     <tr>
       <th scope="row">TB {{ "%02d"|format(tb_num) }}</th>
-      {% for player_id in tie_players %} {# Use the stable tie_players list #}
-        {% set v = round_scores.get(player_id) %}
+      {% for p in tie_players %} {# Use the stable tie_players list #}
+        {% set v = round_scores.get(p) %}
         {% if v is not none %}
           <td>
             <div class="cell">
@@ -712,7 +654,6 @@
             <tbody>
               <tr class="total-row"><th scope="row">Final</th>
                 {% for st in game.final_standings %}
-                  {% set player_id = st.id %}
                   {% set s = st.score %}
                   <td>{% if s>0 %}+{% endif %}{{ s }}</td>
                 {% endfor %}
@@ -720,8 +661,8 @@
 
               {% for i in range(game.max_playoff_rounds, 0, -1) %}
                 <tr><th>TB {{ "%02d"|format(i) }}</th>
-                  {% for st in game.final_standings %}
-                    {% set hist = game.all_playoff_history.get(st.id, []) %}
+                  {% for st in game.final_standings %} {# This is a data cell, not a header #}
+                    {% set hist = game.all_playoff_history.get(st.name, []) %}
                     {% if i <= hist|length %}
                       {% set v = hist[i-1] %}
                     <td>
@@ -743,11 +684,11 @@
               {% for i in range(rp - 1, -1, -1) %}
                 <tr><th scope="row">{{ "%02d"|format(i + 1) }}</th>
                   {% for st in game.final_standings %}
-                    {% set v = game.round_history[i].get(st.id) %}
+                    {% set v = game.round_history[i].get(st.name) %}
                     {% if v is not none %}
                       {% set ns = namespace(total=0) %}
                       {% for r in range(i + 1) %}
-                        {% set ns.total = ns.total + (game.round_history[r].get(st.id, 0)) %}
+                        {% set ns.total = ns.total + (game.round_history[r].get(st.name, 0)) %}
                       {% endfor %}
                       <td>
                         <div class="cell">
@@ -891,7 +832,6 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="playerStatsTitle">
       <div class="modal-header">
         <h3 id="playerStatsTitle">Player Stats</h3>
-        <div id="playerStatsIdDisplay" class="sid-display" style="text-align: center; margin-top: -8px; margin-bottom: 12px;"></div>
       </div>
       <div class="settings-grid" style="padding: 0;">
         <div id="playerStatsContent" class="player-stats-grid">
@@ -901,19 +841,12 @@
       </div>
       <div class="modal-footer">
         <div class="modal-actions">
-          <div style="margin-right: auto; display: flex; gap: 8px;">
-            <button type="button" id="renamePlayerBtn" class="btn btn-icon" aria-label="Rename player" title="Rename player"
-                    style="background-color: #4a4a4a; border-color: #6e6e6e; width: 36px; height: 36px; padding: 0;"
-                    onclick="renamePlayer(this.dataset.playerId, this.dataset.playerName)">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-            </button>
-            <button type="button" id="deletePlayerBtn" class="btn btn-icon btn-cancel" aria-label="Delete player stats" title="Delete player stats"
-                    style="background-color: #582828; border-color: #8c4343; width: 36px; height: 36px; padding: 0;"
-                    onclick="deletePlayerStats(this.dataset.playerId, this.dataset.playerName, this)">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-            </button>
-          </div>
-          <button type="button" class="btn btn-cancel" onclick="closePlayerStats()">Close</button>
+          <button type="button" id="renamePlayerBtn" class="btn btn-icon" aria-label="Rename player" title="Rename player"
+                  style="margin-right: auto; background-color: #4a4a4a; border-color: #6e6e6e; width: 36px; height: 36px; padding: 0;"
+                  onclick="renamePlayer(this.dataset.playerName, this)">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          </button>
+          <button type="button" class="btn btn-cancel" onclick="closePlayerStats()" style="margin-left: 10px;">Close</button>
         </div>
       </div>
     </div>
@@ -1300,12 +1233,12 @@
           const g = JSON.parse(JSON.stringify(window.__gameCache));
           if (g.phase === 'playing'){
             const pIdx = g.current_player_index;
-            const playerId = g.players[pIdx];
+            const player = g.players[pIdx];
             const roundI = g.current_round - 1;
 
             g.round_history[roundI] = g.round_history[roundI] || {};
-            g.scores[playerId] = (g.scores[playerId] || 0) + val;
-            g.round_history[roundI][playerId] = val;
+            g.scores[player] = (g.scores[player] || 0) + val;
+            g.round_history[roundI][player] = val;
 
             g.undo_history = g.undo_history || [];
             g.undo_history.push({ player_index: pIdx, score_change: val });
@@ -1322,7 +1255,7 @@
             }
           } else if (g.phase === 'playoff'){
             const pIdx = g.current_player_index;
-            const player = g.playoff_group[pIdx]; // This is an ID
+            const player = g.playoff_group[pIdx];
             g.playoff_round_scores = g.playoff_round_scores || {};
             g.playoff_round_scores[player] = val;
             // Only advance the index if it's not the last player in the group.
@@ -1380,11 +1313,11 @@
           g.current_round = Math.max(1, g.current_round - 1);
         }
 
-        const playerId_to_undo = g.players[prev_idx];
+        const player_to_undo = g.players[prev_idx];
         const current_round_index = g.current_round - 1;
-        g.scores[playerId_to_undo] = (g.scores[playerId_to_undo] || 0) - (last_move.score_change || 0);
+        g.scores[player_to_undo] = (g.scores[player_to_undo] || 0) - (last_move.score_change || 0);
         g.round_history[current_round_index] = g.round_history[current_round_index] || {};
-        delete g.round_history[current_round_index][playerId_to_undo];
+        delete g.round_history[current_round_index][player_to_undo];
 
         window.__gameCache = g;
         saveLocal(g);
@@ -1434,7 +1367,7 @@
 
       if (isPlayoff) {
         const headerThs = document.querySelectorAll('#scoreboard thead th:not(:first-child)');
-        const colIndex = Array.from(headerThs).findIndex(th => th.dataset.playerId === scoredPlayerName); // scoredPlayerName is now an ID
+        const colIndex = Array.from(headerThs).findIndex(th => th.dataset.playerName === scoredPlayerName);
 
         if (colIndex !== -1) {
           targetCell = document.querySelector(`#scoreboard .current-row td:nth-child(${colIndex + 2})`);
@@ -1533,16 +1466,13 @@
         currentRoundValue = g.current_round;
         roundLabelText = 'ROUND';
         roundTotalText = `/ ${g.holes}`;
-        const currentPlayerId = g.players[g.current_player_index];
-        const currentName = g.player_map[currentPlayerId].name;
-        turnInfoText = g.end_after_round ? 'FINAL ROUND' : `${currentName}'s Turn`;
+        turnInfoText = g.end_after_round ? 'FINAL ROUND' : `${g.players[g.current_player_index]}'s Turn`;
       } else if (g.phase === 'playoff') {
         currentRoundValue = g.playoff_round;
         roundLabelText = 'TIE-BREAKER';
         roundTotalText = ''; // No total rounds in playoff
         if (g.playoff_group && g.playoff_group.length > 0) {
-          const currentPlayerId = g.playoff_group[g.current_player_index];
-          turnInfoText = `${g.player_map[currentPlayerId].name}'s Turn`;
+          turnInfoText = `${g.playoff_group[g.current_player_index]}'s Turn`;
         } else {
           turnInfoText = 'Resolving...'; // Show a generic message while waiting for the server
         }
@@ -1632,27 +1562,29 @@
     function renderPlaying(g){
       updateInfoBar(g); // Update the info bar elements
 
-      var useInitials = g.player_names.length > 4;
-      var headers = g.player_names.map(function(p, i) {
+      var useInitials = g.players.length > 4;
+      var headers = g.players.map(function(p, i) {
         var displayName = useInitials
           ? p.split(' ').map(function(w) { return w[0] || ''; }).join('').toUpperCase()
           : p;
-        var isCurrent = (g.players[i] === g.players[g.current_player_index]);
+        var isCurrent = i === g.current_player_index;
         return '<th class="'+(isCurrent ? 'current-player-header' : '')+'">'+displayName+'</th>';
       }).join('');
       var thead = '<thead><tr><th>&nbsp;</th>' + headers + '</tr></thead>';
 
-      var totals = g.players.map(function(pid){
-        var s = g.scores[pid] || 0;
+      var totals = g.players.map(function(p){
+        var s = g.scores[p] || 0;
         return '<td>'+sign(s)+s+'</td>';
       }).join('');
 
       var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
+      var justWrappedRound = g.current_player_index === 0 && g.current_round > 1;
+
       var curIdx = g.current_round - 1;
       var curRow = g.round_history[curIdx] || {};
-      var currentCells = g.players.map(function(pid, pIdx){
-        var v = curRow[pid]; // Score for this player in this round
+      var currentCells = g.players.map(function(p, pIdx){
+        var v = curRow[p]; // Score for this player in this round
         var isCurrentPlayerForCell = (pIdx === g.current_player_index && typeof v === 'undefined');
         if (typeof v === 'undefined') {
           // This is an empty cell, apply highlight if it's the current player's turn
@@ -1661,17 +1593,17 @@
                  '</td>';
         }
         // This cell has a score, render it normally
-        var running = g.round_history.slice(0, g.current_round).reduce(function(sum, rh){ return sum + (rh[pid]||0); }, 0);
+        var running = g.round_history.slice(0, g.current_round).reduce(function(sum, rh){ return sum + (rh[p]||0); }, 0);
         return '<td><div class="cell"><span class="total-pill">'+(running>0?'+':'')+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
       }).join('');
       tbody += '<tr class="current-row"><th>'+String(g.current_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
 
       for(var i=g.current_round-2;i>=0;i--){
         var row = g.round_history[i] || {}; // This is a past round, no highlight needed.
-        var cells = g.players.map(function(pid) {
-          var v = row[pid];
+        var cells = g.players.map(function(p) {
+          var v = row[p];
           if (typeof v === 'undefined') return '<td></td>';
-          var running = g.round_history.slice(0, i + 1).reduce(function(sum, rh) { return sum + (rh[pid] || 0); }, 0);
+          var running = g.round_history.slice(0, i + 1).reduce(function(sum, rh) { return sum + (rh[p] || 0); }, 0);
           return '<td><div class="cell"><span class="total-pill">' + (running > 0 ? '+' : '') + running + '</span><span class="delta-corner ' + (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'zero')) + '">' + (v > 0 ? '+' : '') + v + '</span></div></td>';
         }).join('');
         tbody += '<tr><th>'+String(i+1).padStart(2,'0')+'</th>'+cells+'</tr>';
@@ -1684,29 +1616,28 @@
     function renderPlayoff(g){
         updateInfoBar(g); // Update the info bar elements
         // ---- Build a stable header list (all players who ever appeared in this tie) ----
-        var headerPlayerIds = g.playoff_pool || []; // Use the stable pool of IDs
+        var headerPlayers = g.playoff_pool || []; // Use the stable pool
         var curScores = g.playoff_round_scores || {};
 
         // THEAD with current shooter highlight when applicable
-        var useInitials = headerPlayerIds.length > 4;
-        var thead = '<thead><tr><th>&nbsp;</th>'+headerPlayerIds.map(function(pid) {
-          var isCur = (g.playoff_group && pid === g.playoff_group[g.current_player_index]);
-          var name = g.player_map[pid].name;
+        var useInitials = headerPlayers.length > 4;
+        var thead = '<thead><tr><th>&nbsp;</th>'+headerPlayers.map(function(p) {
+          var isCur = (g.playoff_group && p === g.playoff_group[g.current_player_index]);
           var displayName = useInitials
-            ? name.split(' ').map(function(w) { return w[0] || ''; }).join('').toUpperCase()
-            : name;
-          return '<th class="'+(isCur ? 'current-player-header' : '')+'" data-player-id="'+pid+'" data-player-name="'+name+'">' + displayName + '</th>';
+            ? p.split(' ').map(function(w) { return w[0] || ''; }).join('').toUpperCase()
+            : p;
+          return '<th class="'+(isCur ? 'current-player-header' : '')+'" data-player-name="'+p+'">' + displayName + '</th>';
         }).join('')+'</tr></thead>';
 
         // TB totals (base score only)
-        var totals = headerPlayerIds.map(function(){ var s = g.playoff_base_score || 0; return '<td>'+(s>0?'+':'')+s+'</td>'; }).join('');
+        var totals = headerPlayers.map(function(){ var s = g.playoff_base_score || 0; return '<td>'+(s>0?'+':'')+s+'</td>'; }).join('');
         var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
 
         // ✅ Current TB round row (stable columns)
-        var currentCells = headerPlayerIds.map(function(pid) {
-          var v = curScores[pid];
+        var currentCells = headerPlayers.map(function(p) {
+          var v = curScores[p];
           // Determine if this cell belongs to the current player whose turn it is
-          var isCurrentPlayerForCell = (g.playoff_group && pid === g.playoff_group[g.current_player_index]);
+          var isCurrentPlayerForCell = (g.playoff_group && p === g.playoff_group[g.current_player_index]);
           // For the player who just scored, render an empty cell. The animation function will fill it.
           // For all other players, render as normal.
           if (typeof v === 'undefined') {
@@ -1721,8 +1652,8 @@
       for (var idx = g.playoff_history.length - 1; idx >= 0; idx--) {
         var round_scores = g.playoff_history[idx] || {};
         var tbNum = idx + 1;
-        var cells = headerPlayerIds.map(function(pid){ // Use stable headerPlayerIds list
-          var v = round_scores[pid];
+        var cells = headerPlayers.map(function(p){ // Use stable headerPlayers list
+          var v = round_scores[p];
           if (typeof v === 'undefined') return '<td></td>';
           return (
             '<td>' +
@@ -1735,6 +1666,7 @@
         }).join('');
         tbody += '<tr><th>TB ' + String(tbNum).padStart(2,'0') + '</th>' + cells + '</tr>';
       }
+
 
         tbody += '</tbody>';
         qs('#scoreboard').innerHTML = thead + tbody;
@@ -2272,17 +2204,9 @@
     document.addEventListener('DOMContentLoaded', () => {
       // Use a flag to ensure this only runs once per page load
       if (!window.statsCalculationStarted) {
-        console.log('Final ranking page loaded. Kicking off background stat calculation...');
         window.statsCalculationStarted = true;
         apiFetch('{{ url_for("api_calculate_game_stats") }}', { method: 'POST' })
-          .then(data => {
-            if (data.ok) {
-              console.log('Successfully initiated stat calculation.', data);
-            } else {
-              console.error('Server responded, but failed to start stat calculation.', data);
-            }
-          })
-          .catch(err => console.error("API call to start stat calculation failed:", err));
+          .catch(err => console.error("Background stat calculation failed:", err));
       }
 
       const statsBtnLink = document.querySelector('a[href="{{ url_for("stats") }}"]');
@@ -2290,45 +2214,28 @@
         statsBtnLink.addEventListener('click', async (e) => {
           e.preventDefault(); // Stop immediate navigation
           const loadingOverlay = document.getElementById('loadingOverlay');
-          const loadingText = loadingOverlay ? loadingOverlay.querySelector('.loading-text') : null;
           
           // Function to check if stats are ready
           const checkStats = async () => {
             try {
               const res = await apiFetch('{{ url_for("api_game_stats_status") }}');
-              console.log('Stats status check response:', res); // Log the full response
-              if (loadingText && res.message) {
-                loadingText.textContent = res.message; // Display status message from backend
-              }
-              return res; // Return the full response object
+              return res.ready;
             } catch {
-              return { ready: false, message: 'Error checking status...' };
+              return false;
             }
           };
 
-          let status = await checkStats();
-          if (!status.ready) {
+          let isReady = await checkStats();
+          if (!isReady) {
             if (loadingOverlay) loadingOverlay.classList.add('show');
-            
-            const maxWaitTime = 15000; // 15 seconds
-            const pollInterval = 300; // ms
-            const startTime = Date.now();
-
-            while (!status.ready && (Date.now() - startTime < maxWaitTime)) {
-              await new Promise(resolve => setTimeout(resolve, pollInterval));
-              status = await checkStats();
-            }
-
-            if (!status.ready) {
-              showToast('Stats calculation timed out. Please try again.', 'error', 4000);
-              console.error('Stats calculation timed out. Last received status:', status);
+            // Poll every 200ms until ready
+            while (!isReady) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+              isReady = await checkStats();
             }
             if (loadingOverlay) loadingOverlay.classList.remove('show');
           }
-          // Only navigate if stats are ready
-          if (status.ready) {
-            window.location.href = statsBtnLink.href;
-          }
+          window.location.href = statsBtnLink.href; // Navigate now that stats are ready
         });
       }
     });
@@ -2736,37 +2643,26 @@
     const playerStatsOverlay = document.getElementById('playerStatsOverlay');
     const playerStatsTitle = document.getElementById('playerStatsTitle');
     const playerStatsContent = document.getElementById('playerStatsContent');
-    const playerStatsIdDisplay = document.getElementById('playerStatsIdDisplay');
     const renamePlayerBtn = document.getElementById('renamePlayerBtn');
-    const deletePlayerBtn = document.getElementById('deletePlayerBtn');
     const allPlayersModalContent = document.getElementById('allPlayersContent'); // Assuming this will be added
 
-    async function openPlayerStats(playerName, playerId, showDeltas = false) {
+    async function openPlayerStats(playerName, showDeltas = false) {
       playerStatsTitle.textContent = `${playerName}'s Stats`; // Use the name from the game that was played
       playerStatsContent.innerHTML = '<div class="stat-block" style="grid-column: 1 / -1; text-align: center;">Loading...</div>';
-      playerStatsIdDisplay.innerHTML = `pid: <span style="color:#fff;">${playerId}</span>`;
       playerStatsOverlay.classList.add('show');
-      renamePlayerBtn.dataset.playerName = playerName;
-      renamePlayerBtn.dataset.playerId = playerId;
-      deletePlayerBtn.dataset.playerName = playerName;
-      deletePlayerBtn.dataset.playerId = playerId;
-      deletePlayerBtn.title = `Delete ${playerName}'s Stats`;
-      deletePlayerBtn.setAttribute('aria-label', `Delete ${playerName}'s Stats`);
+      renamePlayerBtn.dataset.playerName = playerName; // Pass the name to the button
 
       // Hide the rename button if we are viewing stats from a completed game (showDeltas is true)
       if (showDeltas) {
         renamePlayerBtn.style.display = 'none';
-        deletePlayerBtn.style.display = 'none';
       } else {
-        // Also hide if there's no player ID (shouldn't happen in normal flow)
-        renamePlayerBtn.style.display = playerId ? 'block' : 'none';
-        deletePlayerBtn.style.display = playerId ? 'block' : 'none';
+        renamePlayerBtn.style.display = 'block';
       }
       document.body.style.overflow = 'hidden';
       
       try {
-        // Fetch stats using the stable player ID
-        const data = await apiFetch(`/api/player/${encodeURIComponent(playerName)}?id=${encodeURIComponent(playerId)}`);
+        // Fetch stats using the player's name. The backend will find the player even if they've been renamed.
+        const data = await apiFetch(`/api/player/${encodeURIComponent(playerName)}?historical=1`);
         if (!data.ok) throw new Error(data.error || 'Could not load stats');
 
         const stats = data.stats;
@@ -2847,12 +2743,12 @@
     let comparisonSelection = [];
 
     function closePlayerCompareModal() {
+      compareOverlay.classList.remove('show');
       // Exit compare mode (which handles clearing highlights) after a delay.
       setTimeout(exitCompareMode, 100);
-      compareOverlay.classList.remove('show');
     }
 
-    function enterCompareMode() { 
+    function enterCompareMode() {
       isCompareModeActive = true;
       compareBtn.textContent = 'Cancel';
       compareBtn.style.backgroundColor = '#E3292E'; // Red for cancel
@@ -2875,8 +2771,8 @@
       }
     }
 
-    async function showComparisonFor(player1, player2) {
-      if (!player1 || !player2) {
+    async function showComparisonFor(name1, name2) {
+      if (!name1 || !name2) {
         return;
       }
       compareOverlay.classList.add('show');
@@ -2884,13 +2780,13 @@
 
       try {
         const [data1, data2] = await Promise.all([
-          apiFetch(`/api/player/${encodeURIComponent(player1.name)}?id=${encodeURIComponent(player1.id)}`),
-          apiFetch(`/api/player/${encodeURIComponent(player2.name)}?id=${encodeURIComponent(player2.id)}`)
+          apiFetch(`/api/player/${encodeURIComponent(name1)}`),
+          apiFetch(`/api/player/${encodeURIComponent(name2)}`)
         ]);
 
         if (!data1.ok || !data2.ok) throw new Error('Could not load stats for one or more players.');
 
-        renderComparison(data1.stats, data2.stats, player1.name, player2.name);
+        renderComparison(data1.stats, data2.stats, name1, name2);
       } catch (e) {
         comparisonResult.innerHTML = `<div style="color: #ffcccc;">${e.message}</div>`;
       }
@@ -2937,21 +2833,16 @@
 
     // Delegated click listener for leaderboard and stats pages
     document.querySelector('.container').addEventListener('click', (e) => {
-      const statElement = e.target.closest('.stat-left');
-      if (!statElement) return;
+      const link = e.target.closest('a.stat-player-link');
+      if (!link) return;
       
-      // Prevent default link behavior if it was a link that was clicked
-      if (e.target.closest('a')) {
-        e.preventDefault();
-      }
-
-      const playerId = statElement.dataset.playerId;
-      const playerName = statElement.dataset.playerName;
-      if (!playerId || !playerName) return;
+      const playerName = link.parentElement.dataset.playerName;
+      if (!playerName) return;
 
       if (isCompareModeActive) {
-        const listItem = statElement.closest('li');
-        const isSelected = listItem && listItem.classList.contains('selected-for-compare');
+        const listItem = link.closest('li');
+        const isSelected = listItem.classList.contains('selected-for-compare');
+
         if (isSelected) {
           // Deselect
           listItem.classList.remove('selected-for-compare');
@@ -2959,8 +2850,8 @@
         } else {
           // Select
           if (comparisonSelection.length < 2) {
-            if (listItem) listItem.classList.add('selected-for-compare');
-            comparisonSelection.push({ id: playerId, name: playerName });
+            listItem.classList.add('selected-for-compare');
+            comparisonSelection.push(playerName);
           }
         }
 
@@ -2969,8 +2860,8 @@
         }
       } else {
         // Default behavior: open player stats
-        const showDeltas = !!statElement.closest('.stats-view-container');
-        openPlayerStats(playerName, playerId, showDeltas);
+        const showDeltas = link.closest('.stat-block') && !link.closest('#leaderboardList');
+        openPlayerStats(playerName, showDeltas);
       }
     });
   </script>
@@ -3025,96 +2916,22 @@
     });
   </script>
   <script>
-    // --- New dynamic leaderboard sorting logic ---
-    document.addEventListener('DOMContentLoaded', () => {
-      const sortContainer = document.querySelector('.sort-controls');
-      if (!sortContainer) return;
-
-      sortContainer.addEventListener('click', async (e) => {
-        const button = e.target.closest('.sort-btn');
-        if (!button || button.classList.contains('active')) return;
-
-        const sortBy = button.dataset.sort;
-        const leaderboardList = document.getElementById('leaderboardList');
-
-        // 1. Update button active states
-        sortContainer.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-
-        // 2. Animate out the old list
-        leaderboardList.style.opacity = '0';
-
-        try {
-          // 3. Fetch new sorted data
-          const data = await apiFetch(`{{ url_for('api_leaderboard') }}?sort_by=${sortBy}`);
-          if (!data.ok) throw new Error('Failed to load sorted data.');
-
-          // 4. Wait for fade-out, then render new list
-          setTimeout(() => {
-            renderLeaderboard(data.leaderboard, sortBy);
-            // 5. Animate in the new list
-            leaderboardList.style.opacity = '1';
-          }, 150); // Matches the CSS transition duration
-
-        } catch (error) {
-          showToast(error.message, 'error');
-          leaderboardList.style.opacity = '1'; // Restore opacity on error
-        }
-      });
-    });
-
-    function renderLeaderboard(players, sortBy) {
-      const leaderboardList = document.getElementById('leaderboardList');
-      if (!leaderboardList) return;
-
-      const getStatDisplay = (p) => {
-        if (sortBy === 'win_rate') return `${p.win_rate.toFixed(1)}%`;
-        if (sortBy === 'on_target') return `${p.on_target_percentage.toFixed(1)}%`;
-        return `${p.games_played} Game${p.games_played !== 1 ? 's' : ''}`;
-      };
-
-      const sortTitles = {
-        'games_played': 'Number of Games',
-        'win_rate': 'Win Rate',
-        'on_target': '% on Target'
-      };
-      const sortTitleElement = document.getElementById('leaderboardSortTitle');
-      if (sortTitleElement) {
-        sortTitleElement.textContent = sortTitles[sortBy] || 'Number of Games';
-      }
-
-      leaderboardList.innerHTML = players.map((p, index) => `
-        <li data-leaderboard-name="${p.name.toLowerCase()}" style="align-items: center;" data-player-id="${p.id}">
-          <div class="stat-left" style="min-width: 0;" data-player-name="${escapeHtml(p.name)}" data-player-id="${p.id}">
-            <div class="chip" style="cursor: pointer;"><span class="chip-index">${index + 1}</span><span class="chip-name">${escapeHtml(p.name)}</span></div>
-          </div>
-          <div class="stat-right"><span>${getStatDisplay(p)}</span></div>
-        </li>
-      `).join('');
-    }
-  </script>
-  <script>
-    async function deletePlayerStats(playerId, playerName, buttonElement) {
+    async function deletePlayerStats(playerName, buttonElement) {
       const ok = await window.showConfirmModal({
         title: 'Delete Player Stats',
         message: `Are you sure you want to permanently delete all stats for "${playerName}"? This cannot be undone.`,
         okText: 'Delete',
         cancelText: 'Cancel'
       });
-      
+
       if (!ok) return;
 
       try {
-        const data = await apiFetch(`/api/player/${encodeURIComponent(playerName)}?id=${encodeURIComponent(playerId)}`, { method: 'DELETE' });
+        const data = await apiFetch(`/api/player/${encodeURIComponent(playerName)}`, { method: 'DELETE' });
         if (data.ok) {
-          showToast(`Stats for "${playerName}" have been deleted.`, 'success');
-          // If the button is in the modal, we need to find the corresponding `li` in the background and remove it.
-          const liToRemove = document.querySelector(`#leaderboardList li[data-player-id="${playerId}"]`);
-          if (liToRemove) {
-            liToRemove.remove();
-          }
-          // Close the modal after successful deletion
-          closePlayerStats();
+          showToast(`Stats for ${playerName} have been deleted.`, 'success');
+          // Remove the list item from the DOM
+          buttonElement.closest('li').remove();
         } else {
           throw new Error(data.error || 'Server rejected the request.');
         }
@@ -3124,7 +2941,7 @@
     }
   </script>
   <script>
-    async function renamePlayer(playerId, oldName) {
+    async function renamePlayer(oldName, buttonElement) {
       const newName = prompt(`Enter a new name for "${oldName}":`, oldName);
 
       if (!newName || newName.trim() === '' || newName.trim() === oldName) {
@@ -3138,19 +2955,18 @@
       }
 
       try {
-        const data = await apiFetch(`/api/player-stats/${encodeURIComponent(playerId)}/rename`, {
+        const data = await apiFetch(`/api/player/${encodeURIComponent(oldName)}/rename`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ new_name: trimmedNewName, id: playerId })
+          body: JSON.stringify({ new_name: trimmedNewName })
         });
 
         if (data.ok) {
-          showToast(`Renamed "${oldName}" to "${data.player.name}".`, 'success');
+          showToast(`Renamed "${oldName}" to "${trimmedNewName}".`, 'success');
           // Update the modal content in-place without closing/reopening
-          playerStatsTitle.textContent = `${data.player.name}'s Stats`;
-          renamePlayerBtn.dataset.playerName = data.player.name;
+          playerStatsTitle.textContent = `${trimmedNewName}'s Stats`;
+          renamePlayerBtn.dataset.playerName = trimmedNewName;
           updateLeaderboardEntry(oldName, trimmedNewName);
-          updateSetupPlayerName(playerId, data.player.name); // Update setup page if active
         } else {
           throw new Error(data.error || 'Server rejected the request.');
         }
@@ -3163,32 +2979,26 @@
     function updateLeaderboardEntry(oldName, newName) {
       const leaderboardList = document.getElementById('leaderboardList');
       if (!leaderboardList) return;
-    
+
       const playerLi = leaderboardList.querySelector(`li[data-leaderboard-name="${oldName.toLowerCase()}"]`);
       if (!playerLi) return;
-    
+
       // 1. Update the main data attribute for searching
       playerLi.dataset.leaderboardName = newName.toLowerCase();
-    
+
       // 2. Update the visible player name
-      const nameSpan = playerLi.querySelector('.chip-name');
+      const nameSpan = playerLi.querySelector('.stat-player');
       if (nameSpan) nameSpan.textContent = newName;
-    
+
       // 3. Update the data-player-name attribute used by the stats link
       const statLeftDiv = playerLi.querySelector('.stat-left');
-      if (statLeftDiv) statLeftDiv.dataset.playerName = newName; // The ID remains the same
-    }
-  </script>
-  <script>
-    // New function specifically for updating a player's name on the setup screen
-    function updateSetupPlayerName(playerId, newName) {
-      // Check if the 'selected' array and 'renderSelected' function exist in the current scope
-      if (typeof selected !== 'undefined' && typeof renderSelected === 'function') {
-        const playerIndex = selected.findIndex(p => p.id === playerId);
-        if (playerIndex > -1) {
-          selected[playerIndex].name = newName;
-          renderSelected(); // Re-render the selected players list to show the new name
-        }
+      if (statLeftDiv) statLeftDiv.dataset.playerName = newName;
+
+      // 4. Update the onclick handlers for the delete and rename buttons to use the new name
+      const deleteBtn = playerLi.querySelector('.btn-cancel');
+      if (deleteBtn) {
+        deleteBtn.setAttribute('onclick', `deletePlayerStats('${escapeHtml(newName)}', this)`);
+        deleteBtn.setAttribute('aria-label', `Delete stats for ${escapeHtml(newName)}`);
       }
     }
   </script>

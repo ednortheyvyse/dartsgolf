@@ -800,7 +800,7 @@ def create_player():
     player_db = get_player_db()
 
     new_player = {
-        'id': str(uuid.uuid4())[:8], # Generate a shorter 8-character ID
+        'id': str(uuid.uuid4()),
         'name': name
     }
     player_db[new_player['id']] = new_player
@@ -825,75 +825,23 @@ def get_all_players():
 @app.route('/leaderboard')
 def leaderboard():
     """
-    Renders a global leaderboard page, ranking all players by various metrics.
+    Renders a global leaderboard page, ranking all players by games played.
     """
     gs = _get_state() # Get session state for context
     player_db = get_player_db()
     all_player_stats = _get_all_player_stats()
-    sort_by = request.args.get('sort_by', 'games_played')
 
-    # Enrich stats with current names and calculated derived stats
+    # Enrich stats with current names from the player_db
     for stats in all_player_stats:
         stats['name'] = player_db.get(stats['id'], {}).get('name', 'Unknown Player')
-        
-        games_played = stats.get('games_played', 0)
-        wins = stats.get('wins', 0)
-        total_rounds = stats.get('total_rounds_all_games', 0)
-        total_on_target = stats.get('total_on_target_rounds_all_games', 0)
 
-        stats['win_rate'] = (wins / games_played) * 100 if games_played > 0 else 0
-        stats['on_target_percentage'] = (total_on_target / total_rounds) * 100 if total_rounds > 0 else 0
-
-    # Define sort keys. All are descending, with name as a secondary tie-breaker.
-    sort_keys = {
-        'games_played': lambda p: (-p.get('games_played', 0), p.get('name', '').lower()),
-        'win_rate': lambda p: (-p.get('win_rate', 0), p.get('name', '').lower()),
-        'on_target': lambda p: (-p.get('on_target_percentage', 0), p.get('name', '').lower())
-    }
-
-    # Default to 'games_played' if an invalid sort_by is provided
-    sort_key_func = sort_keys.get(sort_by, sort_keys['games_played'])
-
+    # Sort players by games_played (desc), then by name (asc) as a tie-breaker
     leaderboard_data = sorted(
         all_player_stats,
-        key=sort_key_func
+        key=lambda p: (-p.get('games_played', 0), p.get('name', '').lower())
     )
 
-    return render_template('index.html', game=gs, show_leaderboard=True, leaderboard=leaderboard_data, sort_by=sort_by)
-
-@app.route('/api/leaderboard')
-def api_leaderboard():
-    """
-    Returns leaderboard data as JSON, sorted by a given metric.
-    """
-    player_db = get_player_db()
-    all_player_stats = _get_all_player_stats()
-    sort_by = request.args.get('sort_by', 'games_played')
-
-    # Enrich stats with current names and calculated derived stats
-    for stats in all_player_stats:
-        stats['name'] = player_db.get(stats['id'], {}).get('name', 'Unknown Player')
-        
-        games_played = stats.get('games_played', 0)
-        wins = stats.get('wins', 0)
-        total_rounds = stats.get('total_rounds_all_games', 0)
-        total_on_target = stats.get('total_on_target_rounds_all_games', 0)
-
-        stats['win_rate'] = (wins / games_played) * 100 if games_played > 0 else 0
-        stats['on_target_percentage'] = (total_on_target / total_rounds) * 100 if total_rounds > 0 else 0
-
-    # Define sort keys. All are descending, with name as a secondary tie-breaker.
-    sort_keys = {
-        'games_played': lambda p: (-p.get('games_played', 0), p.get('name', '').lower()),
-        'win_rate': lambda p: (-p.get('win_rate', 0), p.get('name', '').lower()),
-        'on_target': lambda p: (-p.get('on_target_percentage', 0), p.get('name', '').lower())
-    }
-
-    sort_key_func = sort_keys.get(sort_by, sort_keys['games_played'])
-    leaderboard_data = sorted(all_player_stats, key=sort_key_func)
-
-    return jsonify(ok=True, leaderboard=leaderboard_data, sort_by=sort_by)
-
+    return render_template('index.html', game=gs, show_leaderboard=True, leaderboard=leaderboard_data)
 
 # ---------- Service worker at root (explicit, no-cache) ----------
 @app.route('/sw.js')
@@ -1070,10 +1018,8 @@ def start_next_playoff(gs: dict):
         logging.info("All playoffs resolved. Transitioning to final ranking.")
         gs['phase'] = 'final_ranking'
         gs['rounds_played'] = _compute_rounds_played(gs)
-        ordered_ids = _final_order_players(gs)
-        if ordered_ids:
-            winner_id = ordered_ids[0]
-            gs['winner'] = gs.get('player_map', {}).get(winner_id, {}).get('name', 'Unknown')
+        ordered = _final_order_players(gs)
+        gs['winner'] = ordered[0] if ordered else None
         gs['stat_deltas'] = _update_persistent_player_stats(gs)
 
 
@@ -1191,6 +1137,7 @@ def api_calculate_game_stats():
     This is called in the background from the final standings page.
     """
     gs = _get_state()
+    
 
     def _best_comebacks_by_player(cumulative_per: dict[str, list[int]]) -> dict:
         out = {}
@@ -1206,7 +1153,7 @@ def api_calculate_game_stats():
                     # Find the index of the minimum score in the rest of the array
                     to_idx = from_idx + 1 + np.argmin(s[from_idx+1:])
                     out[p] = {
-                        'player': p,
+                        'player': p, # Keep the ID here
                         'improvement': int(max_improvement),
                         'from_score': int(seq[from_idx]),
                         'to_score': int(seq[to_idx]),
@@ -1231,7 +1178,7 @@ def api_calculate_game_stats():
                     # Find the index of the maximum score in the rest of the array
                     to_idx = from_idx + 1 + np.argmax(s[from_idx+1:])
                     out[p] = {
-                        'player': p,
+                        'player': p, # Keep the ID here
                         'worsening': int(max_worsening),
                         'from_score': int(seq[from_idx]),
                         'to_score': int(seq[to_idx]),
@@ -1301,22 +1248,22 @@ def api_calculate_game_stats():
     most_bogeys_order = sorted(players_with_data, key=lambda p: (-bogey_counts[p], -avgs[p]))
     on_target_order = sorted(players_with_data, key=lambda p: (-on_target_percentages.get(p, 0), avgs.get(p, 0)))
 
-    birdie_streak_ranking = [{'player_id': p, 'name': get_name(p), 'streak': birdie_streaks[p], 'count': birdie_counts[p], 'average': avgs[p]} for p in birdie_streak_order]
-    bogey_streak_ranking = [{'player_id': p, 'name': get_name(p), 'streak': bogey_streaks[p], 'count': bogey_counts[p], 'average': avgs[p]} for p in bogey_streak_order]
-    average_ranking = [{'player_id': p, 'name': get_name(p), 'average': avgs[p], 'rounds': rounds_counts[p]} for p in average_order]
-    most_birdies_ranking = [{'player_id': p, 'name': get_name(p), 'count': birdie_counts[p], 'average': avgs[p]} for p in most_birdies_order]
-    most_bogeys_ranking = [{'player_id': p, 'name': get_name(p), 'count': bogey_counts[p], 'average': avgs[p]} for p in most_bogeys_order]
-    on_target_ranking = [{'player_id': p, 'name': get_name(p), 'percentage': on_target_percentages.get(p, 0)} for p in on_target_order]
+    birdie_streak_ranking = [{'name': get_name(p), 'streak': birdie_streaks[p], 'count': birdie_counts[p], 'average': avgs[p]} for p in birdie_streak_order]
+    bogey_streak_ranking = [{'name': get_name(p), 'streak': bogey_streaks[p], 'count': bogey_counts[p], 'average': avgs[p]} for p in bogey_streak_order]
+    average_ranking = [{'name': get_name(p), 'average': avgs[p], 'rounds': rounds_counts[p]} for p in average_order]
+    most_birdies_ranking = [{'name': get_name(p), 'count': birdie_counts[p], 'average': avgs[p]} for p in most_birdies_order]
+    most_bogeys_ranking = [{'name': get_name(p), 'count': bogey_counts[p], 'average': avgs[p]} for p in most_bogeys_order]
+    on_target_ranking = [{'name': get_name(p), 'percentage': on_target_percentages.get(p, 0)} for p in on_target_order]
 
     best_comebacks = _best_comebacks_by_player(cumulative_per)
     # Now, map the player ID to a name for the final ranking
     comeback_ranking = sorted(
-        [{**d, 'player_id': d['player'], 'player': get_name(d['player'])} for d in best_comebacks.values()],
+        [{**d, 'player': get_name(d['player'])} for d in best_comebacks.values()], 
         key=lambda d: d['improvement'], reverse=True
     )
     biggest_falls = _biggest_falls_by_player(cumulative_per)
     fall_ranking = sorted(
-        [{**d, 'player_id': d['player'], 'player': get_name(d['player'])} for d in biggest_falls.values()],
+        [{**d, 'player': get_name(d['player'])} for d in biggest_falls.values()],
         key=lambda d: d['worsening'], reverse=True
     )
 
@@ -1361,13 +1308,12 @@ def delete_player_stats(player_name):
     if not player_name:
         return jsonify(ok=False, error="Player name is required."), 400
 
-    player_id = request.args.get('id') # The frontend will now send the ID
-    if not player_id:
-        return jsonify(ok=False, error="Player ID is required."), 400
-
     logging.info(f"Attempting to delete stats for player: {player_name}")
+
     try:
         if _redis:
+            player_id = request.args.get('id') # The frontend will now send the ID
+            if not player_id: return jsonify(ok=False, error="Player ID is required."), 400
             player_key = f"player_stats:{player_id}"
             # Check if the player exists before attempting to delete
             if not _redis.exists(player_key):
@@ -1389,13 +1335,14 @@ def delete_player_stats(player_name):
         logging.error(f"Error deleting player stats for {player_name}: {e}")
         return jsonify(ok=False, error="An internal server error occurred."), 500
 
-@app.route('/api/player-stats/<player_id>/rename', methods=['POST'])
-def rename_player(player_id):
+@app.route('/api/player/<player_name>/rename', methods=['POST'])
+def rename_player(player_name):
     """
     Renames a player in the persistent stats database (Redis or fallback).
     """
     data = request.get_json()
     new_name = data.get('new_name', '').strip()
+    player_id = data.get('id', '').strip()
 
     if not player_id:
         return jsonify(ok=False, error="Player ID is required for renaming."), 400
@@ -1403,21 +1350,18 @@ def rename_player(player_id):
     player_db = get_player_db()
     player_to_rename = player_db.get(player_id)
 
-    if not player_to_rename:
-        return jsonify(ok=False, error="Player not found."), 404
-
-    old_name = player_to_rename.get('name', '')
-
     if not new_name or len(new_name) > 14:
         return jsonify(ok=False, error="New name is invalid or too long."), 400
 
-    if new_name.strip().lower() == old_name.strip().lower():
+    if new_name.strip() == player_name.strip():
         return jsonify(ok=False, error="New name is the same as the old name."), 400 # Still disallow identical names
 
     # Check if the new name already exists for another player
     for pid, pdata in player_db.items():
         if pid != player_id and pdata['name'].lower() == new_name.lower():
             return jsonify(ok=False, error=f"A player named '{new_name}' already exists."), 409
+
+    logging.info(f"Attempting to rename player '{player_name}' (ID: {player_id}) to '{new_name}'")
 
     try:
         # Update the name in the central player database (session)
@@ -1426,7 +1370,7 @@ def rename_player(player_id):
             session.modified = True
 
         # Update the name in the recent players list for all sessions
-        _update_recent_names_after_rename(old_name, new_name)
+        _update_recent_names_after_rename(player_name, new_name)
 
         # Update the name in the current game state if the player is in it
         gs = _get_state()
@@ -1439,10 +1383,10 @@ def rename_player(player_id):
             session.pop('game_stats_cache', None)
 
         _persist(gs)
-        return jsonify(ok=True, player={'id': player_id, 'name': new_name})
+        return jsonify(ok=True, message=f"Player renamed to '{new_name}'.")
 
     except Exception as e:
-        logging.error(f"Error renaming player {old_name}: {e}")
+        logging.error(f"Error renaming player {player_name}: {e}")
         return jsonify(ok=False, error="An internal server error occurred."), 500
 
 @app.route('/api/player/<player_name>')
