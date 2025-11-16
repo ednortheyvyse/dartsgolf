@@ -672,7 +672,7 @@ def api_settings():
     if changed:
         _persist(gs)
     _inject_template_data(gs)
-    return jsonify({'ok': True, 'game': gs, 'changed': changed})
+    return jsonify({'ok': True, 'game': gs, 'changed': changed, 'app_start_time': app_start_time})
 
 
 @app.post('/api/load_saved')

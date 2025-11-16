@@ -105,19 +105,16 @@
       <!-- =====================================================
            LEADERBOARD VIEW
            ===================================================== -->
-      <h1>LEADERBOARD</h1>
-      <small class="stat-description" style="text-align: center; margin-top: -10px; margin-bottom: 20px;">Players ranked by games played</small>
-      
-      <!-- Search input moved here from the control bar -->
-      <input type="search" id="leaderboardSearch" placeholder="Find a player..." class="settings-input" style="width: 100%; max-width: 900px; margin: 0 auto 12px; display: block; box-sizing: border-box; padding: 12px; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;">
+      <h1 class="main-title" style="margin-bottom: 20px;">LEADERBOARD</h1>
       
       <div class="stat-block">
+        <input type="search" id="leaderboardSearch" placeholder="Find a player..." class="settings-input" style="width: 100%; margin-bottom: 12px; padding: 12px; box-sizing: border-box; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;">
         {% if leaderboard %}
           <ol id="leaderboardList">
             {% for player in leaderboard %}
               <li data-leaderboard-name="{{ player.name | lower }}" style="align-items: center;">
-                <button type="button" class="btn btn-cancel" aria-label="Delete stats for {{ player.name }}" title="Delete player stats" 
-                        style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 8px; font-size: 1.2em; line-height: 1; width: 36px; height: 36px; margin-right: 12px;"
+                <button type="button" class="btn btn-cancel" aria-label="Delete stats for {{ player.name }}" title="Delete player stats"
+                        style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 0; font-size: 1em; line-height: 1; width: 27px; height: 27px; margin-right: 10px;"
                         onclick="deletePlayerStats('{{ player.name }}', this)">✕
                 </button>
                 <div class="stat-left" style="min-width: 0;" data-player-name="{{ player.name }}">
@@ -731,9 +728,12 @@
   <!-- Settings Modal (with Add to Home Screen button) -->
   <div id="settingsOverlay" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <div class="modal-header">
-        <h3 id="settingsTitle">Settings</h3>
-        <div id="sidDisplay" class="sid-display"></div>
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 id="settingsTitle" style="margin: 0; flex-shrink: 0;">Settings</h3>
+        <div style="text-align: right;">
+          <div id="sidDisplay" class="sid-display"></div>
+          <div id="uptimeDisplay" class="sid-display" style="margin-top: 4px;"></div>
+        </div>
       </div>
       <div class="settings-grid">
 
@@ -765,7 +765,7 @@
             <label style="font-weight: 700;">Recent Players</label>
             <div class="settings-help">Remove all names from the "Recent players" list.</div>
           </div>
-          <button type="button" id="clearRecentsBtn" class="btn btn-cancel" title="Clear Recent Players" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 12px 16px; font-size: 1.2em; line-height: 1;">
+          <button type="button" id="clearRecentsBtn" class="btn btn-cancel" title="Clear Recent Players" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 0; font-size: 1em; line-height: 1; width: 27px; height: 27px;">
             ✕
           </button>
         </div>
@@ -781,7 +781,7 @@
             <label style="font-weight: 700;">Clear Cache</label>
             <div class="settings-help">Forces the app to reload all its files from the server.</div>
           </div>
-          <button type="button" id="clearCacheBtn" class="btn btn-cancel" title="Clear Cache & Refresh" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 12px 16px; font-size: 1.2em; line-height: 1;">
+          <button type="button" id="clearCacheBtn" class="btn btn-cancel" title="Clear Cache & Refresh" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 0; font-size: 1em; line-height: 1; width: 27px; height: 27px;">
             ✕
           </button>
         </div>
@@ -2418,6 +2418,7 @@
     const settingsSummary = document.getElementById('settingsSummary');
     const clearRecentsBtn = document.getElementById('clearRecentsBtn');    
     const sidDisplay      = document.getElementById('sidDisplay');
+    const uptimeDisplay   = document.getElementById('uptimeDisplay');
 
     // --- Custom Rudeness Slider Logic ---
     const RUDENESS_MAP = ['Serious', 'Medium', 'Rude'];
@@ -2482,6 +2483,41 @@
       handleSliderEnd(e.clientX);
     });
 
+    // --- Uptime Clock Logic ---
+    let uptimeInterval = null;
+    function startUptimeClock(startTimeSeconds) {
+      if (uptimeInterval) clearInterval(uptimeInterval);
+      if (!startTimeSeconds) {
+        uptimeDisplay.textContent = '';
+        return;
+      }
+
+      const startTimeMs = startTimeSeconds * 1000;
+
+      function update() {
+        const now = Date.now();
+        let totalSeconds = Math.floor((now - startTimeMs) / 1000);
+
+        const days = Math.floor(totalSeconds / 86400);
+        totalSeconds %= 86400;
+        const hours = Math.floor(totalSeconds / 3600);
+        totalSeconds %= 3600;
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+
+        let parts = [];
+        if (days > 0) parts.push(`${days}d`);
+        if (hours > 0) parts.push(`${hours}h`);
+        if (minutes > 0) parts.push(`${minutes}m`);
+        parts.push(`${seconds}s`);
+
+        uptimeDisplay.innerHTML = `Uptime: <span style="color:#fff;">${parts.join(' ')}</span>`;
+      }
+
+      update(); // Initial call
+      uptimeInterval = setInterval(update, 1000);
+    }
+
 
     function openSettings(){
       const g = window.__gameCache;
@@ -2489,6 +2525,7 @@
       setRudenessSlider(g.rudeness_level || 0);
 
       sidDisplay.innerHTML = `SID: <span style="color:#fff;">${g.sid || '...'}</span>`;
+      startUptimeClock({{ app_start_time }});
       // Only show the holes/rounds setting during the setup phase
       if (g.phase === 'setup') {
         holesRow.style.display = 'grid';
@@ -2518,6 +2555,7 @@
     }
     function closeSettings(){
 
+      if (uptimeInterval) clearInterval(uptimeInterval);
       settingsOverlay.classList.remove('show');
       document.body.style.overflow = '';
     }
@@ -2538,6 +2576,7 @@
         if (data.ok && data.game) {
           window.__gameCache = data.game;
           if (typeof saveLocal === 'function') saveLocal(data.game);
+          if (data.app_start_time) startUptimeClock(data.app_start_time);
           updateSettingsSummary();
         }
         showToast('Settings saved', 'success');
