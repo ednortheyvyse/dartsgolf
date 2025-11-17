@@ -15,12 +15,84 @@ from flask import (
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
 import logging
+from pythonjsonlogger import jsonlogger
 
 # Get app start time for cache-busting static assets
 app_start_time = int(time.time())
 
-# Configure logging to show DEBUG messages from all loggers
-logging.basicConfig(level=logging.DEBUG)
+# Configure human-readable structured logging
+class HumanReadableFormatter(logging.Formatter):
+    """Custom formatter that produces human-readable logs with optional structured data"""
+
+    LEVEL_COLORS = {
+        'DEBUG': '\033[36m',    # Cyan
+        'INFO': '\033[32m',     # Green
+        'WARNING': '\033[33m',  # Yellow
+        'ERROR': '\033[31m',    # Red
+        'CRITICAL': '\033[35m', # Magenta
+    }
+    RESET = '\033[0m'
+
+    def format(self, record):
+        import re
+        # Format timestamp
+        timestamp = self.formatTime(record, '%H:%M:%S')
+
+        # Color the level
+        level = record.levelname
+        level_color = self.LEVEL_COLORS.get(level, '')
+        colored_level = f"{level_color}{level:8}{self.RESET}"
+
+        # Format the main message
+        message = record.getMessage()
+
+        # Clean up werkzeug request logs for better readability
+        if record.name == 'werkzeug':
+            # Remove ANSI color codes
+            message = re.sub(r'\x1b\[[0-9;]*m', '', message)
+            # Simplify the Common Log Format: "IP - - [timestamp] request status -"
+            # to: "IP status request"
+            clf_match = re.match(
+                r'(\d+\.\d+\.\d+\.\d+) - - \[\d+/\w+/\d+ \d+:\d+:\d+\] "(.*?)" (\d+) (.*)',
+                message
+            )
+            if clf_match:
+                ip, request, status, size = clf_match.groups()
+                # Color status codes
+                status_int = int(status)
+                if status_int >= 500:
+                    status_color = '\033[31m'  # Red for 5xx
+                elif status_int >= 400:
+                    status_color = '\033[33m'  # Yellow for 4xx
+                elif status_int >= 300:
+                    status_color = '\033[36m'  # Cyan for 3xx
+                else:
+                    status_color = '\033[32m'  # Green for 2xx
+                message = f"{ip} {status_color}{status}{self.RESET} {request}"
+
+        # Build the log line
+        log_line = f"{timestamp} {colored_level} {message}"
+
+        # Add extra fields if present (for structured data)
+        extra_fields = {}
+        for key, value in record.__dict__.items():
+            if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
+                          'levelname', 'levelno', 'lineno', 'module', 'msecs',
+                          'message', 'pathname', 'process', 'processName',
+                          'relativeCreated', 'thread', 'threadName', 'exc_info',
+                          'exc_text', 'stack_info', 'taskName']:
+                extra_fields[key] = value
+
+        if extra_fields:
+            extras = ' | '.join(f"{k}={v}" for k, v in extra_fields.items())
+            log_line += f" [{extras}]"
+
+        return log_line
+
+log_handler = logging.StreamHandler()
+log_handler.setFormatter(HumanReadableFormatter())
+logging.root.handlers = [log_handler]
+logging.root.setLevel(logging.DEBUG)
 
 # ---------------- App & Folders ----------------
 BASE_DIR = Path(__file__).resolve().parent
@@ -32,6 +104,63 @@ app = Flask(
 
 # Tell Flask it's behind a proxy (e.g., Cloudflare) and to trust X-Forwarded-Proto
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# CORS Configuration - allow only specific origins
+try:
+    from flask_cors import CORS
+    ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "https://dartsgolf.edvyse.co.uk").split(",")
+    CORS(app, origins=ALLOWED_ORIGINS, supports_credentials=True)
+    logging.info(f"CORS configured for origins: {ALLOWED_ORIGINS}")
+except ImportError:
+    logging.warning("flask-cors not installed, CORS not configured")
+
+# Rate Limiting Configuration
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=["1000 per day", "100 per minute"],
+        storage_uri=os.environ.get("REDIS_URL", "memory://"),
+    )
+    logging.info("Rate limiting configured: 1000/day, 100/minute")
+
+    # Custom error handler for rate limit exceeded
+    @app.errorhandler(429)
+    def ratelimit_handler(e):
+        return jsonify({
+            "ok": False,
+            "error": "rate_limit_exceeded",
+            "message": "Too many requests. Please slow down and try again in a moment."
+        }), 429
+
+except ImportError:
+    limiter = None
+    logging.warning("flask-limiter not installed, rate limiting disabled")
+
+# HTTP Security Headers
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    # Content Security Policy
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'"
+    )
+    # HSTS for HTTPS
+    if request.is_secure:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
 
 # Make the app_start_time available to all templates
 @app.context_processor
@@ -57,23 +186,50 @@ app.before_request(
 # If REDIS_URL is set and redis library available, persist games there.
 # Fallback: in-memory dict (dev).
 _redis = None
+_redis_fallback_mode = False  # Track if we're in fallback mode
 try:
     import redis  # type: ignore
     REDIS_URL = os.environ.get("REDIS_URL")
     if REDIS_URL:
-        logging.info("REDIS_URL found, attempting to connect to Redis...")
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
+        logging.info("REDIS_URL found, attempting to connect to Redis...", extra={"redis_url": REDIS_URL.split("@")[-1] if "@" in REDIS_URL else REDIS_URL})
+        _redis = redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=5, socket_connect_timeout=5)
         _redis.ping() # Check connection
-        logging.info("Redis connection successful.")
+        logging.info("Redis connection successful.", extra={"storage_mode": "redis"})
     else:
-        logging.warning("REDIS_URL not set. Falling back to in-memory storage.")
+        _redis_fallback_mode = True
+        logging.warning("REDIS_URL not set. Using in-memory storage.", extra={
+            "storage_mode": "memory",
+            "warning": "Data will be lost on restart. Set REDIS_URL for persistence."
+        })
+except ImportError:
+    _redis = None
+    _redis_fallback_mode = True
+    logging.error("Redis library not installed. Using in-memory storage.", extra={
+        "storage_mode": "memory",
+        "action_required": "Install redis package for persistence"
+    })
 except Exception as e:
     _redis = None
-    logging.error(f"Redis connection failed: {e}. Falling back to in-memory storage.")
+    _redis_fallback_mode = True
+    logging.error(f"Redis connection failed: {e}", extra={
+        "storage_mode": "memory",
+        "error_type": type(e).__name__,
+        "warning": "Data will NOT be persisted. Check REDIS_URL configuration."
+    })
 
 _games: dict[str, dict] = {}  # in-memory fallback
 _player_stats_fallback: dict[str, dict] = {} # in-memory fallback for player stats
 _players_db_fallback: dict[str, dict] = {} # in-memory fallback for the player "database"
+
+# Log a reminder about fallback mode on every request if in fallback mode
+if _redis_fallback_mode:
+    @app.before_request
+    def warn_fallback_mode():
+        # Only warn once per session
+        if not session.get('_fallback_warned'):
+            sid = session.get('sid', 'new-visitor')
+            logging.warning(f"[MEMORY-ONLY] Redis unavailable. Data for {sid} will not persist across restarts.")
+            session['_fallback_warned'] = True
 
 
 # --- Constants ---
@@ -188,6 +344,10 @@ def _fresh_state() -> dict:
         'holes': DEFAULT_HOLES,
         'score_buttons': DEFAULT_SCORE_BUTTONS,
         'rudeness_level': 0,
+
+        # ---- State versioning for concurrent modification detection ----
+        'state_version': 1,
+        'last_modified': time.time(),
     }
 
 
@@ -272,6 +432,11 @@ def _persist(gs: dict) -> None:
     """Persists the current game state to storage."""
     # This function now correctly receives the modified gs object
     # and saves it, instead of re-fetching from storage.
+
+    # Increment state version for concurrent modification detection
+    gs['state_version'] = gs.get('state_version', 0) + 1
+    gs['last_modified'] = time.time()
+
     sid = _get_sid()
     _storage_set(sid, gs) # This line is correct, the issue was in the calling functions.
 
@@ -833,58 +998,32 @@ def get_all_players():
     all_players = sorted(list(player_db.values()), key=lambda p: p['name'].lower())
     return jsonify(ok=True, players=all_players)
 
-@app.route('/leaderboard')
-def leaderboard():
+def _get_cached_leaderboard(sort_by='games_played'):
     """
-    Renders a global leaderboard page, ranking all players by various metrics.
+    Get leaderboard data with Redis caching for performance.
+    Cache expires after 60 seconds.
     """
-    gs = _get_state() # Get session state for context
+    cache_key = f"leaderboard_cache:{sort_by}"
+
+    # Try to get from Redis cache first
+    if _redis:
+        try:
+            cached = _redis.get(cache_key)
+            if cached:
+                logging.debug(f"Leaderboard cache hit for sort_by={sort_by}")
+                return json.loads(cached)
+        except Exception as e:
+            logging.warning(f"Redis cache read failed: {e}")
+
+    # Cache miss or no Redis - compute leaderboard
+    logging.debug(f"Computing leaderboard for sort_by={sort_by}")
     player_db = get_player_db()
     all_player_stats = _get_all_player_stats()
-    sort_by = request.args.get('sort_by', 'games_played')
 
     # Enrich stats with current names and calculated derived stats
     for stats in all_player_stats:
         stats['name'] = player_db.get(stats['id'], {}).get('name', 'Unknown Player')
-        
-        games_played = stats.get('games_played', 0)
-        wins = stats.get('wins', 0)
-        total_rounds = stats.get('total_rounds_all_games', 0)
-        total_on_target = stats.get('total_on_target_rounds_all_games', 0)
 
-        stats['win_rate'] = (wins / games_played) * 100 if games_played > 0 else 0
-        stats['on_target_percentage'] = (total_on_target / total_rounds) * 100 if total_rounds > 0 else 0
-
-    # Define sort keys. All are descending, with name as a secondary tie-breaker.
-    sort_keys = {
-        'games_played': lambda p: (-p.get('games_played', 0), p.get('name', '').lower()),
-        'win_rate': lambda p: (-p.get('win_rate', 0), p.get('name', '').lower()),
-        'on_target': lambda p: (-p.get('on_target_percentage', 0), p.get('name', '').lower())
-    }
-
-    # Default to 'games_played' if an invalid sort_by is provided
-    sort_key_func = sort_keys.get(sort_by, sort_keys['games_played'])
-
-    leaderboard_data = sorted(
-        all_player_stats,
-        key=sort_key_func
-    )
-
-    return render_template('index.html', game=gs, show_leaderboard=True, leaderboard=leaderboard_data, sort_by=sort_by)
-
-@app.route('/api/leaderboard')
-def api_leaderboard():
-    """
-    Returns leaderboard data as JSON, sorted by a given metric.
-    """
-    player_db = get_player_db()
-    all_player_stats = _get_all_player_stats()
-    sort_by = request.args.get('sort_by', 'games_played')
-
-    # Enrich stats with current names and calculated derived stats
-    for stats in all_player_stats:
-        stats['name'] = player_db.get(stats['id'], {}).get('name', 'Unknown Player')
-        
         games_played = stats.get('games_played', 0)
         wins = stats.get('wins', 0)
         total_rounds = stats.get('total_rounds_all_games', 0)
@@ -902,6 +1041,35 @@ def api_leaderboard():
 
     sort_key_func = sort_keys.get(sort_by, sort_keys['games_played'])
     leaderboard_data = sorted(all_player_stats, key=sort_key_func)
+
+    # Cache the result in Redis for 60 seconds
+    if _redis:
+        try:
+            _redis.set(cache_key, json.dumps(leaderboard_data), ex=60)
+            logging.debug(f"Leaderboard cached for sort_by={sort_by}")
+        except Exception as e:
+            logging.warning(f"Redis cache write failed: {e}")
+
+    return leaderboard_data
+
+@app.route('/leaderboard')
+def leaderboard():
+    """
+    Renders a global leaderboard page, ranking all players by various metrics.
+    """
+    gs = _get_state() # Get session state for context
+    sort_by = request.args.get('sort_by', 'games_played')
+    leaderboard_data = _get_cached_leaderboard(sort_by)
+
+    return render_template('index.html', game=gs, show_leaderboard=True, leaderboard=leaderboard_data, sort_by=sort_by)
+
+@app.route('/api/leaderboard')
+def api_leaderboard():
+    """
+    Returns leaderboard data as JSON, sorted by a given metric.
+    """
+    sort_by = request.args.get('sort_by', 'games_played')
+    leaderboard_data = _get_cached_leaderboard(sort_by)
 
     return jsonify(ok=True, leaderboard=leaderboard_data, sort_by=sort_by)
 
@@ -1184,10 +1352,62 @@ def stats():
                 cur = 0
         return best
 
+    # Fetch player stats with deltas for each player in final_standings
+    player_stats_with_deltas = {}
+    if gs.get('final_standings') and gs.get('stat_deltas'):
+        for st in gs['final_standings']:
+            player_id = st.get('id')
+            player_name = st.get('name')
+            if not player_id:
+                continue
+
+            # Get persistent stats
+            if _redis:
+                player_key = f"player_stats:{player_id}"
+                stats_raw = _redis.hgetall(player_key)
+                p_stats = {k: int(v) for k, v in stats_raw.items()}
+            else:
+                p_stats = _player_stats_fallback.get(player_id, {})
+
+            if not p_stats:
+                p_stats = {}
+
+            # Calculate derived stats
+            games_played = p_stats.get('games_played', 0)
+            wins = p_stats.get('wins', 0)
+            total_rounds = p_stats.get('total_rounds_all_games', 0)
+            total_score = p_stats.get('total_score_all_games', 0)
+            total_on_target = p_stats.get('total_on_target_rounds_all_games', 0)
+
+            p_stats['win_percentage'] = (wins / games_played) * 100 if games_played > 0 else 0
+            p_stats['average_score'] = total_score / total_rounds if total_rounds > 0 else 0
+            p_stats['on_target_percentage'] = (total_on_target / total_rounds) * 100 if total_rounds > 0 else 0
+
+            # Get deltas from game state
+            deltas = gs['stat_deltas'].get(player_name, {})
+            if deltas:
+                prev_games = games_played - deltas.get('games_played', 0)
+                prev_wins = wins - deltas.get('wins', 0)
+                prev_total_rounds = total_rounds - deltas.get('total_rounds_all_games', 0)
+                prev_total_score = total_score - deltas.get('total_score_all_games', 0)
+                prev_total_on_target = total_on_target - deltas.get('total_on_target_rounds_all_games', 0)
+
+                prev_win_perc = (prev_wins / prev_games) * 100 if prev_games > 0 else 0
+                prev_avg_score = prev_total_score / prev_total_rounds if prev_total_rounds > 0 else 0
+                prev_on_target_perc = (prev_total_on_target / prev_total_rounds) * 100 if prev_total_rounds > 0 else 0
+
+                deltas['win_percentage_delta'] = p_stats['win_percentage'] - prev_win_perc
+                deltas['average_score_delta'] = p_stats['average_score'] - prev_avg_score
+                deltas['on_target_percentage_delta'] = p_stats['on_target_percentage'] - prev_on_target_perc
+
+            p_stats['deltas'] = deltas
+            player_stats_with_deltas[player_name] = p_stats
+
     return render_template(
         'index.html',
         show_stats=True,
         game=gs,
+        player_stats_with_deltas=player_stats_with_deltas,
         **game_stats
     )
 

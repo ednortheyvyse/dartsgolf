@@ -193,36 +193,42 @@
       <!-- =====================================================
            LEADERBOARD VIEW
            ===================================================== -->
-      <h1 class="main-title" style="font-family: 'Rye', serif; margin-bottom: 20px; text-align: left;">LEADERBOARD</h1>
+      <h1 class="main-title" style="margin-bottom: 20px;">LEADERBOARD</h1>
 
-      <div class="leaderboard-controls-header">
-        <div id="leaderboardSortTitle" class="leaderboard-sort-title" style="font-weight: bold; color: #E3292E; font-family: var(--sans-serif);">Number of Games</div>
-        <div class="sort-controls">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style="margin-right: 8px; opacity: 0.7;"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
-          <button type="button" data-sort="games_played" class="sort-btn icon-btn {{ 'active' if sort_by == 'games_played' else '' }}" title="Sort by Games Played">🎲</button>
-          <button type="button" data-sort="win_rate" class="sort-btn icon-btn {{ 'active' if sort_by == 'win_rate' else '' }}" title="Sort by Win Rate">🏆</button>
-          <button type="button" data-sort="on_target" class="sort-btn icon-btn {{ 'active' if sort_by == 'on_target' else '' }}" title="Sort by On Target %">🎯</button>
+      <div class="stat-block">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div id="leaderboardSortTitle" class="stat-title" style="margin-bottom: 0;">
+            {% if sort_by == 'win_rate' %}
+              🏆 Win Rate
+            {% elif sort_by == 'on_target' %}
+              🎯 On Target %
+            {% else %}
+              🎲 Games Played
+            {% endif %}
+          </div>
+          <div class="sort-controls" style="display: flex; gap: 8px;">
+            <button type="button" data-sort="games_played" class="sort-btn icon-btn {{ 'active' if sort_by == 'games_played' else '' }}" title="Sort by Games Played" style="padding: 6px 10px; border-radius: 6px; background: {{ 'var(--primary-color)' if sort_by == 'games_played' else '#333' }}; border: none; font-size: 1.1em; cursor: pointer;">🎲</button>
+            <button type="button" data-sort="win_rate" class="sort-btn icon-btn {{ 'active' if sort_by == 'win_rate' else '' }}" title="Sort by Win Rate" style="padding: 6px 10px; border-radius: 6px; background: {{ 'var(--primary-color)' if sort_by == 'win_rate' else '#333' }}; border: none; font-size: 1.1em; cursor: pointer;">🏆</button>
+            <button type="button" data-sort="on_target" class="sort-btn icon-btn {{ 'active' if sort_by == 'on_target' else '' }}" title="Sort by On Target %" style="padding: 6px 10px; border-radius: 6px; background: {{ 'var(--primary-color)' if sort_by == 'on_target' else '#333' }}; border: none; font-size: 1.1em; cursor: pointer;">🎯</button>
+          </div>
         </div>
-      </div>
-      
-      <div>
-        <input type="search" id="leaderboardSearch" placeholder="Find a player..." class="settings-input" style="width: 100%; margin-bottom: 12px; padding: 12px; box-sizing: border-box; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;">
+        <input type="search" id="leaderboardSearch" placeholder="Find a player..." class="settings-input" style="width: 100%; margin-bottom: 16px; padding: 10px 12px; box-sizing: border-box; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.95em;">
         {% if leaderboard %}
-          <ol id="leaderboardList" style="list-style-type: none; padding-left: 0;">
+          <ol id="leaderboardList" style="list-style-type: none; padding-left: 0; margin: 0;">
             {% for p in leaderboard %}
-              <li data-leaderboard-name="{{ p.name | lower }}" style="align-items: center;" data-player-id="{{ p.id }}">
+              <li data-leaderboard-name="{{ p.name | lower }}" data-player-id="{{ p.id }}" style="{{ 'border-bottom: none;' if loop.last else '' }}">
                 <div class="stat-left" style="min-width: 0;" data-player-name="{{ p.name }}" data-player-id="{{ p.id }}">
                   <div class="chip" style="cursor: pointer;">
                     <span class="chip-index">{{ loop.index }}</span><span class="chip-name">{{ p.name }}</span>
                   </div>
                 </div>
-                <div class="stat-right"><span>
+                <div class="stat-right"><span style="font-weight: 600;">
                     {% if sort_by == 'win_rate' %}
                       {{ "%.1f"|format(p.win_rate) }}%
                     {% elif sort_by == 'on_target' %}
                       {{ "%.1f"|format(p.on_target_percentage) }}%
                     {% else %}
-                      {{ p.games_played }} Game{{ 's' if p.games_played != 1 else '' }}
+                      {{ p.games_played }}
                     {% endif %}
                   </span></div>
               </li>
@@ -236,9 +242,122 @@
       <!-- =====================================================
            STATS VIEW
            ===================================================== -->
-      <div class="stats-view-container">
-      <h1 class="main-title" style="font-family: 'Rye', serif;">GAME STATS</h1>
+      <div class="stats-view-container phase-enter">
+      <h1 class="main-title" style="font-family: 'Rye', serif;">STATS</h1>
 
+      <!-- Player Stats Section -->
+      <h2 style="color: var(--primary-color); margin: 20px 0 15px 0; font-size: 1.2em;">Player Stats</h2>
+      {% if player_stats_with_deltas %}
+        {% for st in game.final_standings %}
+          {% set ps = player_stats_with_deltas.get(st.name, {}) %}
+          {% set deltas = ps.get('deltas', {}) %}
+          <div class="stat-block">
+            <div class="stat-title" style="color: var(--primary-color);">{{ st.name }}</div>
+            <ol style="font-size: 0.95em;">
+              <li>
+                <div class="stat-left"><span>🎲 Games Played</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.games_played or 0 }}</span>
+                  {% if deltas.games_played %}
+                    <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.1s;">▲ {{ deltas.games_played }}</span>
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>🏆 Wins</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.wins or 0 }}</span>
+                  {% if deltas.wins %}
+                    <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.2s;">▲ {{ deltas.wins }}</span>
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>📈 Win Rate</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.win_percentage|round|int }}%</span>
+                  {% if deltas.win_percentage_delta %}
+                    {% if deltas.win_percentage_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.3s;">▲ {{ deltas.win_percentage_delta|round|int }}%</span>
+                    {% elif deltas.win_percentage_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.3s;">▼ {{ deltas.win_percentage_delta|abs|round|int }}%</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>📊 Average Score</span></div>
+                <div class="stat-right">
+                  <span>{{ "%.2f"|format(ps.average_score or 0) }}</span>
+                  {% if deltas.average_score_delta %}
+                    {% if deltas.average_score_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.4s;">▼ {{ "%.2f"|format(deltas.average_score_delta|abs) }}</span>
+                    {% elif deltas.average_score_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.4s;">▲ {{ "%.2f"|format(deltas.average_score_delta) }}</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>🎯 On Target %</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.on_target_percentage|round|int }}%</span>
+                  {% if deltas.on_target_percentage_delta %}
+                    {% if deltas.on_target_percentage_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.5s;">▲ {{ deltas.on_target_percentage_delta|round|int }}%</span>
+                    {% elif deltas.on_target_percentage_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.5s;">▼ {{ deltas.on_target_percentage_delta|abs|round|int }}%</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>⭐ Best Game</span></div>
+                <div class="stat-right">
+                  <span>{{ "%+d"|format(ps.best_game_score or 0) }}</span>
+                  {% if deltas.best_game_score_delta %}
+                    <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.6s;">▼ {{ deltas.best_game_score_delta|abs }}</span>
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>💀 Worst Game</span></div>
+                <div class="stat-right">
+                  <span>{{ "%+d"|format(ps.worst_game_score or 0) }}</span>
+                  {% if deltas.worst_game_score_delta %}
+                    <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.7s;">▲ {{ deltas.worst_game_score_delta }}</span>
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>🕊️ Total Birdies</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.total_birdies or 0 }}</span>
+                  {% if deltas.total_birdies %}
+                    <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.8s;">▲ {{ deltas.total_birdies }}</span>
+                  {% endif %}
+                </div>
+              </li>
+              <li style="border-bottom: none;">
+                <div class="stat-left"><span>💔 Total Bogeys</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.total_bogeys or 0 }}</span>
+                  {% if deltas.total_bogeys %}
+                    <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.9s;">▲ {{ deltas.total_bogeys }}</span>
+                  {% endif %}
+                </div>
+              </li>
+            </ol>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="stat-block">
+          <div class="empty-list-text" style="padding: 20px 0;">No recent game data available.</div>
+        </div>
+      {% endif %}
+
+      <!-- Game Stats Section -->
+      <h2 style="color: var(--primary-color); margin: 30px 0 15px 0; font-size: 1.2em;">Game Stats</h2>
 
       <div class="stat-block">
         <div class="stat-title">⛳ Birdie Streaks</div>
@@ -246,10 +365,9 @@
         {% if birdie_streak_ranking %}
           <ol>
             {% for row in birdie_streak_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.streak }}</span>
@@ -270,10 +388,9 @@
         {% if bogey_streak_ranking %}
           <ol>
             {% for row in bogey_streak_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.streak }}</span>
@@ -294,10 +411,9 @@
         {% if most_birdies_ranking %}
           <ol>
             {% for row in most_birdies_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.count }}</span>
@@ -311,17 +427,16 @@
           <small>No completed rounds yet.</small>
         {% endif %}
       </div>
-  
+
       <div class="stat-block">
         <div class="stat-title">💔 Total Bogeys</div>
         <small class="stat-description">Total number of rounds with a score above par.</small>
         {% if most_bogeys_ranking %}
           <ol>
             {% for row in most_bogeys_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.count }}</span>
@@ -334,7 +449,7 @@
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
         {% endif %}
-      </div>      
+      </div>
 
       <div class="stat-block">
         <div class="stat-title">🎯 On Target %</div>
@@ -342,10 +457,9 @@
         {% if on_target_ranking %}
           <ol>
             {% for row in on_target_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
                 </div>
                 <div class="stat-right">
                   <span>{{ row.percentage | round | int }}%</span>
@@ -361,17 +475,16 @@
       </div>
 
 
-      
+
       <div class="stat-block"> {# Fixed stray char #}
         <div class="stat-title">📊 Average Scores</div>
         <small class="stat-description">Average score per round over the entire game.</small>
         {% if average_ranking %}
           <ol>
             {% for row in average_ranking %}
-              {% set player_id = row.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
                   <small class="stat-sub">(over {{ row.rounds }} rounds)</small>
                 </div>
                 <div class="stat-right">
@@ -394,10 +507,9 @@
         {% if comeback_ranking %}
           <ol>
             {% for cb in comeback_ranking %}
-              {% set player_id = cb.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ cb.player }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ cb.player }}</span>
                   <small class="stat-sub">
                     from {{ "%+d"|format(cb.from_score) }} on Round {{ cb.from_round }}
                     to {{ "%+d"|format(cb.to_score) }} on Round {{ cb.to_round }}
@@ -422,10 +534,9 @@
         {% if fall_ranking %}
           <ol>
             {% for fall in fall_ranking %}
-              {% set player_id = fall.player_id %}
-              <li data-player-id="{{ player_id }}">
-                <div class="stat-left" data-player-name="{{ game.player_map[player_id].name }}" data-player-id="{{ player_id }}">
-                  <div class="chip" style="padding: 6px 12px; cursor: pointer;">{{ game.player_map[player_id].name }}</div>
+              <li>
+                <div class="stat-left" data-player-name="{{ fall.player }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ fall.player }}</span>
                   <small class="stat-sub">
                     from {{ "%+d"|format(fall.from_score) }} on Round {{ fall.from_round }}
                     to {{ "%+d"|format(fall.to_score) }} on Round {{ fall.to_round }}
@@ -454,21 +565,21 @@
         <!-- =========================
              SETUP PHASE
              ========================= -->
-        <div class="setup-screen">
+        <div class="setup-screen phase-enter">
           <h1 class="main-title">
             <span class="title-main">DARTS GOLF</span>
             <span class="title-sub">Scorer</span>
           </h1>
 
           <!-- Add-one-name-at-a-time input -->
-            <div class="name-input-wrap" style="position:relative; display:flex; gap:8px; align-items:center; margin-top:8px;">
+            <div class="name-input-wrap" style="position:relative; display:flex; gap:8px; align-items:center; margin-top:16px; margin-bottom:16px;">
               <input
                 id="nameField"
                 type="text"
                 placeholder="Type a player name"
                 aria-label="Player name"
                 class="settings-input"
-                style="flex:1; padding-right:56px; padding-top: 12px; padding-bottom: 12px; box-sizing: border-box;"
+                style="flex:1; padding-right:56px; padding-top: 16px; padding-bottom: 16px; box-sizing: border-box;"
                 autocomplete="off"
                 inputmode="text"
                 maxlength="14"
@@ -509,7 +620,7 @@
         <!-- =========================
              PLAYING PHASE
              ========================= -->
-        <div class="info-bar {{ 'ending' if game.end_after_round else '' }}" id="info-bar" aria-live="polite" role="status">
+        <div class="info-bar phase-enter {{ 'ending' if game.end_after_round else '' }}" id="info-bar" aria-live="polite" role="status">
           <div class="round-count">
             <span class="round-label">ROUND</span>
             <span class="round-number-wrapper">
@@ -610,7 +721,7 @@
         <!-- =========================
              PLAYOFF (TIE-BREAKER) PHASE
              ========================= -->
-        <div class="info-bar" id="info-bar" aria-live="polite" role="status">
+        <div class="info-bar phase-enter" id="info-bar" aria-live="polite" role="status">
           <div class="round-count">
             <span class="round-label">TIE-BREAKER</span>
             <span class="round-number-digit old-digit" style="transform: translateY(0); opacity: 1;">{{ "%02d"|format(game.playoff_round) }}</span>
@@ -712,7 +823,7 @@
         <!-- =========================
              FINAL RANKING PHASE
              ========================= -->
-        <div id="final-capture">
+        <div id="final-capture" class="phase-enter">
           <div class="status-box">
             <img src="{{ url_for('static', filename='images/finalstanding1.png') }}" alt="Final Standings" class="final-standings-img">
           </div>
@@ -883,6 +994,17 @@
             ✕
           </button>
         </div>
+        <!-- Animations Toggle -->
+        <div class="settings-group" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <label style="font-weight: 700;">Animations</label>
+            <div class="settings-help">Enable animations and effects (confetti, transitions). Disable for better performance.</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="animationsToggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
       <div class="modal-footer">
         <div class="modal-actions">
@@ -1018,7 +1140,7 @@
       <h3 id="promptTitle">Rename Player</h3>
       <p id="promptMessage" style="margin-bottom: 16px;">Enter a new name:</p>
       <input id="promptInput" type="text" class="settings-input" style="width: 100%; box-sizing: border-box; padding: 12px; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;" maxlength="14" autocomplete="off">
-      <div class="modal-actions">
+      <div class="modal-actions" style="margin-top: 16px;">
         <button type="button" class="btn btn-cancel" id="promptCancelBtn">Cancel</button>
         <button type="button" class="btn btn-confirm" id="promptOkBtn">Save</button>
       </div>
@@ -1043,7 +1165,14 @@
   <!-- =========================================================
        SCRIPT: INITIAL SERVER STATE INJECTION
        ========================================================= -->
-  <script>window.__gameCache = {{ game | tojson | safe }};</script>
+  <script>
+    try {
+      window.__gameCache = {{ game | tojson | safe }};
+    } catch(e) {
+      console.error('Failed to parse game state:', e);
+      window.__gameCache = {};
+    }
+  </script>
 
   <!-- =========================================================
        SCRIPT: CONFIRM HELPER
@@ -1319,6 +1448,16 @@
         const response = await fetch(url, options);
         const contentType = response.headers.get('content-type');
 
+        // Check for rate limit error (429)
+        if (response.status === 429) {
+          const errorData = contentType && contentType.includes('application/json')
+            ? await response.json()
+            : { message: 'Rate limit exceeded' };
+          const rateLimitError = new Error(errorData.message || 'Too many requests. Please slow down.');
+          rateLimitError.isRateLimit = true;
+          throw rateLimitError;
+        }
+
         if (contentType && contentType.includes('application/json')) {
           return response.json(); // It's JSON, so parse and return it
         }
@@ -1464,7 +1603,7 @@
         }
 
         const data = await apiFetch('{{ url_for("api_score") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({score:val}) });
-        if (!data.ok){ if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Couldn’t save score — server rejected', 'error'); return; }
+        if (!data.ok){ if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Could not save score - server rejected', 'error'); return; }
 
         // If the server responds that the game is over, reload to show the final standings page.
         if (data.game.phase === 'final_ranking') {
@@ -1476,7 +1615,11 @@
         scheduleApplyFromServer(data.game, opId, force);
       }catch(e){
         if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; }
-        showToast('Couldn’t save score — offline?', 'error');
+        if (e.isRateLimit) {
+          showToast('Rate limit reached - slow down!', 'warning', 3000);
+        } else {
+          showToast('Could not save score - offline?', 'error');
+        }
         console.error('Score sync failed', e);
       }
     }
@@ -1872,6 +2015,11 @@
       sendScore(val);
     }
     function showBubbleFor(val, el){
+      // Skip bubbles if animations are disabled
+      if (localStorage.getItem('animationsEnabled') === 'false') {
+        return;
+      }
+
       // 1. Get the label text for the bubble
       const scoreLabels = window.__gameCache?.score_labels || {};
       var key = String(val), label = (typeof scoreLabels[key] !== 'undefined') ? scoreLabels[key] : (val>0?('+'+val):String(val));
@@ -1958,7 +2106,7 @@
 
       if (availableRecents.length > 0) {
         chipList.innerHTML = availableRecents.map(n =>
-          `<div class="chip" data-name="${escapeHtml(n)}">${escapeHtml(n)}</div>`
+          `<div class="chip" data-name="${escapeHtml(n)}"><span class="chip-index" style="visibility:hidden;">0</span><span class="chip-name">${escapeHtml(n)}</span><button type="button" class="chip-remove" style="visibility:hidden;">✕</button></div>`
         ).join('');
       } else {
         chipList.innerHTML = '<div class="empty-list-text">No recent players</div>';
@@ -2320,9 +2468,12 @@
   <script>
     // On the final ranking page, trigger background stat calculation.
     document.addEventListener('DOMContentLoaded', () => {
-      // Trigger the winner confetti on page load
+      // Trigger the winner confetti on page load (respects user preference)
       if (typeof window.initWinnerConfetti === 'function') {
-        window.initWinnerConfetti();
+        const animationsEnabledPref = localStorage.getItem('animationsEnabled') !== 'false';
+        if (animationsEnabledPref) {
+          window.initWinnerConfetti();
+        }
       }
       const statsBtnLink = document.querySelector('a[href="{{ url_for("stats") }}"]');
       if (statsBtnLink) {
@@ -2539,9 +2690,65 @@
     const rudenessSlider  = document.getElementById('rudenessSlider');
     const rudenessLabel   = document.getElementById('rudenessLabel');
     const settingsSummary = document.getElementById('settingsSummary');
-    const clearRecentsBtn = document.getElementById('clearRecentsBtn');    
+    const clearRecentsBtn = document.getElementById('clearRecentsBtn');
     const sidDisplay      = document.getElementById('sidDisplay');
     const uptimeDisplay   = document.getElementById('uptimeDisplay');
+    const animationsToggle = document.getElementById('animationsToggle');
+
+    // --- Animations Toggle Logic ---
+    let animationsEnabled = localStorage.getItem('animationsEnabled') !== 'false'; // Default true
+    if (animationsToggle) {
+      animationsToggle.checked = animationsEnabled;
+    } else {
+      console.warn('animationsToggle element not found');
+    }
+
+    function updateAnimationsState() {
+      const confettiBtn = document.getElementById('confettiBtn');
+      const finalControlsGrid = document.querySelector('.button-grid.final-controls');
+
+      // Apply or remove the no-animations class on body
+      if (animationsEnabled) {
+        document.body.classList.remove('no-animations');
+      } else {
+        document.body.classList.add('no-animations');
+      }
+
+      // Show/hide confetti button based on animations state
+      if (confettiBtn) {
+        confettiBtn.style.display = animationsEnabled ? 'inline-block' : 'none';
+      }
+
+      // Adjust grid layout when confetti button is hidden
+      if (finalControlsGrid) {
+        if (animationsEnabled) {
+          finalControlsGrid.style.gridTemplateColumns = '1fr auto 1fr'; // Stats | Confetti | New Game
+        } else {
+          finalControlsGrid.style.gridTemplateColumns = '1fr 1fr'; // Stats | New Game (equal space)
+        }
+      }
+    }
+
+    // Toggle function for the button
+    window.toggleAnimations = function() {
+      animationsEnabled = !animationsEnabled;
+      localStorage.setItem('animationsEnabled', animationsEnabled);
+      if (animationsToggle) {
+        animationsToggle.checked = animationsEnabled;
+      }
+      updateAnimationsState();
+    };
+
+    if (animationsToggle) {
+      animationsToggle.addEventListener('change', function() {
+        animationsEnabled = this.checked;
+        localStorage.setItem('animationsEnabled', animationsEnabled);
+        updateAnimationsState();
+      });
+    }
+
+    // Initialize on page load
+    updateAnimationsState();
 
     // --- Custom Rudeness Slider Logic ---
     const RUDENESS_MAP = ['Serious', 'Medium', 'Rude'];
@@ -2768,7 +2975,25 @@
 
     async function openPlayerStats(playerName, playerId, showDeltas = false) {
       playerStatsTitle.textContent = `${playerName}'s Stats`; // Use the name from the game that was played
-      playerStatsContent.innerHTML = '<div class="stat-block" style="grid-column: 1 / -1; text-align: center;">Loading...</div>';
+      // Show skeleton loading placeholders
+      playerStatsContent.innerHTML = `
+        <div class="stat-block skeleton-stat">
+          <div class="skeleton skeleton-text" style="width: 40%; height: 14px; margin-bottom: 8px;"></div>
+          <div class="skeleton skeleton-text" style="width: 60%; height: 24px;"></div>
+        </div>
+        <div class="stat-block skeleton-stat">
+          <div class="skeleton skeleton-text" style="width: 50%; height: 14px; margin-bottom: 8px;"></div>
+          <div class="skeleton skeleton-text" style="width: 70%; height: 24px;"></div>
+        </div>
+        <div class="stat-block skeleton-stat">
+          <div class="skeleton skeleton-text" style="width: 45%; height: 14px; margin-bottom: 8px;"></div>
+          <div class="skeleton skeleton-text" style="width: 55%; height: 24px;"></div>
+        </div>
+        <div class="stat-block skeleton-stat">
+          <div class="skeleton skeleton-text" style="width: 35%; height: 14px; margin-bottom: 8px;"></div>
+          <div class="skeleton skeleton-text" style="width: 65%; height: 24px;"></div>
+        </div>
+      `;
       playerStatsIdDisplay.innerHTML = `pid: <span style="color:#fff;">${playerId}</span>`;
       playerStatsOverlay.classList.add('show');
       renamePlayerBtn.dataset.playerName = playerName;
@@ -2905,7 +3130,16 @@
         return;
       }
       compareOverlay.classList.add('show');
-      comparisonResult.innerHTML = '<div style="text-align: center;">Loading comparison...</div>';
+      // Show skeleton loading for comparison table
+      comparisonResult.innerHTML = `
+        <div style="text-align: center;">
+          <div class="skeleton skeleton-text" style="width: 80%; height: 20px; margin: 12px auto;"></div>
+          <div class="skeleton skeleton-text" style="width: 90%; height: 16px; margin: 8px auto;"></div>
+          <div class="skeleton skeleton-text" style="width: 85%; height: 16px; margin: 8px auto;"></div>
+          <div class="skeleton skeleton-text" style="width: 88%; height: 16px; margin: 8px auto;"></div>
+          <div class="skeleton skeleton-text" style="width: 82%; height: 16px; margin: 8px auto;"></div>
+        </div>
+      `;
 
       try {
         const [data1, data2] = await Promise.all([
@@ -2922,42 +3156,96 @@
     }
 
     function renderComparison(stats1, stats2, name1, name2) {
-      const getDelta = (val1, val2, lowerIsBetter = false) => {
-        if (val1 === val2) return '';
-        const isGood = lowerIsBetter ? val2 < val1 : val2 > val1;
-        return `<span class="delta ${isGood ? 'good' : 'bad'}">${isGood ? '▲' : '▼'}</span>`;
-      };
-
       const statsToCompare = [
-        { name: '🎲 Games Played', key: 'games_played', format: v => v || 0 },
-        { name: '🏆 Wins', key: 'wins', format: v => v || 0 },
-        { name: '📈 Win Rate', key: 'win_percentage', format: v => `${Math.round(v)}%` },
-        { name: '📊 Average Score', key: 'average_score', format: v => v.toFixed(2), lowerIsBetter: true },
-        { name: '🎯 On Target %', key: 'on_target_percentage', format: v => `${Math.round(v)}%` },
-        { name: '⭐ Best Game', key: 'best_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
-        { name: '💀 Worst Game', key: 'worst_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
-        { name: '🕊️ Total Birdies', key: 'total_birdies', format: v => v || 0 },
-        { name: '💔 Total Bogeys', key: 'total_bogeys', format: v => v || 0, lowerIsBetter: true },
+        { name: 'Games Played', key: 'games_played', format: v => v || 0 },
+        { name: 'Wins', key: 'wins', format: v => v || 0 },
+        { name: 'Win Rate', key: 'win_percentage', format: v => `${Math.round(v)}%`, rawValue: v => v || 0 },
+        { name: 'Average Score', key: 'average_score', format: v => v.toFixed(2), lowerIsBetter: true },
+        { name: 'On Target %', key: 'on_target_percentage', format: v => `${Math.round(v)}%`, rawValue: v => v || 0 },
+        { name: 'Best Game', key: 'best_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
+        { name: 'Worst Game', key: 'worst_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
+        { name: 'Total Birdies', key: 'total_birdies', format: v => v || 0 },
+        { name: 'Total Bogeys', key: 'total_bogeys', format: v => v || 0, lowerIsBetter: true },
       ];
+
+      let player1Wins = 0;
+      let player2Wins = 0;
 
       const rowsHtml = statsToCompare.map(stat => {
         const val1 = stats1[stat.key] || 0;
         const val2 = stats2[stat.key] || 0;
+        const rawVal1 = stat.rawValue ? stat.rawValue(val1) : val1;
+        const rawVal2 = stat.rawValue ? stat.rawValue(val2) : val2;
+
+        // Calculate who wins this stat
+        let p1Wins = false, p2Wins = false, isTie = false;
+        if (rawVal1 === rawVal2) {
+          isTie = true;
+        } else if (stat.lowerIsBetter) {
+          p1Wins = rawVal1 < rawVal2;
+          p2Wins = rawVal2 < rawVal1;
+        } else {
+          p1Wins = rawVal1 > rawVal2;
+          p2Wins = rawVal2 > rawVal1;
+        }
+
+        if (p1Wins) player1Wins++;
+        if (p2Wins) player2Wins++;
+
+        // Calculate bar percentages (each side shows relative proportion)
+        const total = Math.abs(rawVal1) + Math.abs(rawVal2);
+        let p1Pct = 50, p2Pct = 50;
+        if (total > 0) {
+          p1Pct = (Math.abs(rawVal1) / total) * 100;
+          p2Pct = (Math.abs(rawVal2) / total) * 100;
+        }
+
+        const p1Class = isTie ? 'tie' : (p1Wins ? 'winner' : '');
+        const p2Class = isTie ? 'tie' : (p2Wins ? 'winner' : '');
+
         return `
-          <tr>
-            <td class="stat-name">${stat.name}</td>
-            <td>${stat.format(val1)} ${getDelta(val2, val1, stat.lowerIsBetter)}</td>
-            <td>${stat.format(val2)} ${getDelta(val1, val2, stat.lowerIsBetter)}</td>
-          </tr>
+          <div class="h2h-stat-row">
+            <div class="h2h-stat-label">${stat.name}</div>
+            <div class="h2h-bar-container">
+              <div class="h2h-value player1">${stat.format(val1)}</div>
+              <div class="h2h-bar-wrapper">
+                <div class="h2h-bar player1 ${p1Class}" data-width="${p1Pct}%"></div>
+                <div class="h2h-bar player2 ${p2Class}" data-width="${p2Pct}%"></div>
+              </div>
+              <div class="h2h-value player2">${stat.format(val2)}</div>
+            </div>
+          </div>
         `;
       }).join('');
 
       comparisonResult.innerHTML = `
-        <table class="comparison-results-table">
-          <thead><tr><th>Stat</th><th>${escapeHtml(name1)}</th><th>${escapeHtml(name2)}</th></tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
+        <div class="h2h-comparison">
+          <div class="h2h-header">
+            <div class="h2h-player-name player1">${escapeHtml(name1)}</div>
+            <div class="h2h-player-name player2">${escapeHtml(name2)}</div>
+          </div>
+          ${rowsHtml}
+          <div class="h2h-summary">
+            <div class="h2h-summary-title">STATS WON</div>
+            <div class="h2h-summary-score">
+              <span class="player1">${player1Wins}</span>
+              <span class="vs">-</span>
+              <span class="player2">${player2Wins}</span>
+            </div>
+          </div>
+        </div>
       `;
+
+      // Animate bars after render
+      requestAnimationFrame(() => {
+        const bars = comparisonResult.querySelectorAll('.h2h-bar');
+        bars.forEach((bar, index) => {
+          const targetWidth = bar.getAttribute('data-width');
+          setTimeout(() => {
+            bar.style.width = targetWidth;
+          }, Math.floor(index / 2) * 100); // Stagger each row by 100ms
+        });
+      });
     }
 
     // Delegated click listener for leaderboard and stats pages
