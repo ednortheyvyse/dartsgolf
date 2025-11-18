@@ -144,8 +144,8 @@ body::after{
   -webkit-overflow-scrolling:touch;   /* momentum on iOS */
   overscroll-behavior:contain;        /* stop bounce from bubbling */
   padding:15px 5px;
-  /* Keep last rows clear of the bottom controls + iOS safe area */
-  padding-bottom: calc(15px + 160px); /* 160px is a safe, fixed height for the controls; safe-area now handled by fixed controls positioning */
+  /* Keep last rows clear of the bottom controls (now fixed, so only account for visual padding) */
+  padding-bottom: 15px;
   -ms-overflow-style:none; scrollbar-width:none;
 }
 .container::-webkit-scrollbar{ display:none; }
@@ -632,6 +632,7 @@ body::after{
   visibility: hidden;
   transition: opacity 0.2s ease, visibility 0.2s ease;
   overflow: auto; /* Allow scrolling if modal is too tall */
+  box-sizing: border-box; /* Include padding in the inset height */
 }
 /* Ensure the confirm modal always appears on top of other modals */
 #confirmOverlay {
@@ -647,7 +648,7 @@ body::after{
   max-width:560px; width:100%; padding:18px; box-shadow:0 12px 36px rgba(0,0,0,.6);
   display: flex;
   flex-direction: column;
-  max-height: min(90vh, calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 40px)); /* Ensure modal fits within screen with 20px margins */
+  max-height: calc(100vh - 2 * max(20px, env(safe-area-inset-top)) - 2 * max(20px, env(safe-area-inset-bottom)));
   overflow: hidden;
   /* Animation properties */
   opacity: 0;
