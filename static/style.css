@@ -1296,11 +1296,10 @@ body.no-animations .delta-corner {
   }
 }
 
-/* iPhone PWA Specific - Allow controls to sit very close to bottom edge */
+/* iPhone PWA Specific - Position controls just above safe area */
 @media (display-mode: standalone) and (max-height: 900px) {
   .controls {
-    /* On iPhone PWA, push controls down aggressively to overlap safe area */
-    bottom: -20px;
-    padding-bottom: 0px;
+    /* On iPhone PWA, reduce bottom padding significantly to sit closer to bottom edge */
+    padding-bottom: 2px;
   }
 }
