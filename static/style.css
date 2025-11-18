@@ -1296,11 +1296,10 @@ body.no-animations .delta-corner {
   }
 }
 
-/* iPhone PWA Specific - Position controls at the safe area (home indicator) */
+/* iPhone PWA Specific - Position controls closer to bottom */
 @media (display-mode: standalone) and (max-height: 900px) {
   .controls {
-    /* On iPhone PWA, position controls so they sit at the home indicator area */
-    bottom: calc(-1 * env(safe-area-inset-bottom) + 10px);
+    /* On iPhone PWA, minimize bottom padding to sit closer to bottom edge */
     padding-bottom: 2px;
   }
 }
