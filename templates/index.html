@@ -312,7 +312,7 @@
                 </div>
               </li>
               <li>
-                <div class="stat-left"><span>⭐ Best Game</span></div>
+                <div class="stat-left"><span>⭐ Best Score</span></div>
                 <div class="stat-right">
                   <span>{{ "%+d"|format(ps.best_game_score or 0) }}</span>
                   {% if deltas.best_game_score_delta %}
@@ -321,7 +321,7 @@
                 </div>
               </li>
               <li>
-                <div class="stat-left"><span>💀 Worst Game</span></div>
+                <div class="stat-left"><span>💀 Worst Score</span></div>
                 <div class="stat-right">
                   <span>{{ "%+d"|format(ps.worst_game_score or 0) }}</span>
                   {% if deltas.worst_game_score_delta %}

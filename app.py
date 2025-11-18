@@ -550,6 +550,21 @@ def _update_persistent_player_stats(gs: dict):
             player_key = f"player_stats:{player_id}"
             logging.info(f"Saving stats to Redis key: {player_key}")
             try:
+                # Get current best/worst scores before updating
+                current_stats = _redis.hgetall(player_key)
+                current_best = int(current_stats.get('best_game_score', game_score))
+                current_worst = int(current_stats.get('worst_game_score', game_score))
+
+                # Calculate new best/worst
+                new_best = min(current_best, game_score)
+                new_worst = max(current_worst, game_score)
+
+                # Track deltas for best/worst if records were broken
+                if game_score < current_best:
+                    stat_deltas[player_name]['best_game_score_delta'] = game_score - current_best
+                if game_score > current_worst:
+                    stat_deltas[player_name]['worst_game_score_delta'] = game_score - current_worst
+
                 # Use a pipeline for atomic updates
                 pipe = _redis.pipeline()
                 pipe.hincrby(player_key, "games_played", 1)
@@ -561,6 +576,11 @@ def _update_persistent_player_stats(gs: dict):
                 pipe.hincrby(player_key, "total_score_all_games", game_score)
                 pipe.hincrby(player_key, "total_rounds_all_games", game_rounds_played)
                 pipe.hincrby(player_key, "total_on_target_rounds_all_games", game_on_target_rounds)
+
+                # Update best/worst scores (use hset since these are min/max, not incremental)
+                pipe.hset(player_key, "best_game_score", new_best)
+                pipe.hset(player_key, "worst_game_score", new_worst)
+
                 # Store the deltas temporarily for frontend animation
                 delta_key = f"player_stats_delta:{player_id}"
                 pipe.set(delta_key, json.dumps(stat_deltas[player_name]), ex=300) # Expire after 5 minutes
