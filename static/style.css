@@ -1295,3 +1295,11 @@ body.no-animations .delta-corner {
     padding: 10px 10px calc(max(5px, env(safe-area-inset-bottom) - 8px)) 10px;
   }
 }
+
+/* iPhone PWA Specific - More aggressive safe area overlap */
+@media (display-mode: standalone) and (max-height: 900px) {
+  .controls {
+    /* On iPhone PWA (typically 812px or less), allow bigger overlap into the safe area */
+    padding: 10px 10px calc(max(5px, env(safe-area-inset-bottom) - 16px)) 10px;
+  }
+}
