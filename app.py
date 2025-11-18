@@ -522,7 +522,9 @@ def _update_persistent_player_stats(gs: dict):
     for standing in standings:
         player_name = standing['name']
         player_id = next((pid for pid, pdata in player_map.items() if pdata['name'] == player_name), None)
-        if not player_id: continue
+        if not player_id:
+            logging.warning(f"Could not find player_id for '{player_name}' in player_map. Skipping stats update.")
+            continue
 
         birdies = sum(1 for r in gs['round_history'] if r.get(player_id, 1) < 0)
         bogeys = sum(1 for r in gs['round_history'] if r.get(player_id, -1) > 0)
@@ -530,6 +532,8 @@ def _update_persistent_player_stats(gs: dict):
         game_score = standing.get('score', 0)
         game_rounds_played = sum(1 for r in gs['round_history'] if player_id in r)
         game_on_target_rounds = sum(1 for r in gs['round_history'] if r.get(player_id, 1) <= 0)
+
+        logging.info(f"Player '{player_name}' (ID: {player_id}): Rank={standing['rank']}, Score={game_score}, Birdies={birdies}, Bogeys={bogeys}, Rounds={game_rounds_played}")
 
         # Store deltas for animation
         stat_deltas[player_name] = {
@@ -544,21 +548,27 @@ def _update_persistent_player_stats(gs: dict):
 
         if _redis:
             player_key = f"player_stats:{player_id}"
-            # Use a pipeline for atomic updates
-            pipe = _redis.pipeline()
-            pipe.hincrby(player_key, "games_played", 1)
-            if standing['rank'] == 1:
-                pipe.hincrby(player_key, "wins", 1)
-            pipe.hincrby(player_key, "total_birdies", birdies)
-            pipe.hincrby(player_key, "total_bogeys", bogeys)
-            pipe.hincrby(player_key, "total_score_all_games", game_score)
-            pipe.hincrby(player_key, "total_rounds_all_games", game_rounds_played)
-            pipe.hincrby(player_key, "total_on_target_rounds_all_games", game_on_target_rounds)
-            # Store the deltas temporarily for frontend animation
-            delta_key = f"player_stats_delta:{player_id}"
-            pipe.set(delta_key, json.dumps(stat_deltas[player_name]), ex=300) # Expire after 5 minutes
+            logging.info(f"Saving stats to Redis key: {player_key}")
+            try:
+                # Use a pipeline for atomic updates
+                pipe = _redis.pipeline()
+                pipe.hincrby(player_key, "games_played", 1)
+                if standing['rank'] == 1:
+                    pipe.hincrby(player_key, "wins", 1)
+                    logging.info(f"  Player '{player_name}' won! Incrementing wins.")
+                pipe.hincrby(player_key, "total_birdies", birdies)
+                pipe.hincrby(player_key, "total_bogeys", bogeys)
+                pipe.hincrby(player_key, "total_score_all_games", game_score)
+                pipe.hincrby(player_key, "total_rounds_all_games", game_rounds_played)
+                pipe.hincrby(player_key, "total_on_target_rounds_all_games", game_on_target_rounds)
+                # Store the deltas temporarily for frontend animation
+                delta_key = f"player_stats_delta:{player_id}"
+                pipe.set(delta_key, json.dumps(stat_deltas[player_name]), ex=300) # Expire after 5 minutes
 
-            pipe.execute()
+                result = pipe.execute()
+                logging.info(f"Successfully saved stats for '{player_name}' to Redis. Pipeline result: {result}")
+            except Exception as e:
+                logging.error(f"Failed to save stats for '{player_name}' to Redis: {e}", exc_info=True)
         else:
             # Fallback to in-memory dictionary for local development
             if player_id not in _player_stats_fallback:
@@ -616,6 +626,8 @@ def _get_all_player_stats():
     all_stats = []
     if _redis:
         # Use SCAN to iterate over player stat keys without blocking the server
+        logging.debug("Fetching all player stats from Redis...")
+        count = 0
         for key in _redis.scan_iter("player_stats:*"):
             player_id = key.split(":", 1)[1]
             stats_raw = _redis.hgetall(key)
@@ -623,12 +635,16 @@ def _get_all_player_stats():
                 stats = {k: int(v) for k, v in stats_raw.items()}
                 stats['id'] = player_id
                 all_stats.append(stats)
+                count += 1
+        logging.info(f"Retrieved {count} player stat records from Redis.")
     else:
         # Use the in-memory fallback
+        logging.debug("Using in-memory fallback for player stats.")
         for player_id, stats_raw in _player_stats_fallback.items():
             stats = stats_raw.copy()
             stats['id'] = player_id
             all_stats.append(stats)
+        logging.info(f"Retrieved {len(all_stats)} player stat records from in-memory fallback.")
     return all_stats
 # --------------------- Routes ---------------------
 @app.route('/')
