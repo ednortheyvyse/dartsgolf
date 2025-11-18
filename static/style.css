@@ -144,8 +144,8 @@ body::after{
   -webkit-overflow-scrolling:touch;   /* momentum on iOS */
   overscroll-behavior:contain;        /* stop bounce from bubbling */
   padding:15px 5px;
-  /* Keep last rows clear of the bottom controls (now fixed, so only account for visual padding) */
-  padding-bottom: 15px;
+  /* Keep last rows clear of the bottom controls (fixed positioned, so add controls height + visual padding) */
+  padding-bottom: calc(15px + var(--controls-h));
   -ms-overflow-style:none; scrollbar-width:none;
 }
 .container::-webkit-scrollbar{ display:none; }
