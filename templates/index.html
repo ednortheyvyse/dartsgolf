@@ -83,6 +83,13 @@
       opacity: 1;
       background-color: rgba(255, 255, 255, 0.1);
     }
+    .sort-controls .sort-btn {
+      background: #333;
+      transition: background-color 0.2s ease;
+    }
+    .sort-controls .sort-btn.active {
+      background: var(--primary-color);
+    }
     /* Add transition to all chips for smooth color changes */
     .chip {
       transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
@@ -101,10 +108,33 @@
       margin-bottom: 12px;
     }
     #leaderboardList {
-      transition: opacity 0.15s ease-in-out;
+      /* Removed fade transition for smoother experience */
     }
     #leaderboardSortTitle {
-      transition: opacity 0.15s ease-in-out;
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+    /* Top 3 rankings get special styling */
+    #leaderboardList li:nth-child(1) .chip-index {
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      color: #000;
+      font-weight: 700;
+    }
+    #leaderboardList li:nth-child(2) .chip-index {
+      background: linear-gradient(135deg, #C0C0C0, #808080);
+      color: #000;
+      font-weight: 700;
+    }
+    #leaderboardList li:nth-child(3) .chip-index {
+      background: linear-gradient(135deg, #CD7F32, #8B4513);
+      color: #fff;
+      font-weight: 700;
+    }
+    #leaderboardList li {
+      transition: background-color 0.2s ease;
+    }
+    #leaderboardList li:hover {
+      background-color: rgba(255, 255, 255, 0.02);
     }
     .floating-help-btn {
       position: fixed;
@@ -196,7 +226,7 @@
       <h1 class="main-title" style="margin-bottom: 20px;">LEADERBOARD</h1>
 
       <div class="stat-block">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <div id="leaderboardSortTitle" class="stat-title" style="margin-bottom: 0;">
             {% if sort_by == 'win_rate' %}
               🏆 Win Rate
@@ -207,12 +237,12 @@
             {% endif %}
           </div>
           <div class="sort-controls" style="display: flex; gap: 8px;">
-            <button type="button" data-sort="games_played" class="sort-btn icon-btn {{ 'active' if sort_by == 'games_played' else '' }}" title="Sort by Games Played" style="padding: 6px 10px; border-radius: 6px; background: {{ 'var(--primary-color)' if sort_by == 'games_played' else '#333' }}; border: none; font-size: 1.1em; cursor: pointer;">🎲</button>
-            <button type="button" data-sort="win_rate" class="sort-btn icon-btn {{ 'active' if sort_by == 'win_rate' else '' }}" title="Sort by Win Rate" style="padding: 6px 10px; border-radius: 6px; background: {{ 'var(--primary-color)' if sort_by == 'win_rate' else '#333' }}; border: none; font-size: 1.1em; cursor: pointer;">🏆</button>
-            <button type="button" data-sort="on_target" class="sort-btn icon-btn {{ 'active' if sort_by == 'on_target' else '' }}" title="Sort by On Target %" style="padding: 6px 10px; border-radius: 6px; background: {{ 'var(--primary-color)' if sort_by == 'on_target' else '#333' }}; border: none; font-size: 1.1em; cursor: pointer;">🎯</button>
+            <button type="button" data-sort="games_played" class="sort-btn icon-btn {{ 'active' if sort_by == 'games_played' else '' }}" title="Sort by Games Played" style="padding: 6px 10px; border-radius: 6px; border: none; font-size: 1.1em; cursor: pointer;">🎲</button>
+            <button type="button" data-sort="win_rate" class="sort-btn icon-btn {{ 'active' if sort_by == 'win_rate' else '' }}" title="Sort by Win Rate" style="padding: 6px 10px; border-radius: 6px; border: none; font-size: 1.1em; cursor: pointer;">🏆</button>
+            <button type="button" data-sort="on_target" class="sort-btn icon-btn {{ 'active' if sort_by == 'on_target' else '' }}" title="Sort by On Target %" style="padding: 6px 10px; border-radius: 6px; border: none; font-size: 1.1em; cursor: pointer;">🎯</button>
           </div>
         </div>
-        <input type="search" id="leaderboardSearch" placeholder="Find a player..." class="settings-input" style="width: 100%; margin-bottom: 16px; padding: 10px 12px; box-sizing: border-box; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.95em;">
+        <input type="search" id="leaderboardSearch" placeholder="🔍 Find a player..." class="settings-input" style="width: 100%; margin-bottom: 20px; padding: 12px 14px; box-sizing: border-box; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.95em; transition: border-color 0.2s ease;" onfocus="this.style.borderColor='var(--primary-color)'" onblur="this.style.borderColor='var(--border-color)'">
         {% if leaderboard %}
           <ol id="leaderboardList" style="list-style-type: none; padding-left: 0; margin: 0;">
             {% for p in leaderboard %}
@@ -235,7 +265,11 @@
             {% endfor %}
           </ol>
         {% else %}
-          <div class="empty-list-text" style="padding: 20px 0;">No player stats found. Play a game to get on the board!</div>
+          <div class="empty-list-text" style="padding: 40px 20px; text-align: center; color: #888;">
+            <div style="font-size: 3em; margin-bottom: 12px;">🏌️</div>
+            <div style="font-size: 1.1em; margin-bottom: 8px;">No stats yet!</div>
+            <div style="font-size: 0.9em; opacity: 0.7;">Play a game to claim your spot on the leaderboard</div>
+          </div>
         {% endif %}
       </div>
     {% elif show_stats %}
@@ -3071,8 +3105,8 @@
               <li><div class="stat-left"><span class="stat-player">📈 Win Rate</span></div><div class="stat-right"><span>${Math.round(stats.win_percentage)}%</span> ${getPercDeltaHtml(deltas.win_percentage_delta)}</div></li>
               <li><div class="stat-left"><span class="stat-player">📊 Average Score</span></div><div class="stat-right"><span>${stats.average_score.toFixed(2)}</span> ${getAvgDeltaHtml(deltas.average_score_delta)}</div></li>
               <li><div class="stat-left"><span class="stat-player">🎯 On Target %</span></div><div class="stat-right"><span>${Math.round(stats.on_target_percentage)}%</span> ${getPercDeltaHtml(deltas.on_target_percentage_delta)}</div></li>
-              <li><div class="stat-left"><span class="stat-player">⭐ Best Game</span></div><div class="stat-right"><span>${formatScoreWithSign(stats.best_game_score)}</span> ${getGameScoreDeltaHtml(deltas.best_game_score_delta)}</div></li>
-              <li><div class="stat-left"><span class="stat-player">💀 Worst Game</span></div><div class="stat-right"><span>${formatScoreWithSign(stats.worst_game_score)}</span> ${getGameScoreDeltaHtml(deltas.worst_game_score_delta)}</div></li>
+              <li><div class="stat-left"><span class="stat-player">⭐ Best Score</span></div><div class="stat-right"><span>${formatScoreWithSign(stats.best_game_score)}</span> ${getGameScoreDeltaHtml(deltas.best_game_score_delta)}</div></li>
+              <li><div class="stat-left"><span class="stat-player">💀 Worst Score</span></div><div class="stat-right"><span>${formatScoreWithSign(stats.worst_game_score)}</span> ${getGameScoreDeltaHtml(deltas.worst_game_score_delta)}</div></li>
               <li><div class="stat-left"><span class="stat-player">🕊️ Total Birdies</span></div><div class="stat-right"><span>${stats.total_birdies || 0}</span> ${getDeltaHtml(deltas.total_birdies)}</div></li>
               <li style="border-bottom: none;"><div class="stat-left"><span class="stat-player">💔 Total Bogeys</span></div><div class="stat-right"><span>${stats.total_bogeys || 0}</span> ${getDeltaHtml(deltas.total_bogeys)}</div></li>
             </ol>
@@ -3164,8 +3198,8 @@
         { name: 'Win Rate', key: 'win_percentage', format: v => `${Math.round(v)}%`, rawValue: v => v || 0 },
         { name: 'Average Score', key: 'average_score', format: v => v.toFixed(2), lowerIsBetter: true },
         { name: 'On Target %', key: 'on_target_percentage', format: v => `${Math.round(v)}%`, rawValue: v => v || 0 },
-        { name: 'Best Game', key: 'best_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
-        { name: 'Worst Game', key: 'worst_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
+        { name: 'Best Score', key: 'best_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
+        { name: 'Worst Score', key: 'worst_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
         { name: 'Total Birdies', key: 'total_birdies', format: v => v || 0 },
         { name: 'Total Bogeys', key: 'total_bogeys', format: v => v || 0, lowerIsBetter: true },
       ];
@@ -3209,12 +3243,12 @@
           <div class="h2h-stat-row">
             <div class="h2h-stat-label">${stat.name}</div>
             <div class="h2h-bar-container">
-              <div class="h2h-value player1">${stat.format(val1)}</div>
+              <div class="h2h-value player1 ${p1Class}">${stat.format(val1)}</div>
               <div class="h2h-bar-wrapper">
                 <div class="h2h-bar player1 ${p1Class}" data-width="${p1Pct}%"></div>
                 <div class="h2h-bar player2 ${p2Class}" data-width="${p2Pct}%"></div>
               </div>
-              <div class="h2h-value player2">${stat.format(val2)}</div>
+              <div class="h2h-value player2 ${p2Class}">${stat.format(val2)}</div>
             </div>
           </div>
         `;
@@ -3371,26 +3405,16 @@
         sortContainer.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
 
-        // 2. Animate out the old list
-        leaderboardList.style.opacity = '0';
-        if (sortTitleElement) sortTitleElement.style.opacity = '0';
-
         try {
-          // 3. Fetch new sorted data
+          // 2. Fetch new sorted data
           const data = await apiFetch(`{{ url_for('api_leaderboard') }}?sort_by=${sortBy}`);
           if (!data.ok) throw new Error('Failed to load sorted data.');
 
-          // 4. Wait for fade-out, then render new list and title
-          setTimeout(() => {
-            renderLeaderboard(data.leaderboard, sortBy);
-            // 5. Animate in the new list and title
-            leaderboardList.style.opacity = '1';
-            if (sortTitleElement) sortTitleElement.style.opacity = '1';
-          }, 150); // Matches the CSS transition duration
+          // 3. Render new list and title immediately (no fade animation)
+          renderLeaderboard(data.leaderboard, sortBy);
 
         } catch (error) {
           showToast(error.message, 'error');
-          leaderboardList.style.opacity = '1'; // Restore opacity on error
         }
       });
     });

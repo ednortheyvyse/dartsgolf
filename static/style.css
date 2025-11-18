@@ -1219,12 +1219,23 @@ body.no-animations .delta-corner {
   font-size: 0.95em;
   min-width: 60px;
   text-align: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 .h2h-value.player1 {
   color: var(--primary-color);
 }
 .h2h-value.player2 {
   color: var(--secondary-color);
+}
+.h2h-value.winner {
+  border-color: currentColor;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+.h2h-value.tie {
+  opacity: 0.6;
 }
 .h2h-bar-wrapper {
   flex: 1;

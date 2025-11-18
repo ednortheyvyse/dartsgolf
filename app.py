@@ -614,26 +614,24 @@ def _update_persistent_player_stats(gs: dict):
             stats["total_rounds_all_games"] += game_rounds_played
             stats["total_on_target_rounds_all_games"] += game_on_target_rounds
 
-            # Update best/worst game scores
-            if 'best_game_score' not in stats:
-                stats['best_game_score'] = game_score
-            else:
-                stats['best_game_score'] = min(stats['best_game_score'], game_score)
+            # Update best/worst game scores and track deltas
+            # Store old values before updating
+            old_best = stats.get('best_game_score', game_score)
+            old_worst = stats.get('worst_game_score', game_score)
 
-            if 'worst_game_score' not in stats:
-                stats['worst_game_score'] = game_score
-            else:
-                stats['worst_game_score'] = max(stats['worst_game_score'], game_score)
+            # Calculate new best/worst
+            new_best = min(old_best, game_score)
+            new_worst = max(old_worst, game_score)
 
-            # Calculate deltas for best/worst scores
-            # Note: For min/max, a delta is only meaningful if a new record is set.
-            # We'll calculate the change from the *previous* record.
-            old_best = stats.get('best_game_score_before_this_game', game_score)
-            old_worst = stats.get('worst_game_score_before_this_game', game_score)
+            # Track deltas if records were broken
             if game_score < old_best:
                 stat_deltas[player_name]['best_game_score_delta'] = game_score - old_best
             if game_score > old_worst:
                 stat_deltas[player_name]['worst_game_score_delta'] = game_score - old_worst
+
+            # Update the stats
+            stats['best_game_score'] = new_best
+            stats['worst_game_score'] = new_worst
 
             stats["last_game_deltas"] = stat_deltas[player_name]
     return stat_deltas
