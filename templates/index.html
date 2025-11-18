@@ -3252,29 +3252,43 @@
 
     // Delegated click listener for leaderboard and stats pages
     document.querySelector('.container').addEventListener('click', (e) => {
+      // Check if we're clicking on a leaderboard list item or stats element
+      const listItem = e.target.closest('#leaderboardList li');
       const statElement = e.target.closest('.stat-left');
-      if (!statElement) return;
-      
+
+      // Get player data from either source
+      let playerId, playerName;
+      if (listItem && listItem.dataset.playerId) {
+        // Clicking anywhere on the leaderboard row
+        playerId = listItem.dataset.playerId;
+        playerName = listItem.querySelector('[data-player-name]')?.dataset.playerName;
+      } else if (statElement) {
+        // Clicking on stats element (for stats page)
+        playerId = statElement.dataset.playerId;
+        playerName = statElement.dataset.playerName;
+      } else {
+        return;
+      }
+
+      if (!playerId || !playerName) return;
+
       // Prevent default link behavior if it was a link that was clicked
       if (e.target.closest('a')) {
         e.preventDefault();
       }
 
-      const playerId = statElement.dataset.playerId;
-      const playerName = statElement.dataset.playerName;
-      if (!playerId || !playerName) return;
+      const row = listItem || statElement.closest('li');
 
       if (isCompareModeActive) {
-        const listItem = statElement.closest('li');
-        const isSelected = listItem && listItem.classList.contains('selected-for-compare');
+        const isSelected = row && row.classList.contains('selected-for-compare');
         if (isSelected) {
           // Deselect
-          listItem.classList.remove('selected-for-compare');
+          row.classList.remove('selected-for-compare');
           comparisonSelection = comparisonSelection.filter(p => p !== playerName);
         } else {
           // Select
           if (comparisonSelection.length < 2) {
-            if (listItem) listItem.classList.add('selected-for-compare');
+            if (row) row.classList.add('selected-for-compare');
             comparisonSelection.push({ id: playerId, name: playerName });
           }
         }
@@ -3284,7 +3298,7 @@
         }
       } else {
         // Default behavior: open player stats
-        const showDeltas = !!statElement.closest('.stats-view-container');
+        const showDeltas = !!statElement?.closest('.stats-view-container');
         openPlayerStats(playerName, playerId, showDeltas);
       }
     });
