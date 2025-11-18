@@ -132,7 +132,7 @@ body::after{
   height: env(safe-area-inset-bottom);
   background: #000;        /* matches your bar */
   pointer-events: none;
-  z-index: 18;             /* below .controls (z-index:19) */
+  z-index: 17;             /* below .controls (z-index:19) */
 }
 
 /* ------------------------------
@@ -145,7 +145,7 @@ body::after{
   overscroll-behavior:contain;        /* stop bounce from bubbling */
   padding:15px 5px;
   /* Keep last rows clear of the bottom controls + iOS safe area */
-  padding-bottom: calc(15px + 160px + env(safe-area-inset-bottom)); /* 160px is a safe, fixed height for the controls */
+  padding-bottom: calc(15px + 160px); /* 160px is a safe, fixed height for the controls; safe-area now handled by fixed controls positioning */
   -ms-overflow-style:none; scrollbar-width:none;
 }
 .container::-webkit-scrollbar{ display:none; }
@@ -154,16 +154,16 @@ body::after{
    Controls (Bottom Bar) — fixed & flush to bottom
    ------------------------------ */
 .controls{
-  /*position: fixed;*/
+  position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: env(safe-area-inset-bottom);
   background:#000;
   border-top:2px solid var(--border-color);
   z-index: 19;
 
-  /* Fix A: regular visual padding only (no safe-area here) */
-  padding: 10px 10px calc(env(safe-area-inset-bottom) + 10px);
+  /* Fix A: regular visual padding only (safe-area handled by bottom positioning) */
+  padding: 10px 10px 10px 10px;
 
 }
 
