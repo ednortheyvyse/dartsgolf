@@ -162,8 +162,8 @@ body::after{
   border-top:2px solid var(--border-color);
   z-index: 19;
 
-  /* Fix A: regular visual padding only (safe-area handled by bottom positioning) */
-  padding: 10px 10px 10px 10px;
+  /* Fix A: regular visual padding + small gap at bottom for PWA mode where safe-area-inset-bottom might be 0 */
+  padding: 10px 10px max(10px, env(safe-area-inset-bottom)) 10px;
 
 }
 
@@ -648,7 +648,7 @@ body::after{
   max-width:560px; width:100%; padding:18px; box-shadow:0 12px 36px rgba(0,0,0,.6);
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 2 * max(20px, env(safe-area-inset-top)) - 2 * max(20px, env(safe-area-inset-bottom)));
+  max-height: calc(100vh - max(20px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)) - 40px);
   overflow: hidden;
   /* Animation properties */
   opacity: 0;
