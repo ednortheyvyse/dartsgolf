@@ -604,12 +604,14 @@
           <div class="player-lists-container">
             <!-- Left Column: Selected Players -->
             <div class="player-list-wrap" id="selectedWrap">
-              <div class="player-list-title">Players (drag to reorder)</div>
+              <div class="player-list-title">Players</div>
+              <small style="display:block; color:#bbb; margin-bottom:2px;">(drag to reorder)</small>
               <div id="selectedChipList" class="chip-list"></div>
             </div>
             <!-- Right Column: Recent Players -->
             <div class="player-list-wrap" id="recentWrap">
               <div class="player-list-title">Recent players</div>
+              <div style="height:18px;"></div>
               <div id="chipList" class="chip-list"></div>
             </div>
           </div>
@@ -2109,7 +2111,7 @@
           `<div class="chip" data-name="${escapeHtml(n)}"><span class="chip-index" style="visibility:hidden;">0</span><span class="chip-name">${escapeHtml(n)}</span><button type="button" class="chip-remove" style="visibility:hidden;">✕</button></div>`
         ).join('');
       } else {
-        chipList.innerHTML = '<div class="empty-list-text">No recent players</div>';
+        chipList.innerHTML = '<div class="empty-list-text">empty</div>';
       }
 
       chipList.querySelectorAll('.chip[data-name]').forEach(el=>{
