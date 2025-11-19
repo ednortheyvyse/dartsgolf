@@ -3427,9 +3427,21 @@
   </script>
   <script>
     // --- New dynamic leaderboard sorting logic ---
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       const sortContainer = document.querySelector('.sort-controls');
       if (!sortContainer) return;
+
+      // Refresh leaderboard on page load to ensure it shows the latest stats
+      try {
+        const activeBtn = sortContainer.querySelector('.sort-btn.active');
+        const sortBy = activeBtn ? activeBtn.dataset.sort : 'games_played';
+        const data = await apiFetch(`{{ url_for('api_leaderboard') }}?sort_by=${sortBy}`);
+        if (data.ok) {
+          renderLeaderboard(data.leaderboard, sortBy);
+        }
+      } catch (error) {
+        // Silently fail - leaderboard can remain as server-rendered
+      }
 
       sortContainer.addEventListener('click', async (e) => {
         const button = e.target.closest('.sort-btn');
