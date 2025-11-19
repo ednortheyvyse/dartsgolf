@@ -3548,6 +3548,9 @@
           renamePlayerBtn.dataset.playerName = data.player.name;
           updateLeaderboardEntry(oldName, trimmedNewName);
           updateSetupPlayerName(playerId, data.player.name); // Update setup page if active
+
+          // Reload the player stats with the new name to ensure everything is updated
+          await openPlayerStats(data.player.name, playerId);
         } else {
           throw new Error(data.error || 'Server rejected the request.');
         }

@@ -693,7 +693,68 @@ def index():
         gs['stat_deltas'] = _update_persistent_player_stats(gs) # Update persistent stats at game end
         _persist(gs)
 
-    return render_template('index.html', game=gs, show_stats=False, previous_players=previous_players)
+    # Calculate player_stats_with_deltas for displaying stats on final standings page
+    player_stats_with_deltas = {}
+    if gs.get('final_standings') and gs.get('stat_deltas'):
+        for st in gs['final_standings']:
+            try:
+                player_id = st.get('id')
+                player_name = st.get('name')
+                if not player_id:
+                    continue
+
+                # Get persistent stats
+                if _redis:
+                    player_key = f"player_stats:{player_id}"
+                    stats_raw = _redis.hgetall(player_key)
+                    p_stats = {}
+                    for k, v in stats_raw.items():
+                        try:
+                            p_stats[k] = int(v)
+                        except (ValueError, TypeError):
+                            # Skip values that can't be converted to int
+                            pass
+                else:
+                    p_stats = _player_stats_fallback.get(player_id, {})
+
+                if not p_stats:
+                    p_stats = {}
+
+                # Calculate derived stats
+                games_played = p_stats.get('games_played', 0)
+                wins = p_stats.get('wins', 0)
+                total_rounds = p_stats.get('total_rounds_all_games', 0)
+                total_score = p_stats.get('total_score_all_games', 0)
+                total_on_target = p_stats.get('total_on_target_rounds_all_games', 0)
+
+                p_stats['win_percentage'] = (wins / games_played) * 100 if games_played > 0 else 0
+                p_stats['average_score'] = total_score / total_rounds if total_rounds > 0 else 0
+                p_stats['on_target_percentage'] = (total_on_target / total_rounds) * 100 if total_rounds > 0 else 0
+
+                # Get deltas from game state
+                deltas = gs['stat_deltas'].get(player_name, {})
+                if deltas:
+                    prev_games = games_played - deltas.get('games_played', 0)
+                    prev_wins = wins - deltas.get('wins', 0)
+                    prev_total_rounds = total_rounds - deltas.get('total_rounds_all_games', 0)
+                    prev_total_score = total_score - deltas.get('total_score_all_games', 0)
+                    prev_total_on_target = total_on_target - deltas.get('total_on_target_rounds_all_games', 0)
+
+                    prev_win_perc = (prev_wins / prev_games) * 100 if prev_games > 0 else 0
+                    prev_avg_score = prev_total_score / prev_total_rounds if prev_total_rounds > 0 else 0
+                    prev_on_target_perc = (prev_total_on_target / prev_total_rounds) * 100 if prev_total_rounds > 0 else 0
+
+                    deltas['win_percentage_delta'] = p_stats['win_percentage'] - prev_win_perc
+                    deltas['average_score_delta'] = p_stats['average_score'] - prev_avg_score
+                    deltas['on_target_percentage_delta'] = p_stats['on_target_percentage'] - prev_on_target_perc
+
+                p_stats['deltas'] = deltas
+                player_stats_with_deltas[player_name] = p_stats
+            except Exception as e:
+                logging.error(f"Error processing stats for player {st.get('name')}: {e}", exc_info=True)
+                continue
+
+    return render_template('index.html', game=gs, show_stats=False, player_stats_with_deltas=player_stats_with_deltas, previous_players=previous_players)
 
 
 # NEW: tolerate GET /start (prefetches / SW / crawlers) by redirecting home
