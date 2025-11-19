@@ -8,6 +8,7 @@
 
   --primary-color:#E3292E;   /* RED (current turn & stats) */
   --secondary-color:#309F6A; /* GREEN (negative deltas) */
+  --neutral-color:#888888;   /* GRAY (neutral/no change deltas) */
 
   --accent-color:#F9DFBC;    /* SCORE CELL BACKGROUND */
   --accent-text-color:#000;  /* Running total text in cells */
@@ -532,7 +533,7 @@ body::after{
 }
 .delta-corner.pos{  background:var(--primary-color); }
 .delta-corner.neg{  background:var(--secondary-color); }
-.delta-corner.zero{ background:#000; }
+.delta-corner.zero{ background:var(--neutral-color); color:#000; }
 .delta-corner.hidden{ opacity:0; animation: none; } /* Disable animation when hidden */
 
 @keyframes deltaPop {
@@ -1118,6 +1119,7 @@ body.no-animations .delta-corner {
 }
 .stat-delta.good { color: var(--secondary-color); }
 .stat-delta.bad { color: var(--primary-color); }
+.stat-delta.neutral { color: var(--neutral-color); }
 
 /* Helpers for “from…to…” under name */
 .stat-left{ display:flex; flex-direction:column; gap:2px; min-width:170px; flex-shrink: 0; align-items: flex-start; }

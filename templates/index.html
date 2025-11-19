@@ -310,11 +310,13 @@
                 <div class="stat-left"><span>📈 Win Rate</span></div>
                 <div class="stat-right">
                   <span>{{ ps.win_percentage|round|int }}%</span>
-                  {% if deltas.win_percentage_delta %}
+                  {% if deltas.win_percentage_delta is defined and deltas.win_percentage_delta is not none %}
                     {% if deltas.win_percentage_delta > 0 %}
                       <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.3s;">▲ {{ deltas.win_percentage_delta|round|int }}%</span>
                     {% elif deltas.win_percentage_delta < 0 %}
                       <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.3s;">▼ {{ deltas.win_percentage_delta|abs|round|int }}%</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.3s;">− 0%</span>
                     {% endif %}
                   {% endif %}
                 </div>
@@ -323,11 +325,13 @@
                 <div class="stat-left"><span>📊 Average Score</span></div>
                 <div class="stat-right">
                   <span>{{ "%.2f"|format(ps.average_score or 0) }}</span>
-                  {% if deltas.average_score_delta %}
+                  {% if deltas.average_score_delta is defined and deltas.average_score_delta is not none %}
                     {% if deltas.average_score_delta < 0 %}
                       <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.4s;">▼ {{ "%.2f"|format(deltas.average_score_delta|abs) }}</span>
                     {% elif deltas.average_score_delta > 0 %}
                       <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.4s;">▲ {{ "%.2f"|format(deltas.average_score_delta) }}</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.4s;">− 0.00</span>
                     {% endif %}
                   {% endif %}
                 </div>
@@ -336,11 +340,13 @@
                 <div class="stat-left"><span>🎯 On Target %</span></div>
                 <div class="stat-right">
                   <span>{{ ps.on_target_percentage|round|int }}%</span>
-                  {% if deltas.on_target_percentage_delta %}
+                  {% if deltas.on_target_percentage_delta is defined and deltas.on_target_percentage_delta is not none %}
                     {% if deltas.on_target_percentage_delta > 0 %}
                       <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.5s;">▲ {{ deltas.on_target_percentage_delta|round|int }}%</span>
                     {% elif deltas.on_target_percentage_delta < 0 %}
                       <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.5s;">▼ {{ deltas.on_target_percentage_delta|abs|round|int }}%</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.5s;">− 0%</span>
                     {% endif %}
                   {% endif %}
                 </div>
@@ -349,8 +355,14 @@
                 <div class="stat-left"><span>⭐ Best Score</span></div>
                 <div class="stat-right">
                   <span>{{ "%+d"|format(ps.best_game_score or 0) }}</span>
-                  {% if deltas.best_game_score_delta %}
-                    <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.6s;">▼ {{ deltas.best_game_score_delta|abs }}</span>
+                  {% if deltas.best_game_score_delta is defined and deltas.best_game_score_delta is not none %}
+                    {% if deltas.best_game_score_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.6s;">▼ {{ deltas.best_game_score_delta|abs }}</span>
+                    {% elif deltas.best_game_score_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.6s;">▲ {{ deltas.best_game_score_delta }}</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.6s;">− 0</span>
+                    {% endif %}
                   {% endif %}
                 </div>
               </li>
@@ -358,8 +370,14 @@
                 <div class="stat-left"><span>💀 Worst Score</span></div>
                 <div class="stat-right">
                   <span>{{ "%+d"|format(ps.worst_game_score or 0) }}</span>
-                  {% if deltas.worst_game_score_delta %}
-                    <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.7s;">▲ {{ deltas.worst_game_score_delta }}</span>
+                  {% if deltas.worst_game_score_delta is defined and deltas.worst_game_score_delta is not none %}
+                    {% if deltas.worst_game_score_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.7s;">▲ {{ deltas.worst_game_score_delta }}</span>
+                    {% elif deltas.worst_game_score_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.7s;">▼ {{ deltas.worst_game_score_delta|abs }}</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.7s;">− 0</span>
+                    {% endif %}
                   {% endif %}
                 </div>
               </li>
@@ -3059,37 +3077,57 @@
         const deltas = stats.last_game_deltas || {};
 
         function getDeltaHtml(deltaValue) {
-          if (!deltaValue || !showDeltas) return '';
+          if (deltaValue === undefined || deltaValue === null || !showDeltas) return '';
+          if (deltaValue === 0) {
+            return `<div class="stat-delta neutral">
+              − ${deltaValue}
+            </div>`;
+          }
           const isGood = deltaValue > 0;
           return `<div class="stat-delta ${isGood ? 'good' : 'bad'}">
             ${isGood ? '▲' : '▼'} ${deltaValue}
-          </span>`;
+          </div>`;
         }
 
         // For average score, lower is better
         function getAvgDeltaHtml(deltaValue) {
-          if (!deltaValue || !showDeltas) return '';
+          if (deltaValue === undefined || deltaValue === null || !showDeltas) return '';
+          if (deltaValue === 0) {
+            return `<div class="stat-delta neutral">
+              − ${(0).toFixed(2)}
+            </div>`;
+          }
           const isGood = deltaValue < 0;
           return `<div class="stat-delta ${isGood ? 'good' : 'bad'}">
             ${isGood ? '▼' : '▲'} ${deltaValue.toFixed(2)}
-          </span>`;
+          </div>`;
         }
 
         function getPercDeltaHtml(deltaValue) {
-          if (!deltaValue || !showDeltas) return '';
+          if (deltaValue === undefined || deltaValue === null || !showDeltas) return '';
+          if (deltaValue === 0) {
+            return `<div class="stat-delta neutral">
+              − 0%
+            </div>`;
+          }
           const isGood = deltaValue > 0;
           return `<div class="stat-delta ${isGood ? 'good' : 'bad'}">
             ${isGood ? '▲' : '▼'} ${Math.round(deltaValue)}%
-          </span>`;
+          </div>`;
         }
-        
+
         // For best/worst score, lower is better
         function getGameScoreDeltaHtml(deltaValue) {
-          if (!deltaValue || !showDeltas) return '';
+          if (deltaValue === undefined || deltaValue === null || !showDeltas) return '';
+          if (deltaValue === 0) {
+            return `<div class="stat-delta neutral">
+              − 0
+            </div>`;
+          }
           const isGood = deltaValue < 0; // A new best score is a negative delta
           return `<div class="stat-delta ${isGood ? 'good' : 'bad'}">
             ${isGood ? '▼' : '▲'} ${deltaValue}
-          </span>`;
+          </div>`;
         }
 
         function formatScoreWithSign(score) {
