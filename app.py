@@ -1718,16 +1718,29 @@ def delete_player_stats(player_name):
             # Check if the player exists before attempting to delete
             if not _redis.exists(player_key):
                 return jsonify(ok=False, error="Player not found in Redis."), 404
-            
+
             # Delete the player's stats hash
             _redis.delete(player_key)
             logging.info(f"Deleted Redis key: {player_key}")
+
+            # Also delete the player from the players_db hash
+            _redis.hdel('players_db', player_id)
+            logging.info(f"Deleted player '{player_id}' from players_db")
+
+            # Invalidate leaderboard cache since player has been removed
+            _redis.delete("leaderboard_cache:games_played", "leaderboard_cache:win_rate", "leaderboard_cache:on_target")
+            logging.info("Invalidated leaderboard cache after player deletion")
         else: # In-memory fallback
             if player_id not in _player_stats_fallback:
                 return jsonify(ok=False, error="Player not found in in-memory stats."), 404
-            
+
             del _player_stats_fallback[player_id]
             logging.info(f"Deleted '{player_id}' from in-memory stats.")
+
+            # Also delete from players_db fallback
+            if player_id in _players_db_fallback:
+                del _players_db_fallback[player_id]
+                logging.info(f"Deleted '{player_id}' from in-memory players_db.")
 
         return jsonify(ok=True, message=f"Stats for player '{player_name}' deleted successfully.")
 
