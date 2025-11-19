@@ -630,6 +630,15 @@ def _update_persistent_player_stats(gs: dict):
             stats['worst_game_score'] = new_worst
 
             stats["last_game_deltas"] = stat_deltas[player_name]
+
+    # Invalidate leaderboard cache since stats have been updated
+    if _redis:
+        try:
+            _redis.delete("leaderboard_cache:games_played", "leaderboard_cache:win_rate", "leaderboard_cache:on_target")
+            logging.debug("Invalidated leaderboard cache after stats update")
+        except Exception as e:
+            logging.warning(f"Failed to invalidate leaderboard cache: {e}")
+
     return stat_deltas
 
 def _get_all_player_stats():
