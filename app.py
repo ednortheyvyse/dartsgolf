@@ -151,11 +151,11 @@ def add_security_headers(response):
     # Content Security Policy
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
-        "connect-src 'self'"
+        "connect-src 'self' https://cdn.jsdelivr.net"
     )
     # HSTS for HTTPS
     if request.is_secure:
@@ -1528,6 +1528,65 @@ def api_game_stats_status():
     """
     is_ready = 'game_stats_cache' in session
     return jsonify({'ready': is_ready})
+
+@app.route('/api/score-timeline')
+def api_score_timeline():
+    """
+    Returns the cumulative score timeline for each player in the game.
+    Used for displaying score progression graphs on the stats page.
+    """
+    gs = _get_state()
+
+    if not gs.get('round_history'):
+        return jsonify({'error': 'No game data available'}), 400
+
+    # Get player list
+    players = gs.get('players', [])
+    player_map = gs.get('player_map', {})
+
+    # Calculate cumulative scores for each player across rounds
+    timeline_data = {}
+
+    for player_id in players:
+        player_info = player_map.get(player_id, {})
+        player_name = player_info.get('name', player_id)
+
+        cumulative_score = 0
+        scores = []
+
+        for round_data in gs['round_history']:
+            if player_id in round_data:
+                cumulative_score += round_data[player_id]
+                scores.append(cumulative_score)
+            else:
+                # Player hasn't played this round yet
+                scores.append(cumulative_score)
+
+        timeline_data[player_name] = {
+            'player_id': player_id,
+            'scores': scores,
+            'final_score': cumulative_score
+        }
+
+    # Also include playoff scores if present
+    if gs.get('all_playoff_history'):
+        playoff_history = gs['all_playoff_history']
+        round_offset = len(gs['round_history'])
+
+        for player_id, playoff_scores in playoff_history.items():
+            player_info = player_map.get(player_id, {})
+            player_name = player_info.get('name', player_id)
+
+            if player_name in timeline_data:
+                # Start from the final regular round score
+                base_score = timeline_data[player_name]['scores'][-1] if timeline_data[player_name]['scores'] else 0
+                # Add playoff scores
+                for playoff_score in playoff_scores:
+                    base_score += playoff_score
+                    timeline_data[player_name]['scores'].append(base_score)
+                timeline_data[player_name]['final_score'] = base_score
+
+    return jsonify(timeline_data)
 
 @app.route('/api/calculate-game-stats', methods=['POST'])
 def api_calculate_game_stats():

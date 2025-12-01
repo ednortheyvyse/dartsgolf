@@ -39,6 +39,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rye&family=Galada&display=swap" rel="stylesheet">
 
+  <!-- Chart.js for score timeline graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+
   <!-- =========================================================
        GLOBAL STYLES (CSS) - Externalized
        ========================================================= -->
@@ -150,6 +153,36 @@
       font-size: 1.5em;
       font-weight: bold;
       cursor: pointer;
+    }
+    /* Score timeline chart styles */
+    .score-timeline-container {
+      margin: 30px 0 15px 0;
+      padding: 20px;
+      background-color: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .score-timeline-container h2 {
+      color: var(--primary-color);
+      margin: 0 0 20px 0;
+      font-size: 1.2em;
+    }
+    .chart-wrapper {
+      position: relative;
+      width: 100%;
+      height: 400px;
+      margin-bottom: 10px;
+      touch-action: none;
+    }
+    @media (max-width: 768px) {
+      .chart-wrapper {
+        height: 300px;
+      }
+    }
+    .chart-info {
+      font-size: 0.9em;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 10px;
     }
   </style>
   <style>
@@ -279,14 +312,25 @@
       <div class="stats-view-container phase-enter">
       <h1 class="main-title" style="font-family: 'Rye', serif;">STATS</h1>
 
+      <!-- Score Timeline Chart Section -->
+      <div class="score-timeline-container" id="scoreTimelineContainer" style="display: none;">
+        <h2>📈 Score Timeline</h2>
+        <div class="chart-wrapper">
+          <canvas id="scoreTimelineChart"></canvas>
+        </div>
+        <div class="chart-info">
+          <p>Tap and drag to pan • Pinch to zoom • Double-tap to reset</p>
+        </div>
+      </div>
+
       <!-- Player Stats Section -->
-      <h2 style="color: var(--primary-color); margin: 20px 0 15px 0; font-size: 1.2em;">Player Stats</h2>
-      {% if player_stats_with_deltas %}
-        {% for st in game.final_standings %}
-          {% set ps = player_stats_with_deltas.get(st.name, {}) %}
-          {% set deltas = ps.get('deltas', {}) %}
-          <div class="stat-block">
-            <div class="stat-title" style="color: var(--primary-color);">{{ st.name }}</div>
+      <div class="stat-block">
+        <h2 style="color: var(--primary-color); margin: 0 0 15px 0; font-size: 1.2em;">Player Stats</h2>
+        {% if player_stats_with_deltas %}
+          {% for st in game.final_standings %}
+            {% set ps = player_stats_with_deltas.get(st.name, {}) %}
+            {% set deltas = ps.get('deltas', {}) %}
+            <div class="stat-title" style="color: var(--primary-color); margin-top: 15px;">{{ st.name }}</div>
             <ol style="font-size: 0.95em;">
               <li>
                 <div class="stat-left"><span>🎲 Games Played</span></div>
@@ -400,19 +444,17 @@
                 </div>
               </li>
             </ol>
-          </div>
-        {% endfor %}
-      {% else %}
-        <div class="stat-block">
+          {% endfor %}
+        {% else %}
           <div class="empty-list-text" style="padding: 20px 0;">No recent game data available.</div>
-        </div>
-      {% endif %}
+        {% endif %}
+      </div>
 
       <!-- Game Stats Section -->
-      <h2 style="color: var(--primary-color); margin: 30px 0 15px 0; font-size: 1.2em;">Game Stats</h2>
-
       <div class="stat-block">
-        <div class="stat-title">⛳ Birdie Streaks</div>
+        <h2 style="color: var(--primary-color); margin: 0 0 15px 0; font-size: 1.2em;">Game Stats</h2>
+
+        <div class="stat-title" style="margin-top: 15px;">⛳ Birdie Streaks</div>
         <small class="stat-description">Longest consecutive run of rounds with a score below par.</small>
         {% if birdie_streak_ranking %}
           <ol>
@@ -432,10 +474,8 @@
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
         {% endif %}
-      </div>
 
-      <div class="stat-block">
-        <div class="stat-title">🔥 Bogey Streaks</div>
+        <div class="stat-title" style="margin-top: 15px;">🔥 Bogey Streaks</div>
         <small class="stat-description">Longest consecutive run of rounds with a score above par.</small>
         {% if bogey_streak_ranking %}
           <ol>
@@ -455,10 +495,8 @@
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
         {% endif %}
-      </div>
 
-      <div class="stat-block">
-        <div class="stat-title">🕊️ Total Birdies</div>
+        <div class="stat-title" style="margin-top: 15px;">🕊️ Total Birdies</div>
         <small class="stat-description">Total number of rounds with a score below par.</small>
         {% if most_birdies_ranking %}
           <ol>
@@ -478,10 +516,8 @@
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
         {% endif %}
-      </div>
 
-      <div class="stat-block">
-        <div class="stat-title">💔 Total Bogeys</div>
+        <div class="stat-title" style="margin-top: 15px;">💔 Total Bogeys</div>
         <small class="stat-description">Total number of rounds with a score above par.</small>
         {% if most_bogeys_ranking %}
           <ol>
@@ -501,10 +537,8 @@
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
         {% endif %}
-      </div>
 
-      <div class="stat-block">
-        <div class="stat-title">🎯 On Target %</div>
+        <div class="stat-title" style="margin-top: 15px;">🎯 On Target %</div>
         <small class="stat-description">Percentage of rounds completed at par or better.</small>
         {% if on_target_ranking %}
           <ol>
@@ -524,12 +558,8 @@
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
         {% endif %}
-      </div>
 
-
-
-      <div class="stat-block"> {# Fixed stray char #}
-        <div class="stat-title">📊 Average Scores</div>
+        <div class="stat-title" style="margin-top: 15px;">📊 Average Scores</div>
         <small class="stat-description">Average score per round over the entire game.</small>
         {% if average_ranking %}
           <ol>
@@ -551,10 +581,8 @@
           <div class="stat-value">—</div>
           <small>No completed rounds yet.</small>
         {% endif %}
-      </div>
 
-      <div class="stat-block">
-        <div class="stat-title">📈 Biggest Saves</div>
+        <div class="stat-title" style="margin-top: 15px;">📈 Biggest Saves</div>
         <small class="stat-description">Largest score improvement in the game.</small>
         {% if comeback_ranking %}
           <ol>
@@ -578,10 +606,8 @@
           <div class="stat-value">—</div>
           <small>No positive improvements detected.</small>
         {% endif %}
-      </div>
 
-      <div class="stat-block">
-        <div class="stat-title">📉 Worst Falls</div>
+        <div class="stat-title" style="margin-top: 15px;">📉 Worst Falls</div>
         <small class="stat-description">Largest score drop in the game.</small>
         {% if fall_ranking %}
           <ol>
@@ -606,7 +632,7 @@
           <small>No score worsening detected.</small>
         {% endif %}
       </div>
-      </div>
+    </div>
 
     {% else %}
       <!-- =====================================================
@@ -3636,6 +3662,275 @@
       });
     });
   </script>
+
+  <!-- =========================================================
+       SCRIPT: SCORE TIMELINE CHART
+       ========================================================= -->
+  <script>
+    let scoreTimelineChart = null;
+    let chartDataCache = null;
+
+    async function initializeScoreTimelineChart() {
+      const container = document.getElementById('scoreTimelineContainer');
+      const canvas = document.getElementById('scoreTimelineChart');
+
+      if (!container || !canvas) {
+        console.error('Score timeline: Container or canvas not found');
+        return;
+      }
+
+      try {
+        // Fetch timeline data from backend
+        const response = await fetch('/api/score-timeline');
+        if (!response.ok) {
+          console.error('Score timeline: Failed to fetch data -', response.status, response.statusText);
+          return;
+        }
+
+        const timelineData = await response.json();
+        chartDataCache = timelineData;
+
+        // Prepare data for Chart.js
+        const datasets = [];
+        const colors = [
+          '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
+          '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
+          '#F8B4D9', '#A8E6CF', '#FFD3B6', '#FFAAA5'
+        ];
+
+        const playerNames = Object.keys(timelineData).sort();
+
+        if (playerNames.length === 0) {
+          console.warn('Score timeline: No player data available');
+          return;
+        }
+
+        playerNames.forEach((playerName, index) => {
+          const playerData = timelineData[playerName];
+          if (playerData && playerData.scores && playerData.scores.length > 0) {
+            datasets.push({
+              label: playerName,
+              data: playerData.scores,
+              borderColor: colors[index % colors.length],
+              backgroundColor: colors[index % colors.length] + '20',
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 4,
+              pointBackgroundColor: colors[index % colors.length],
+              pointBorderColor: '#fff',
+              pointBorderWidth: 1.5,
+              pointHoverRadius: 6,
+              spanGaps: true,
+            });
+          }
+        });
+
+        if (datasets.length === 0) {
+          console.warn('Score timeline: No valid datasets created');
+          return;
+        }
+
+        const allScores = Object.values(timelineData)
+          .flatMap(p => p.scores || [])
+          .filter(s => typeof s === 'number');
+
+        const maxScore = Math.max(...allScores);
+        const minScore = Math.min(...allScores);
+        const padding = Math.abs(maxScore - minScore) * 0.1 || 5;
+
+        const ctx = canvas.getContext('2d');
+        scoreTimelineChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: Array.from({ length: Math.max(...datasets.map(d => d.data.length)) }, (_, i) => `Round ${i + 1}`),
+            datasets: datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: 'index',
+              intersect: false,
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  padding: 15,
+                  font: { size: 12 },
+                  generateLabels: (chart) => {
+                    return chart.data.datasets.map((dataset, i) => ({
+                      text: dataset.label,
+                      fillStyle: dataset.borderColor,
+                      strokeStyle: dataset.borderColor,
+                      lineWidth: 2,
+                      hidden: false,
+                      index: i
+                    }));
+                  }
+                },
+                onClick: (e, legendItem, legend) => {
+                  const datasetIndex = legendItem.index;
+                  const chart = legend.chart;
+                  chart.getDatasetMeta(datasetIndex).hidden = !chart.getDatasetMeta(datasetIndex).hidden;
+                  chart.update();
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                padding: 12,
+                titleColor: '#fff',
+                bodyColor: '#fff',
+                borderColor: 'rgba(255, 255, 255, 0.3)',
+                borderWidth: 1,
+                callbacks: {
+                  label: function(context) {
+                    return context.dataset.label + ': ' + context.parsed.y;
+                  }
+                }
+              },
+              filler: {
+                propagate: true
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  font: { size: 11 }
+                },
+                grid: {
+                  color: 'rgba(255, 255, 255, 0.1)',
+                  drawBorder: false
+                },
+                min: Math.floor(minScore - padding),
+                max: Math.ceil(maxScore + padding)
+              },
+              x: {
+                ticks: {
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  font: { size: 11 }
+                },
+                grid: {
+                  color: 'rgba(255, 255, 255, 0.05)',
+                  drawBorder: false
+                }
+              }
+            },
+            animation: {
+              duration: 1000,
+              easing: 'easeInOutQuart'
+            }
+          }
+        });
+
+        // Enable touch interactions for mobile
+        enableChartTouchInteractions(canvas);
+
+        // Make the container visible
+        container.style.display = 'block';
+      } catch (error) {
+        console.error('Score timeline: Error initializing -', error);
+      }
+    }
+
+    function enableChartTouchInteractions(canvas) {
+      let lastX = 0;
+      let lastDistance = 0;
+      let isPanning = false;
+
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          lastX = e.touches[0].clientX;
+          isPanning = true;
+        } else if (e.touches.length === 2) {
+          isPanning = false;
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          lastDistance = Math.sqrt(dx * dx + dy * dy);
+        }
+      }, false);
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1 && isPanning && scoreTimelineChart) {
+          const deltaX = e.touches[0].clientX - lastX;
+          lastX = e.touches[0].clientX;
+
+          // Horizontal pan simulation via zoom
+          const scale = scoreTimelineChart.scales.x;
+          const range = scale.max - scale.min;
+          const panAmount = (range * deltaX) / canvas.width * -0.05;
+
+          if (Math.abs(panAmount) > 0) {
+            scale.min += panAmount;
+            scale.max += panAmount;
+            scoreTimelineChart.update('none');
+          }
+        } else if (e.touches.length === 2 && scoreTimelineChart) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (lastDistance > 0) {
+            const zoomFactor = distance / lastDistance;
+            if (Math.abs(zoomFactor - 1) > 0.01) {
+              const scale = scoreTimelineChart.scales.y;
+              const center = (scale.max + scale.min) / 2;
+              const range = scale.max - scale.min;
+              const newRange = range / zoomFactor;
+              scale.min = center - newRange / 2;
+              scale.max = center + newRange / 2;
+              scoreTimelineChart.update('none');
+            }
+          }
+          lastDistance = distance;
+        }
+      }, false);
+
+      canvas.addEventListener('touchend', () => {
+        isPanning = false;
+      }, false);
+
+      // Double-tap to reset zoom
+      let lastTap = 0;
+      canvas.addEventListener('touchend', (e) => {
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTap;
+        if (tapLength < 300 && tapLength > 0 && scoreTimelineChart) {
+          // Reset scales
+          scoreTimelineChart.resetScale();
+          scoreTimelineChart.update();
+        }
+        lastTap = currentTime;
+      });
+    }
+
+    // Initialize chart when stats view is shown
+    function tryInitializeChart() {
+      if (typeof Chart === 'undefined') {
+        // Chart.js not loaded yet, try again in a moment
+        setTimeout(tryInitializeChart, 100);
+        return;
+      }
+
+      const statsContainer = document.querySelector('.stats-view-container');
+      if (statsContainer) {
+        initializeScoreTimelineChart();
+      }
+    }
+
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', tryInitializeChart);
+    } else {
+      tryInitializeChart();
+    }
+  </script>
+
   <!-- =========================================================
        SCRIPT: INITIAL PRELOADER
        ========================================================= -->
