@@ -1,0 +1,4031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- =========================================================
+       PAGE META / PWA BASICS
+       ========================================================= -->
+  <meta charset="UTF-8">
+  <!-- Prevent auto zoom on mobile + enable iOS safe areas -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Darts Golf Scorer</title>
+
+  <!-- Manifest + theme-color for PWA -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <meta name="theme-color" content="#182634">
+
+  <!-- iOS/Android standalone capability -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Darts Golf">
+  <meta name="mobile-web-app-capable" content="yes">
+
+
+  <!-- Service Worker registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+    }
+  </script>
+
+  <!-- Favicons / Touch icons -->
+  <link rel="icon" href="{{ url_for('static', filename='icons/dartboard.svg') }}" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/dartboard-32.png') }}">
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/dartboard-192.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/dartboard-180.png') }}">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+  <!-- Google Font for the main title -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rye&family=Galada&display=swap" rel="stylesheet">
+
+  <!-- Chart.js for score timeline graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+
+  <!-- =========================================================
+       GLOBAL STYLES (CSS) - Externalized
+       ========================================================= -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=app_start_time) }}">
+
+  <style>
+    .leaderboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap; /* Allow wrapping for the new row */
+    }
+    .leaderboard-header .leaderboard-subtitle {
+      width: 100%; /* Make subtitle take full width */
+      margin-top: -10px; /* Pull it up closer to the title */
+    }
+    .leaderboard-header .main-title {
+      margin: 0;
+    }
+    .sort-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid var(--border-color);
+      padding: 4px 8px;
+      border-radius: 8px;
+      background-color: #101010;
+    }
+    .sort-controls .icon-btn {
+      background: none;
+      border: none;
+      padding: 6px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.4em;
+      line-height: 1;
+      opacity: 0.5;
+      transition: all 0.2s ease;
+    }
+    .sort-controls .icon-btn.active {
+      opacity: 1;
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    .sort-controls .sort-btn {
+      background: #333;
+      transition: background-color 0.2s ease;
+    }
+    .sort-controls .sort-btn.active {
+      background: var(--primary-color);
+    }
+    /* Add transition to all chips for smooth color changes */
+    .chip {
+      transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    /* Style for chips selected for comparison */
+    #leaderboardList li.selected-for-compare .chip {
+      background-color: #F9DFBC; /* Use the lighter yellow from confetti */
+      color: #101010; /* Dark text for readability */
+      border-color: #F9DFBC;
+      box-shadow: 0 0 8px rgba(249, 223, 188, 0.6);
+    }
+    .leaderboard-controls-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    #leaderboardList {
+      /* Removed fade transition for smoother experience */
+    }
+    #leaderboardSortTitle {
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+    /* Top 3 rankings get special styling */
+    #leaderboardList li:nth-child(1) .chip-index {
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      color: #000;
+      font-weight: 700;
+    }
+    #leaderboardList li:nth-child(2) .chip-index {
+      background: linear-gradient(135deg, #C0C0C0, #808080);
+      color: #000;
+      font-weight: 700;
+    }
+    #leaderboardList li:nth-child(3) .chip-index {
+      background: linear-gradient(135deg, #CD7F32, #8B4513);
+      color: #fff;
+      font-weight: 700;
+    }
+    #leaderboardList li {
+      transition: background-color 0.2s ease;
+    }
+    #leaderboardList li:hover {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+    .floating-help-btn {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      z-index: 1100; /* Above other content but below modals */
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: rgba(40, 40, 40, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 1.5em;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    /* Score timeline chart styles */
+    .score-timeline-container {
+      margin: 30px 0 15px 0;
+      padding: 20px;
+      background-color: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .score-timeline-container h2 {
+      color: var(--primary-color);
+      margin: 0 0 20px 0;
+      font-size: 1.2em;
+    }
+    .chart-wrapper {
+      position: relative;
+      width: 100%;
+      height: 400px;
+      margin-bottom: 10px;
+      touch-action: none;
+    }
+    @media (max-width: 768px) {
+      .chart-wrapper {
+        height: 300px;
+      }
+    }
+    .chart-info {
+      font-size: 0.9em;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 10px;
+    }
+  </style>
+  <style>
+    /* Add padding for the numbered list */
+    #leaderboardList { list-style-type: decimal; padding-left: 25px; }
+  </style>
+</head>
+
+<body>
+  <!-- =========================================================
+       GLOBAL CANVAS FOR CONFETTI
+       ========================================================= -->
+  <canvas id="confettiCanvas"></canvas>
+
+  <!-- Help button - only shown during gameplay -->
+  {% if game.phase in ['playing', 'playoff'] %}
+    <button type="button" id="helpBtn" class="floating-help-btn" aria-label="How to play" title="How to play" onclick="openHelpModal()">?</button>
+  {% endif %}
+
+  <!-- =========================================================
+       INITIAL LOADING OVERLAY
+       ========================================================= -->
+  <div id="initialLoadingOverlay" class="initial-loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+
+  <!-- =========================================================
+       MAIN CONTENT CONTAINER
+       ========================================================= -->
+  <div class="container">
+    <!-- Flash message container (moved to global scope) -->
+    <div class="flash-container">
+      {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, msg in messages %}
+            <div class="flash {{ category or 'info' }}" role="alert">{{ msg }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+    </div>
+    {% if False %} {# This block is now unused, replaced by the player stats modal #}
+      <!-- =====================================================
+           PLAYER STATS VIEW
+           ===================================================== -->
+      <h1>{{ player_name }}</h1>
+      <small class="stat-description" style="text-align: center; margin-top: -10px; margin-bottom: 20px;">Lifetime Stats</small>
+
+      <div class="player-stats-grid">
+        <div class="stat-block">
+          <div class="stat-title">Games Played</div>
+          <div class="stat-value">{{ player_stats.games_played or 0 }}</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-title">Wins</div>
+          <div class="stat-value">{{ player_stats.wins or 0 }}</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-title">Win Rate</div>
+          <div class="stat-value">{{ "%.1f"|format(player_stats.win_percentage) }}%</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-title">Total Birdies</div>
+          <div class="stat-value">{{ player_stats.total_birdies or 0 }}</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-title">Total Bogeys</div>
+          <div class="stat-value">{{ player_stats.total_bogeys or 0 }}</div>
+        </div>
+      </div>
+
+    {% elif show_leaderboard %}
+      <!-- =====================================================
+           LEADERBOARD VIEW
+           ===================================================== -->
+      <h1 class="main-title" style="margin-bottom: 20px;">LEADERBOARD</h1>
+
+      <div class="stat-block">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div id="leaderboardSortTitle" class="stat-title" style="margin-bottom: 0;">
+            {% if sort_by == 'win_rate' %}
+              🏆 Win Rate
+            {% elif sort_by == 'on_target' %}
+              🎯 On Target %
+            {% else %}
+              🎲 Games Played
+            {% endif %}
+          </div>
+          <div class="sort-controls" style="display: flex; gap: 8px;">
+            <button type="button" data-sort="games_played" class="sort-btn icon-btn {{ 'active' if sort_by == 'games_played' else '' }}" title="Sort by Games Played" style="padding: 6px 10px; border-radius: 6px; border: none; font-size: 1.1em; cursor: pointer;">🎲</button>
+            <button type="button" data-sort="win_rate" class="sort-btn icon-btn {{ 'active' if sort_by == 'win_rate' else '' }}" title="Sort by Win Rate" style="padding: 6px 10px; border-radius: 6px; border: none; font-size: 1.1em; cursor: pointer;">🏆</button>
+            <button type="button" data-sort="on_target" class="sort-btn icon-btn {{ 'active' if sort_by == 'on_target' else '' }}" title="Sort by On Target %" style="padding: 6px 10px; border-radius: 6px; border: none; font-size: 1.1em; cursor: pointer;">🎯</button>
+          </div>
+        </div>
+        <input type="search" id="leaderboardSearch" placeholder="🔍 Find a player..." class="settings-input" style="width: 100%; margin-bottom: 20px; padding: 12px 14px; box-sizing: border-box; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.95em; transition: border-color 0.2s ease;" onfocus="this.style.borderColor='var(--primary-color)'" onblur="this.style.borderColor='var(--border-color)'">
+        {% if leaderboard %}
+          <ol id="leaderboardList" style="list-style-type: none; padding-left: 0; margin: 0;">
+            {% for p in leaderboard %}
+              <li data-leaderboard-name="{{ p.name | lower }}" data-player-id="{{ p.id }}" style="{{ 'border-bottom: none;' if loop.last else '' }}">
+                <div class="stat-left" style="min-width: 0;" data-player-name="{{ p.name }}" data-player-id="{{ p.id }}">
+                  <div class="chip" style="cursor: pointer;">
+                    <span class="chip-index">{{ loop.index }}</span><span class="chip-name">{{ p.name }}</span>
+                  </div>
+                </div>
+                <div class="stat-right"><span style="font-weight: 600;">
+                    {% if sort_by == 'win_rate' %}
+                      {{ "%.1f"|format(p.win_rate) }}%
+                    {% elif sort_by == 'on_target' %}
+                      {{ "%.1f"|format(p.on_target_percentage) }}%
+                    {% else %}
+                      {{ p.games_played }}
+                    {% endif %}
+                  </span></div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="empty-list-text" style="padding: 40px 20px; text-align: center; color: #888;">
+            <div style="font-size: 3em; margin-bottom: 12px;">🏌️</div>
+            <div style="font-size: 1.1em; margin-bottom: 8px;">No stats yet!</div>
+            <div style="font-size: 0.9em; opacity: 0.7;">Play a game to claim your spot on the leaderboard</div>
+          </div>
+        {% endif %}
+      </div>
+    {% elif show_stats %}
+      <!-- =====================================================
+           STATS VIEW
+           ===================================================== -->
+      <div class="stats-view-container phase-enter">
+      <h1 class="main-title" style="font-family: 'Rye', serif;">STATS</h1>
+
+      <!-- Score Timeline Chart Section -->
+      <div class="score-timeline-container" id="scoreTimelineContainer" style="display: none;">
+        <h2>📈 Score Timeline</h2>
+        <div class="chart-wrapper">
+          <canvas id="scoreTimelineChart"></canvas>
+        </div>
+        <div class="chart-info">
+          <p>Tap and drag to pan • Pinch to zoom • Double-tap to reset</p>
+        </div>
+      </div>
+
+      <!-- Player Stats Section -->
+      <div class="stat-block">
+        <h2 style="color: var(--primary-color); margin: 0 0 15px 0; font-size: 1.2em;">Player Stats</h2>
+        {% if player_stats_with_deltas %}
+          {% for st in game.final_standings %}
+            {% set ps = player_stats_with_deltas.get(st.name, {}) %}
+            {% set deltas = ps.get('deltas', {}) %}
+            <div class="stat-title" style="color: var(--primary-color); margin-top: 15px;">{{ st.name }}</div>
+            <ol style="font-size: 0.95em;">
+              <li>
+                <div class="stat-left"><span>🎲 Games Played</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.games_played or 0 }}</span>
+                  {% if deltas.games_played %}
+                    <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.1s;">▲ {{ deltas.games_played }}</span>
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>🏆 Wins</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.wins or 0 }}</span>
+                  {% if deltas.wins %}
+                    <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.2s;">▲ {{ deltas.wins }}</span>
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>📈 Win Rate</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.win_percentage|round|int }}%</span>
+                  {% if deltas.win_percentage_delta is defined and deltas.win_percentage_delta is not none %}
+                    {% if deltas.win_percentage_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.3s;">▲ {{ deltas.win_percentage_delta|round|int }}%</span>
+                    {% elif deltas.win_percentage_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.3s;">▼ {{ deltas.win_percentage_delta|abs|round|int }}%</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.3s;">− 0%</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>📊 Average Score</span></div>
+                <div class="stat-right">
+                  <span>{{ "%.2f"|format(ps.average_score or 0) }}</span>
+                  {% if deltas.average_score_delta is defined and deltas.average_score_delta is not none %}
+                    {% if deltas.average_score_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.4s;">▼ {{ "%.2f"|format(deltas.average_score_delta|abs) }}</span>
+                    {% elif deltas.average_score_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.4s;">▲ {{ "%.2f"|format(deltas.average_score_delta) }}</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.4s;">− 0.00</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>🎯 On Target %</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.on_target_percentage|round|int }}%</span>
+                  {% if deltas.on_target_percentage_delta is defined and deltas.on_target_percentage_delta is not none %}
+                    {% if deltas.on_target_percentage_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.5s;">▲ {{ deltas.on_target_percentage_delta|round|int }}%</span>
+                    {% elif deltas.on_target_percentage_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.5s;">▼ {{ deltas.on_target_percentage_delta|abs|round|int }}%</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.5s;">− 0%</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>⭐ Best Score</span></div>
+                <div class="stat-right">
+                  <span>{{ "%+d"|format(ps.best_game_score or 0) }}</span>
+                  {% if deltas.best_game_score_delta is defined and deltas.best_game_score_delta is not none %}
+                    {% if deltas.best_game_score_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.6s;">▼ {{ deltas.best_game_score_delta|abs }}</span>
+                    {% elif deltas.best_game_score_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.6s;">▲ {{ deltas.best_game_score_delta }}</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.6s;">− 0</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>💀 Worst Score</span></div>
+                <div class="stat-right">
+                  <span>{{ "%+d"|format(ps.worst_game_score or 0) }}</span>
+                  {% if deltas.worst_game_score_delta is defined and deltas.worst_game_score_delta is not none %}
+                    {% if deltas.worst_game_score_delta > 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.7s;">▲ {{ deltas.worst_game_score_delta }}</span>
+                    {% elif deltas.worst_game_score_delta < 0 %}
+                      <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.7s;">▼ {{ deltas.worst_game_score_delta|abs }}</span>
+                    {% else %}
+                      <span class="stat-delta-indicator" style="color: var(--neutral-color); margin-left: 8px; --delay: 0.7s;">− 0</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </li>
+              <li>
+                <div class="stat-left"><span>🕊️ Total Birdies</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.total_birdies or 0 }}</span>
+                  {% if deltas.total_birdies %}
+                    <span class="stat-delta-indicator" style="color: var(--secondary-color); margin-left: 8px; --delay: 0.8s;">▲ {{ deltas.total_birdies }}</span>
+                  {% endif %}
+                </div>
+              </li>
+              <li style="border-bottom: none;">
+                <div class="stat-left"><span>💔 Total Bogeys</span></div>
+                <div class="stat-right">
+                  <span>{{ ps.total_bogeys or 0 }}</span>
+                  {% if deltas.total_bogeys %}
+                    <span class="stat-delta-indicator" style="color: var(--primary-color); margin-left: 8px; --delay: 0.9s;">▲ {{ deltas.total_bogeys }}</span>
+                  {% endif %}
+                </div>
+              </li>
+            </ol>
+          {% endfor %}
+        {% else %}
+          <div class="empty-list-text" style="padding: 20px 0;">No recent game data available.</div>
+        {% endif %}
+      </div>
+
+      <!-- Game Stats Section -->
+      <div class="stat-block">
+        <h2 style="color: var(--primary-color); margin: 0 0 15px 0; font-size: 1.2em;">Game Stats</h2>
+
+        <div class="stat-title" style="margin-top: 15px;">⛳ Birdie Streaks</div>
+        <small class="stat-description">Longest consecutive run of rounds with a score below par.</small>
+        {% if birdie_streak_ranking %}
+          <ol>
+            {% for row in birdie_streak_ranking %}
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
+                </div>
+                <div class="stat-right">
+                  <span>{{ row.streak }}</span>
+                  <div class="stat-bar" data-width="{{ ((row.streak / (max_birdie_streak or 1) * 60) | round(0)) or (2 if row.streak > 0 else 0) }}px"></div>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No completed rounds yet.</small>
+        {% endif %}
+
+        <div class="stat-title" style="margin-top: 15px;">🔥 Bogey Streaks</div>
+        <small class="stat-description">Longest consecutive run of rounds with a score above par.</small>
+        {% if bogey_streak_ranking %}
+          <ol>
+            {% for row in bogey_streak_ranking %}
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
+                </div>
+                <div class="stat-right">
+                  <span>{{ row.streak }}</span>
+                  <div class="stat-bar bad" data-width="{{ ((row.streak / (max_bogey_streak or 1) * 60) | round(0)) or (2 if row.streak > 0 else 0) }}px"></div>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No completed rounds yet.</small>
+        {% endif %}
+
+        <div class="stat-title" style="margin-top: 15px;">🕊️ Total Birdies</div>
+        <small class="stat-description">Total number of rounds with a score below par.</small>
+        {% if most_birdies_ranking %}
+          <ol>
+            {% for row in most_birdies_ranking %}
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
+                </div>
+                <div class="stat-right">
+                  <span>{{ row.count }}</span>
+                  <div class="stat-bar" data-width="{{ ((row.count / (max_birdie_count or 1) * 60) | round(0)) or (2 if row.count > 0 else 0) }}px"></div>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No completed rounds yet.</small>
+        {% endif %}
+
+        <div class="stat-title" style="margin-top: 15px;">💔 Total Bogeys</div>
+        <small class="stat-description">Total number of rounds with a score above par.</small>
+        {% if most_bogeys_ranking %}
+          <ol>
+            {% for row in most_bogeys_ranking %}
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
+                </div>
+                <div class="stat-right">
+                  <span>{{ row.count }}</span>
+                  <div class="stat-bar bad" data-width="{{ ((row.count / (max_bogey_count or 1) * 60) | round(0)) or (2 if row.count > 0 else 0) }}px"></div>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No completed rounds yet.</small>
+        {% endif %}
+
+        <div class="stat-title" style="margin-top: 15px;">🎯 On Target %</div>
+        <small class="stat-description">Percentage of rounds completed at par or better.</small>
+        {% if on_target_ranking %}
+          <ol>
+            {% for row in on_target_ranking %}
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
+                </div>
+                <div class="stat-right">
+                  <span>{{ row.percentage | round | int }}%</span>
+                  <div class="stat-bar" data-width="{{ ((row.percentage / (max_on_target_percentage or 1) * 60) | round(0)) or (2 if row.percentage > 0 else 0) }}px"></div>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No completed rounds yet.</small>
+        {% endif %}
+
+        <div class="stat-title" style="margin-top: 15px;">📊 Average Scores</div>
+        <small class="stat-description">Average score per round over the entire game.</small>
+        {% if average_ranking %}
+          <ol>
+            {% for row in average_ranking %}
+              <li>
+                <div class="stat-left" data-player-name="{{ row.name }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ row.name }}</span>
+                  <small class="stat-sub">(over {{ row.rounds }} rounds)</small>
+                </div>
+                <div class="stat-right">
+                  <span>{{ "%+.2f"|format(row.average) }}</span>
+                  <div class="stat-bar {{ 'bad' if row.average > 0 else ('neutral' if row.average == 0 else '') }}" data-width="{{ ((row.average|abs / (max_average_abs or 1) * 60) | round(0)) or (2 if row.average|abs > 0 else 0) }}px">
+                  </div>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No completed rounds yet.</small>
+        {% endif %}
+
+        <div class="stat-title" style="margin-top: 15px;">📈 Biggest Saves</div>
+        <small class="stat-description">Largest score improvement in the game.</small>
+        {% if comeback_ranking %}
+          <ol>
+            {% for cb in comeback_ranking %}
+              <li>
+                <div class="stat-left" data-player-name="{{ cb.player }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ cb.player }}</span>
+                  <small class="stat-sub">
+                    from {{ "%+d"|format(cb.from_score) }} on Round {{ cb.from_round }}
+                    to {{ "%+d"|format(cb.to_score) }} on Round {{ cb.to_round }}
+                  </small>
+                </div>
+                <div class="stat-right">
+                  <span>{{ cb.improvement }} saved</span>
+                  <div class="stat-bar" data-width="{{ ((cb.improvement / (max_comeback_improvement or 1) * 60) | round(0)) or (2 if cb.improvement > 0 else 0) }}px"></div>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No positive improvements detected.</small>
+        {% endif %}
+
+        <div class="stat-title" style="margin-top: 15px;">📉 Worst Falls</div>
+        <small class="stat-description">Largest score drop in the game.</small>
+        {% if fall_ranking %}
+          <ol>
+            {% for fall in fall_ranking %}
+              <li>
+                <div class="stat-left" data-player-name="{{ fall.player }}">
+                  <span class="stat-player" style="color: var(--primary-color);">{{ fall.player }}</span>
+                  <small class="stat-sub">
+                    from {{ "%+d"|format(fall.from_score) }} on Round {{ fall.from_round }}
+                    to {{ "%+d"|format(fall.to_score) }} on Round {{ fall.to_round }}
+                  </small>
+                </div>
+                <div class="stat-right">
+                  <span>{{ fall.worsening }} lost</span>
+                  <div class="stat-bar bad" data-width="{{ ((fall.worsening / (max_fall_worsening or 1) * 60) | round(0)) or (2 if fall.worsening > 0 else 0) }}px"></div>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="stat-value">—</div>
+          <small>No score worsening detected.</small>
+        {% endif %}
+      </div>
+    </div>
+
+    {% else %}
+      <!-- =====================================================
+           NORMAL GAME VIEWS
+           ===================================================== -->
+
+      {% if game.phase == 'setup' %}
+        <!-- =========================
+             SETUP PHASE
+             ========================= -->
+        <div class="setup-screen phase-enter">
+          <h1 class="main-title">
+            <span class="title-main">DARTS GOLF</span>
+            <span class="title-sub">Scorer</span>
+          </h1>
+
+          <!-- Add-one-name-at-a-time input -->
+            <div class="name-input-wrap" style="position:relative; display:flex; gap:8px; align-items:center; margin-top:16px; margin-bottom:16px;">
+              <input
+                id="nameField"
+                type="text"
+                placeholder="Type a player name"
+                aria-label="Player name"
+                class="settings-input"
+                style="flex:1; padding-right:56px; padding-top: 16px; padding-bottom: 16px; box-sizing: border-box;"
+                autocomplete="off"
+                inputmode="text"
+                maxlength="14"
+              >
+              <button
+                type="button"
+                id="addNameBtn"
+                class="settings-btn"
+                aria-label="Add player"
+                title="Add player"
+                style="position:absolute; right:6px; top:50%; transform:translateY(-50%); padding:8px 12px;"
+              >➜</button>
+            </div>
+          <form id="startForm" action="{{ url_for('start_game') }}" method="post" style="margin-top:12px;">
+            <input id="playersInput" type="hidden" name="players" required>
+            <small style="display:block; color:#bbb; margin-top:6px;">
+              Press <b>Enter</b> or tap the arrow to add. Tap <b>✕</b> to remove. Drag pills to reorder.
+            </small>
+
+          </form>
+          <!-- New two-column container for player lists -->
+          <div class="player-lists-container">
+            <!-- Left Column: Selected Players -->
+            <div class="player-list-wrap" id="selectedWrap">
+              <div class="player-list-title">Players</div>
+              <small style="display:block; color:#bbb; margin-bottom:2px;">(drag to reorder)</small>
+              <div id="selectedChipList" class="chip-list"></div>
+            </div>
+            <!-- Right Column: Recent Players -->
+            <div class="player-list-wrap" id="recentWrap">
+              <div class="player-list-title">Recent players</div>
+              <div style="height:18px;"></div>
+              <div id="chipList" class="chip-list"></div>
+            </div>
+          </div>
+
+        </div>
+
+      {% elif game.phase == 'playing' %}
+        <!-- =========================
+             PLAYING PHASE
+             ========================= -->
+        <div class="info-bar phase-enter {{ 'ending' if game.end_after_round else '' }}" id="info-bar" aria-live="polite" role="status">
+          <div class="round-count">
+            <span class="round-label">ROUND</span>
+            <span class="round-number-wrapper">
+              <span class="round-number-digit old-digit" style="transform: translateY(0); opacity: 1;">{{ "%02d"|format(game.current_round) }}</span>
+              <span class="round-number-digit new-digit" style="transform: translateY(100%); opacity: 0;"></span>
+            </span>
+            <span class="round-total">/ {{ game.holes }}</span>
+          </div>
+          <div class="turn-info">
+            {% set current_player_id = game.players[game.current_player_index] %}
+            {% set current_player_name = game.player_map.get(current_player_id, {}).get('name', 'Unknown Player') %}
+            {% if game.end_after_round %}FINAL ROUND{% else %}{{ current_player_name }}'s Turn{% endif %}
+          </div>
+        </div>
+
+        <table class="scoreboard playing" id="scoreboard">
+          <thead>
+            <tr><th scope="col">&nbsp;</th>
+              {% for player_id in game.players %}
+                {% set is_cur = (player_id == game.players[game.current_player_index]) %}
+                <th scope="col" class="{{ 'current-player-header' if is_cur else '' }}">
+                  {% if game.players|length > 4 %}
+                    {{ game.player_map[player_id].name.split(' ')|map('first')|join('')|upper }}
+                  {% else %}
+                    {{ game.player_map[player_id].name }}
+                  {% endif %}
+                </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            <tbody>
+  <tr class="total-row"><th>Total</th>
+    {% for player_id in game.players %}
+      {% set s = game.scores.get(player_id, 0) %} {# This is a data cell, not a header #}
+      <td>{% if s > 0 %}+{% endif %}{{ s }}</td>
+    {% endfor %}
+  </tr>
+
+  <!-- ✅ Current round being played -->
+  <tr class="current-row"><th>{{ "%02d"|format(game.current_round) }}</th>
+    {% for player_id in game.players %}
+      {% set v = game.round_history[game.current_round - 1].get(player_id) %} {# This is a data cell, not a header #}
+      {% set is_cur_cell = (loop.index0 == game.current_player_index) %}
+      {% if v is not none %}
+        {% set ns = namespace(total=0) %}
+        {% for r in range(game.current_round) %}
+          {% set ns.total = ns.total + (game.round_history[r].get(player_id, 0)) %}
+        {% endfor %}
+        <td>
+          <div class="cell">
+            <span class="total-pill">{{ ns.total > 0 and '+' or '' }}{{ ns.total }}</span>
+            <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+              {{ v > 0 and '+' or '' }}{{ v }}
+            </span>
+          </div>
+        </td>
+      {% else %}
+        <td class="{{ 'current-player-cell' if is_cur_cell else '' }}">
+          <div class="cell">
+            <span class="total-pill">0</span>
+            <span class="delta-corner hidden">0</span>
+          </div>
+        </td>
+      {% endif %}
+    {% endfor %}
+  </tr>
+
+  <!-- 🔁 Previous rounds (from latest to earliest) -->
+  {% for i in range(game.current_round - 1) | reverse %}
+    <tr>
+      <th>{{ "%02d"|format(i + 1) }}</th>
+      {% for player_id in game.players %} {# This is a data cell, not a header #}
+        {% set v = game.round_history[i].get(player_id) %}
+        {% if v is not none %}
+          {% set ns = namespace(total=0) %}
+          {% for r in range(i + 1) %}
+            {% set ns.total = ns.total + (game.round_history[r].get(player_id, 0)) %}
+          {% endfor %}
+          <td>
+            <div class="cell">
+              <span class="total-pill">{{ ns.total > 0 and '+' or '' }}{{ ns.total }}</span>
+              <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+                {{ v > 0 and '+' or '' }}{{ v }}
+              </span>
+            </div>
+          </td>
+        {% else %}
+          <td></td>
+        {% endif %}
+      {% endfor %}
+    </tr>
+  {% endfor %}
+
+        </table>
+
+      {% elif game.phase == 'playoff' %}
+        <!-- =========================
+             PLAYOFF (TIE-BREAKER) PHASE
+             ========================= -->
+        <div class="info-bar phase-enter" id="info-bar" aria-live="polite" role="status">
+          <div class="round-count">
+            <span class="round-label">TIE-BREAKER</span>
+            <span class="round-number-digit old-digit" style="transform: translateY(0); opacity: 1;">{{ "%02d"|format(game.playoff_round) }}</span>
+            <span class="round-number-digit new-digit" style="transform: translateY(100%); opacity: 0;"></span>
+            </span>
+          </div>
+          <div class="turn-info">
+            {% set current_player_id = game.playoff_group[game.current_player_index] if game.playoff_group else None %}
+            {% if current_player_id %}{{ game.player_map[current_player_id].name }}'s Turn{% endif %}
+          </div>
+        </div>
+                <table class="scoreboard" id="scoreboard">
+          {# -----------------------------------------------------
+             BUILD A STABLE COLUMN SET (ALL PLAYERS IN THIS TIE)
+             ----------------------------------------------------- #}
+          {% set tie_players = game.playoff_pool %}
+
+          <thead>
+            <tr><th scope="col">&nbsp;</th>
+              {% for player_id in tie_players %}
+                {# highlight only if this header is the current shooter #}
+                {% set is_cur = (game.playoff_group and player_id == game.playoff_group[game.current_player_index]) %}
+                <th scope="col" class="{{ 'current-player-header' if is_cur else '' }}" data-player-id="{{ player_id }}" data-player-name="{{ game.player_map[player_id].name }}">
+                  {% if tie_players|length > 4 %}
+                    {{ game.player_map[player_id].name.split(' ')|map('first')|join('')|upper }}
+                  {% else %}
+                    {{ game.player_map[player_id].name }}
+                  {% endif %}
+                </th>
+              {% endfor %}
+            </tr>
+          </thead>
+
+          <tbody>
+            <!-- Stable total row: base score repeated across all tie players -->
+            <tr class="total-row">
+              <th scope="row">Total</th>
+              {% for _ in tie_players %}
+                {% set s = game.playoff_base_score %}
+                <td>{% if s > 0 %}+{% endif %}{{ s }}</td>
+              {% endfor %}
+            </tr>
+
+            <!-- ✅ Current TB round being played (use stable columns) -->
+            <tr class="current-row">
+              <th scope="row">TB {{ "%02d"|format(game.playoff_round) }}</th>
+              {% for player_id in tie_players %}
+                {% set v = game.playoff_round_scores.get(player_id) %}
+                {% set is_current = (game.playoff_group and player_id == game.playoff_group[game.current_player_index]) %}
+                {% if v is not none %}
+                  <td>
+                    <div class="cell">
+                      <span class="total-pill">{{ v > 0 and '+' or '' }}{{ v }}</span>
+                      <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+                        {{ v > 0 and '+' or '' }}{{ v }}
+                      </span>
+                    </div>
+                  </td>
+                {% else %}
+                  <td class="{{ 'current-player-cell' if is_current else '' }}">
+                    <div class="cell">
+                      <span class="total-pill">0</span>
+                      <span class="delta-corner hidden">0</span>
+                    </div>
+                  </td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+
+  <!-- 🔁 Past completed TB rounds -->
+  {% set total_tb = game.playoff_history|length %}
+  {% for round_scores in game.playoff_history | reverse %}
+    {% set tb_num = total_tb - loop.index0 %}
+    <tr>
+      <th scope="row">TB {{ "%02d"|format(tb_num) }}</th>
+      {% for player_id in tie_players %} {# Use the stable tie_players list #}
+        {% set v = round_scores.get(player_id) %}
+        {% if v is not none %}
+          <td>
+            <div class="cell">
+              <span class="total-pill">{{ v > 0 and '+' or '' }}{{ v }}</span>
+              <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+                {{ v > 0 and '+' or '' }}{{ v }}
+              </span>
+            </div>
+          </td>
+        {% else %}
+          <td></td>
+        {% endif %}
+      {% endfor %}
+    </tr>
+  {% endfor %}
+
+          </tbody>
+        </table>
+
+
+      {% elif game.phase == 'final_ranking' %}
+        <!-- =========================
+             FINAL RANKING PHASE
+             ========================= -->
+        <div id="final-capture" class="phase-enter">
+          <div class="status-box">
+            <img src="{{ url_for('static', filename='images/finalstanding1.png') }}" alt="Final Standings" class="final-standings-img">
+          </div>
+
+          {% set winner_name = game.winner or (game.final_standings and game.final_standings[0].name) %}
+          {% if winner_name %}
+            <div class="winner-banner" role="status" aria-live="polite">
+              🏆 WINNER: {{ winner_name }}
+            </div>
+          {% endif %}
+
+          <table class="scoreboard final" id="scoreboard">
+            <thead> {# Add a caption for overall table context #}
+              <tr><th scope="col">&nbsp;</th>
+                {% for st in game.final_standings %}
+                  <th scope="col">{% set r=st.rank %}{% set sfx='th' %}
+                      {% if r % 10 == 1 and r % 100 != 11 %}{% set sfx='st' %}{% endif %}
+                      {% if r % 10 == 2 and r % 100 != 12 %}{% set sfx='nd' %}{% endif %}
+                      {% if r % 10 == 3 and r % 100 != 13 %}{% set sfx='rd' %}{% endif %}
+                      {{ r }}{{ sfx }}</th>
+                {% endfor %}
+              </tr>
+              <tr><th scope="col">Player</th>
+                {% for st in game.final_standings %}
+                  <th scope="col" class="final-player-header">
+                    {{ '🏆 ' if st.rank == 1 else '' }}
+                    {% if game.final_standings|length > 4 %}
+                      {{ st.name.split(' ')|map('first')|join('')|upper }}
+                    {% else %}
+                      {{ st.name }}
+                    {% endif %}
+                  </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="total-row"><th scope="row">Final</th>
+                {% for st in game.final_standings %}
+                  {% set player_id = st.id %}
+                  {% set s = st.score %}
+                  <td>{% if s>0 %}+{% endif %}{{ s }}</td>
+                {% endfor %}
+              </tr>
+
+              {% for i in range(game.max_playoff_rounds, 0, -1) %}
+                <tr><th>TB {{ "%02d"|format(i) }}</th>
+                  {% for st in game.final_standings %}
+                    {% set hist = game.all_playoff_history.get(st.id, []) %}
+                    {% if i <= hist|length %}
+                      {% set v = hist[i-1] %}
+                    <td>
+                        <div class="cell">
+                          <span class="total-pill">{{ v>0 and '+' or '' }}{{ v }}</span>
+                          <span class="delta-corner {{ 'pos' if v > 0 else ('neg' if v < 0 else 'zero') }}">
+                            {{ v>0 and '+' or '' }}{{ v }}
+                          </span>
+                        </div>
+                      </td>
+                    {% else %}
+                      <td>-</td>
+                    {% endif %}
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+
+              {% set rp = game.rounds_played or 0 %}
+              {% for i in range(rp - 1, -1, -1) %}
+                <tr><th scope="row">{{ "%02d"|format(i + 1) }}</th>
+                  {% for st in game.final_standings %}
+                    {% set v = game.round_history[i].get(st.id) %}
+                    {% if v is not none %}
+                      {% set ns = namespace(total=0) %}
+                      {% for r in range(i + 1) %}
+                        {% set ns.total = ns.total + (game.round_history[r].get(st.id, 0)) %}
+                      {% endfor %}
+                      <td>
+                        <div class="cell">
+                          <span class="total-pill">{{ ns.total>0 and '+' or '' }}{{ ns.total }}</span>
+                          <span class="delta-corner {{ 'pos' if v>0 else ('neg' if v<0 else 'zero') }}">
+                            {{ v>0 and '+' or '' }}{{ v }}
+                          </span>
+                        </div>
+                      </td>
+                    {% else %}
+                      <td></td>
+                    {% endif %}
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <!-- =========================================================
+       MODALS
+       ========================================================= -->
+  <div id="confirmOverlay" class="modal-overlay" aria-hidden="true" style="background: rgba(0,0,0,0.8);">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+      <h3 id="confirmTitle">Confirm</h3>
+      <p id="confirmMessage">Are you sure?</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" id="confirmCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-confirm" id="confirmOkBtn">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal (with Add to Home Screen button) -->
+  <div id="settingsOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 id="settingsTitle" style="margin: 0; flex-shrink: 0;">Settings</h3>
+        <div style="text-align: right;">
+          <div id="sidDisplay" class="sid-display"></div>
+          <div id="uptimeDisplay" class="sid-display" style="margin-top: 4px;"></div>
+        </div>
+      </div>
+      <div class="settings-grid">
+
+        <!-- Rudeness Slider -->
+        <div class="settings-group" id="rudenessSettingsRow">
+          <label for="rudenessSlider" style="font-weight: 700; display: block;">
+            Rudeness: <span id="rudenessLabel">Serious</span>
+          </label>
+          <div id="rudenessSlider" class="slider-container">
+            <div class="slider-track"></div>
+            <div class="slider-thumb"></div>
+          </div>
+          <div class="settings-help">
+            Adjust the tone of the score announcements.
+          </div>
+        </div>
+        
+        <!-- Holes setting (only in setup) -->
+        <div class="settings-group" id="holesSettingsRow" style="display: none;">
+          <label for="holesInput" style="font-weight: 700; display: block;">Number of Rounds (Holes)</label>
+          <input id="holesInput" type="number" class="settings-input" min="1" max="50" step="1" style="width: 100%; box-sizing: border-box; padding: 12px; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;">
+          <div class="settings-help" style="margin-top: 8px;">
+            Set the game length. Can only be changed before the game starts.
+          </div>
+        </div>
+        <!-- Clear Recent Players -->
+        <div class="settings-group" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <label style="font-weight: 700;">Recent Players</label>
+            <div class="settings-help">Remove all names from the "Recent players" list.</div>
+          </div>
+          <button type="button" id="clearRecentsBtn" class="btn btn-cancel" title="Clear Recent Players" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 0; font-size: 1em; line-height: 1; width: 27px; height: 27px;">
+            ✕
+          </button>
+        </div>
+        <!-- Add to Home Screen button (shown when eligible) -->
+        <div class="settings-group" id="installPromptGroup" style="display: none;">
+          <button type="button" id="installBtnSettings" class="btn btn-confirm" style="display:none;">
+            ➕ Add to Home Screen
+          </button>
+          <div class="settings-help">Install this app as a shortcut on your device.</div>
+        </div>
+        <div class="settings-group" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <label style="font-weight: 700;">Clear Cache</label>
+            <div class="settings-help">Forces the app to reload all its files from the server.</div>
+          </div>
+          <button type="button" id="clearCacheBtn" class="btn btn-cancel" title="Clear Cache & Refresh" style="background-color: #582828; border: 1px solid #8c4343; flex-shrink: 0; padding: 0; font-size: 1em; line-height: 1; width: 27px; height: 27px;">
+            ✕
+          </button>
+        </div>
+        <!-- Animations Toggle -->
+        <div class="settings-group" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <label style="font-weight: 700;">Animations</label>
+            <div class="settings-help">Enable animations and effects (confetti, transitions). Disable for better performance.</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="animationsToggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="modal-actions">
+          <button type="button" class="btn btn-cancel" onclick="closeSettings()">Close</button>
+          <button type="button" class="btn btn-confirm" onclick="saveSettings()">Save</button>
+        </div>
+        <div class="settings-help" style="margin-top:8px;">Current: <b id="settingsSummary"></b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- iOS Add-to-Home instructions -->
+  <div id="iosInstallOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="iosInstallTitle">
+      <h3 id="iosInstallTitle">Add to Home Screen</h3>
+      <p style="margin-top:6px;">
+        On iPhone/iPad (Safari): tap the <b>Share</b> button, then choose <b>Add to Home Screen</b>.
+      </p>
+      <div class="modal-actions" style="margin-top:12px;">
+        <button type="button" class="btn btn-confirm" onclick="closeIosInstall()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Player Resolution Modal -->
+  <div id="playerResolutionOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="playerResolutionTitle">
+      <div class="modal-header">
+        <h3 id="playerResolutionTitle">Player Found</h3>
+      </div>
+      <p id="playerResolutionMessage" style="margin-bottom: 16px;">Did you mean one of these players, or do you want to create a new one?</p>
+      <ul id="playerResolutionList" class="player-resolution-list">
+        <!-- Player options will be injected here -->
+      </ul>
+      <div class="modal-footer">
+        <div class="modal-actions">
+          <button type="button" class="btn btn-cancel" onclick="closePlayerResolution()">Cancel</button>
+          <button type="button" id="createNewPlayerBtn" class="btn btn-confirm">Create New Player</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- New Player Stats Modal -->
+  <div id="playerStatsOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="playerStatsTitle">
+      <div class="modal-header">
+        <h3 id="playerStatsTitle">Player Stats</h3>
+        <div id="playerStatsIdDisplay" class="sid-display" style="text-align: center; margin-top: -8px; margin-bottom: 12px;"></div>
+      </div>
+      <div class="settings-grid" style="padding: 0;">
+        <div id="playerStatsContent" class="player-stats-grid">
+          <!-- Content will be injected by JavaScript -->
+          <div class="stat-block" style="grid-column: 1 / -1; text-align: center;">Loading...</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="modal-actions">
+          <div style="margin-right: auto; display: flex; gap: 8px;">
+            <button type="button" id="renamePlayerBtn" class="btn btn-icon" aria-label="Rename player" title="Rename player"
+                    style="background-color: #4a4a4a; border-color: #6e6e6e; width: 36px; height: 36px; padding: 0;"
+                    onclick="renamePlayer(this.dataset.playerId, this.dataset.playerName)">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            </button>
+            <button type="button" id="deletePlayerBtn" class="btn btn-icon btn-cancel" aria-label="Delete player stats" title="Delete player stats"
+                    style="background-color: #582828; border-color: #8c4343; width: 36px; height: 36px; padding: 0;"
+                    onclick="deletePlayerStats(this.dataset.playerId, this.dataset.playerName, this)">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </button>
+          </div>
+          <button type="button" class="btn btn-cancel" onclick="closePlayerStats()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- New Player Comparison Modal -->
+  <div id="playerCompareOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="playerCompareTitle">
+      <div class="modal-header">
+        <h3 id="playerCompareTitle">COMPARE PLAYERS</h3>
+      </div>
+      <div class="comparison-select-wrap" style="display: none;">
+        <select id="comparePlayer1" class="settings-input" style="width: 100%;">
+          <option value="">Select Player 1</option>
+        </select>
+        <span class="vs-text">VS</span>
+        <select id="comparePlayer2" class="settings-input" style="width: 100%;">
+          <option value="">Select Player 2</option>
+        </select>
+      </div>
+      <div id="comparisonResult" class="settings-grid" style="padding: 0;">
+        <!-- Comparison results will be injected here -->
+      </div>
+      <div class="modal-footer">
+        <div class="modal-actions">
+          <button type="button" class="btn btn-cancel" onclick="closePlayerCompareModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help Modal -->
+  <div id="helpOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="modal-header">
+        <h3 id="helpTitle">How to Play Darts Golf</h3>
+      </div>
+      <div class="settings-grid" style="padding: 0; text-align: left; max-height: 60vh; overflow-y: auto;">
+          <p style="margin-top: 0;">Darts Golf is played like the game 'Around the World'. The goal is to have the <strong>lowest score</strong> at the end. In Round 1, all players aim for the number 1. In Round 2, they aim for 2, and so on. Your best score out of three darts is recorded for each round.</p>
+          <h4>Scoring</h4>
+          <ul style="padding-left: 20px; margin-top: 0;">
+              <li><strong>-3 points:</strong> Hitting the <strong>Triple</strong> ring of the target number.</li>
+              <li><strong>-2 points:</strong> Hitting the <strong>Double</strong> ring of the target number.</li>
+              <li><strong>-1 point:</strong> Hitting the <strong>Inner Single</strong> (between the bullseye and triple).</li>
+              <li><strong>0 points:</strong> Hitting the <strong>Outer Single</strong> (between the triple and double).</li>
+              <li style="margin-top: 8px;"><strong>+1 point:</strong> Hitting a number directly next to the target, or the outer bullseye.</li>
+              <li><strong>+2 points:</strong> Hitting anywhere else (including the inner bullseye, off the board, or two numbers away from the target).</li>
+          </ul>
+          <h4>Tie-Breakers</h4>
+          <p style="margin-top: 0;">If players are tied at the end of the game, they enter a sudden-death playoff. Tied players start over from Round 1. After each completed round, if one player has a lower total score, they are the winner. If scores remain tied, players advance to the next round (2, 3, etc.) until a winner is decided.</p>
+      </div>
+      <div class="modal-footer">
+        <div class="modal-actions">
+          <button type="button" class="btn btn-confirm" onclick="closeHelpModal()">Got it!</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- New Prompt Modal for Renaming -->
+  <div id="promptOverlay" class="modal-overlay" aria-hidden="true" style="background: rgba(0,0,0,0.8);">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
+      <h3 id="promptTitle">Rename Player</h3>
+      <p id="promptMessage" style="margin-bottom: 16px;">Enter a new name:</p>
+      <input id="promptInput" type="text" class="settings-input" style="width: 100%; box-sizing: border-box; padding: 12px; background: #101010; border: 1px solid var(--border-color); border-radius: 8px; color: #fff;" maxlength="14" autocomplete="off">
+      <div class="modal-actions" style="margin-top: 16px;">
+        <button type="button" class="btn btn-cancel" id="promptCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-confirm" id="promptOkBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- New container for stat delta animations -->
+  <div id="statDeltaHost" class="stat-delta-container"></div>
+
+  <!-- New Loading Overlay -->
+  <div id="loadingOverlay" class="modal-overlay" style="background: rgba(0,0,0,0.8);">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <div class="loading-text">Calculating Stats...</div>
+    </div>
+  </div>
+
+  <!-- Toast host -->
+  <div id="toastHost" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- =========================================================
+       SCRIPT: INITIAL SERVER STATE INJECTION
+       ========================================================= -->
+  <script>
+    try {
+      window.__gameCache = {{ game | tojson | safe }};
+    } catch(e) {
+      console.error('Failed to parse game state:', e);
+      window.__gameCache = {};
+    }
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: CONFIRM HELPER
+       ========================================================= -->
+  <script>
+    (function(){
+      const overlay = document.getElementById('confirmOverlay');
+      const titleEl = document.getElementById('confirmTitle');
+      const msgEl   = document.getElementById('confirmMessage');
+      const okBtn   = document.getElementById('confirmOkBtn');
+      const cancelBtn = document.getElementById('confirmCancelBtn');
+      let resolvePromise = null;
+
+      function openModal(opts){
+        const { title='Confirm', message='Are you sure?', okText='OK', cancelText='Cancel' } = opts || {};
+        titleEl.textContent = title;
+        msgEl.textContent   = message;
+        okBtn.textContent   = okText;
+        cancelBtn.textContent = cancelText;
+        overlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+        setTimeout(() => okBtn.focus(), 0);
+        return new Promise(resolve => { resolvePromise = resolve; });
+      }
+      function closeModal(result){
+        overlay.classList.remove('show');
+        document.body.style.overflow = '';
+        if (resolvePromise){ const r = resolvePromise; resolvePromise = null; r(result); }
+      }
+      okBtn.addEventListener('click', ()=> closeModal(true));
+      cancelBtn.addEventListener('click', ()=> closeModal(false));
+      overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(false); }); // Close on backdrop click
+      window.addEventListener('keydown', (e)=>{ if (overlay.classList.contains('show') && e.key === 'Escape') closeModal(false); });
+      window.showConfirmModal = openModal;
+    })();
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: PROMPT HELPER (for renaming)
+       ========================================================= -->
+  <script>
+    (function(){
+      const overlay = document.getElementById('promptOverlay');
+      const titleEl = document.getElementById('promptTitle');
+      const msgEl   = document.getElementById('promptMessage');
+      const inputEl = document.getElementById('promptInput');
+      const okBtn   = document.getElementById('promptOkBtn');
+      const cancelBtn = document.getElementById('promptCancelBtn');
+      let resolvePromise = null;
+
+      function openModal(opts){
+        const { title='Rename Player', message='Enter a new name:', value='', okText='Save', cancelText='Cancel' } = opts || {};
+        titleEl.textContent = title;
+        msgEl.textContent   = message;
+        inputEl.value       = value;
+        okBtn.textContent   = okText;
+        cancelBtn.textContent = cancelText;
+        overlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+        setTimeout(() => { inputEl.focus(); inputEl.select(); }, 100);
+        return new Promise(resolve => { resolvePromise = resolve; });
+      }
+      function closeModal(result){
+        overlay.classList.remove('show');
+        document.body.style.overflow = '';
+        if (resolvePromise){ const r = resolvePromise; resolvePromise = null; r(result); }
+      }
+      
+      okBtn.addEventListener('click', () => closeModal(inputEl.value));
+      cancelBtn.addEventListener('click', () => closeModal(null));
+      overlay.addEventListener('click', (e) => { if(e.target === overlay) closeModal(null); });
+      window.addEventListener('keydown', (e) => { if (overlay.classList.contains('show') && e.key === 'Escape') closeModal(null); });
+      inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); okBtn.click(); }});
+      window.showPromptModal = openModal;
+    })();
+  </script>
+  <!-- =========================================================
+       SCRIPT: TOAST HELPERS
+       ========================================================= -->
+  <script>
+    function showToast(message, type='info', ms=2200){
+      const host = document.getElementById('toastHost');
+      function popButton(el) {
+        if (!el) return;
+        el.classList.add('pop-animation');
+        el.addEventListener('animationend', () => el.classList.remove('pop-animation'), { once: true });
+      }
+
+      if(!host) return ()=>{};
+      const t = document.createElement('div');
+      t.className = 'toast toast--' + type;
+      t.textContent = message;
+      host.appendChild(t);
+      requestAnimationFrame(()=> t.classList.add('show'));
+      const remove = ()=> { t.classList.remove('show'); setTimeout(()=> t.remove(), 200); };
+      setTimeout(remove, ms);
+      return remove;
+    }
+    function showActionToast(message, actionText, onClick, type='info', ms=6000){
+      const host = document.getElementById('toastHost');
+      if(!host) return ()=>{};
+      const t = document.createElement('div');
+      t.className = 'toast toast--' + type;
+      const span = document.createElement('span');
+      span.textContent = message;
+      const btn = document.createElement('button');
+      btn.textContent = actionText;
+      btn.addEventListener('click', ()=>{ try{ onClick(); }catch(e){} remove(); });
+      t.appendChild(span); t.appendChild(btn);
+      host.appendChild(t);
+      requestAnimationFrame(()=> t.classList.add('show'));
+      const remove = ()=> { t.classList.remove('show'); setTimeout(()=> t.remove(), 200); };
+      setTimeout(remove, ms);
+      return remove;
+    }
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: HAPTIC FEEDBACK
+       ========================================================= -->
+  <script>
+  (function(){
+    const HAPTIC_KEY = 'darts-haptics-enabled';
+    function isHapticsOn(){ const v = localStorage.getItem(HAPTIC_KEY); return v === null ? true : v === '1'; }
+    function setHaptics(on){ localStorage.setItem(HAPTIC_KEY, on ? '1' : '0'); }
+    window.hapticsPref = { isOn: isHapticsOn, set: setHaptics };
+
+    let audioCtx;
+    function ensureAudio(){
+      if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        audioCtx = AC ? new AC() : null;
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    function softClick(ms=70, freq=70){
+      const ctx = ensureAudio(); if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      const t0 = ctx.currentTime;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.16, t0 + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + ms/1000);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t0); osc.stop(t0 + ms/1000 + 0.03);
+    }
+    function doubleClick(){ softClick(60, 85); setTimeout(()=> softClick(70, 60), 70); }
+
+    const PATTERNS = { light:30, medium:[24,40,24], success:[20,40,20,50,70] };
+    function tryVibrate(kind){
+      if (!('vibrate' in navigator)) return false;
+      const pattern = kind==='medium' ? PATTERNS.medium : (kind==='success' ? PATTERNS.success : PATTERNS.light);
+      try{ return !!navigator.vibrate(pattern); }catch{ return false; }
+    }
+
+    window.haptic = function(kind='light'){
+      if (!isHapticsOn()) return;
+      const ok = tryVibrate(kind);
+      if (ok) return;
+      if (kind==='light') softClick(70, 70);
+      else if (kind==='medium') doubleClick();
+      else if (kind==='success'){ softClick(60, 90); setTimeout(()=> softClick(80, 50), 90); }
+      else softClick(70, 70);
+    };
+    ['touchstart','mousedown','keydown'].forEach(ev=>{
+      window.addEventListener(ev, ()=>{ ensureAudio(); }, { once:true, passive:true });
+    });
+    window.testHaptics = function(){
+      const ok = tryVibrate('medium');
+      if (!ok) doubleClick();
+    };
+  })();
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: PWA INSTALL (button lives in Settings)
+       ========================================================= -->
+  <script>
+    (function(){
+      const installPromptGroup = document.getElementById('installPromptGroup');
+      const installBtn  = document.getElementById('installBtnSettings');
+      const iosOverlay  = document.getElementById('iosInstallOverlay');
+      let deferredPrompt = null;
+
+      function isStandalone(){
+        return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      }
+      function isIOS(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent); }
+      function isSafari(){ return isIOS() && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent); }
+
+      function showInstallBtn(){
+        // First, check if we are on a mobile device before showing anything.
+        const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (!isMobile) return;
+
+        if (installPromptGroup) installPromptGroup.style.display = 'grid';
+        if (installBtn) installBtn.style.display = 'inline-block';
+      }
+      function hideInstallBtn(){ if (installBtn) installBtn.style.display = 'none'; }
+
+      function openIosInstall(){
+        if (!iosOverlay) return;
+        iosOverlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+      }
+      window.closeIosInstall = function(){
+        if (!iosOverlay) return;
+        iosOverlay.classList.remove('show');
+        document.body.style.overflow = '';
+      };
+
+      window.updateInstallVisibility = function(){
+        if (isStandalone()){ hideInstallBtn(); return; }
+        if (deferredPrompt || isSafari()) showInstallBtn();
+        else hideInstallBtn();
+      };
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        window.updateInstallVisibility();
+      });
+
+      window.addEventListener('appinstalled', () => {
+        hideInstallBtn();
+        showToast('App installed! 🎉', 'success');
+        deferredPrompt = null;
+      });
+
+      installBtn?.addEventListener('click', async () => {
+        if (isStandalone()) { showToast('Already installed', 'warning'); hideInstallBtn(); return; }
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          try {
+            const choice = await deferredPrompt.userChoice;
+            if (choice && choice.outcome === 'accepted') {
+              showToast('Installing…', 'warning');
+            }
+          } finally {
+            deferredPrompt = null;
+            setTimeout(window.updateInstallVisibility, 0);
+          }
+        } else if (isSafari()) {
+          openIosInstall();
+        } else {
+          showToast('Install not supported in this browser', 'warning');
+        }
+      });
+
+      document.addEventListener('DOMContentLoaded', window.updateInstallVisibility);
+    })();
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: GLOBAL HELPER FUNCTIONS
+       ========================================================= -->
+  <script>
+    function popButton(el) {
+      if (!el) return;
+      el.classList.add('pop-animation');
+      el.addEventListener('animationend', () => el.classList.remove('pop-animation'), { once: true });
+    }
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+    function norm(s){ return (s||'').trim().replace(/\s+/g,' '); }
+
+    async function apiFetch(url, options) {
+      try {
+        const response = await fetch(url, options);
+        const contentType = response.headers.get('content-type');
+
+        // Check for rate limit error (429)
+        if (response.status === 429) {
+          const errorData = contentType && contentType.includes('application/json')
+            ? await response.json()
+            : { message: 'Rate limit exceeded' };
+          const rateLimitError = new Error(errorData.message || 'Too many requests. Please slow down.');
+          rateLimitError.isRateLimit = true;
+          throw rateLimitError;
+        }
+
+        if (contentType && contentType.includes('application/json')) {
+          return response.json(); // It's JSON, so parse and return it
+        }
+
+        // It's not JSON. This is an unexpected response, likely an HTML error page.
+        // We can try to get the text to see what it is.
+        const text = await response.text();
+        if (text.toLowerCase().includes('<!doctype')) {
+          throw new Error(`Server returned an HTML page instead of JSON. Status: ${response.status}`);
+        }
+        // Otherwise, it's some other non-JSON text
+        throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
+      } catch (error) {
+        // Re-throw the error to be caught by the calling function's catch block
+        throw error;
+      }
+    }
+  </script>
+
+  {% if (game.phase == 'playing' or game.phase == 'playoff') and not show_stats %}
+  <!-- =========================================================
+       SCRIPT: PLAYING / PLAYOFF CLIENT RENDER & ACTIONS
+       ========================================================= -->
+  <script>
+    function qs(s){ return document.querySelector(s); }
+
+    // Wake Lock
+    let wakeLock;
+    async function keepAwake(on){
+      try{
+        if(on && 'wakeLock' in navigator){
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release',()=>{});
+        } else {
+          await wakeLock?.release();
+          wakeLock = null;
+        }
+      }catch(e){}
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e)=>{
+      const map = { '1':-3, '2':-2, '3':-1, '4':0, '5':+1, '6':+2, '0':0, 'u':'undo', 'U':'undo' };
+      if(!(e.key in map)) return;
+      e.preventDefault();
+      if (map[e.key]==='undo') { undo(); return; }
+      // For keyboard, we don't have a button to animate, so we pass `null`
+      // to the hit function to prevent the page-pop animation.
+      hit(map[e.key], null);
+    });
+
+    // Local save (resume)
+    const SAVE_KEY='darts-golf-game';
+    function saveLocal(game){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(game||{})); }catch(_){ } }
+    function loadLocal(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }catch(_){ return null; } }
+
+    // Track end state for confirm prompts
+    let END_ACTIVE = {{ 'true' if game.end_after_round else 'false' }};
+
+    function updateEndButtonLabel(active){
+      var b = document.getElementById('endBtn');
+      if (b) b.textContent = active ? 'Cancel' : 'End';
+    }
+
+    // ---- Anti-flicker sequencing + micro-batching ----
+    let __opCounter = 0;
+    let __lastCommittedOp = 0;
+    let __applyTimer = null;
+
+    function scheduleApplyFromServer(game, opId, force = false) {
+      if (force) {
+        __lastCommittedOp = Math.max(__lastCommittedOp, opId);
+        window.__gameCache = game;
+        saveLocal(game);
+        renderGame(game);
+        return;
+      }
+      if (opId !== __opCounter) return;
+      if (__applyTimer) clearTimeout(__applyTimer);
+      __applyTimer = setTimeout(() => {
+        if (opId !== __opCounter) return;
+        __lastCommittedOp = opId;
+        window.__gameCache = game;
+        saveLocal(game);
+        renderGame(game);
+      }, 64);
+    }
+
+    async function sendScore(val){
+      const snapshot = window.__gameCache ? JSON.parse(JSON.stringify(window.__gameCache)) : null;
+      const opId = ++__opCounter;
+
+      try{
+        // Optimistic
+        if (window.__gameCache){
+          const isPlayoff = window.__gameCache.phase === 'playoff';
+          const playerToAnimate = isPlayoff ? window.__gameCache.playoff_group[window.__gameCache.current_player_index] : window.__gameCache.players[window.__gameCache.current_player_index];
+          const playerIndexToAnimate = window.__gameCache.current_player_index; // For main game logic
+
+          const g = JSON.parse(JSON.stringify(window.__gameCache));
+          if (g.phase === 'playing'){
+            const pIdx = g.current_player_index;
+            const playerId = g.players[pIdx];
+            const roundI = g.current_round - 1;
+
+            g.round_history[roundI] = g.round_history[roundI] || {};
+            g.scores[playerId] = (g.scores[playerId] || 0) + val;
+            g.round_history[roundI][playerId] = val;
+
+            g.undo_history = g.undo_history || [];
+            g.undo_history.push({ player_index: pIdx, score_change: val });
+
+            const lastIndex = g.players.length - 1;
+            const wasLast   = pIdx === lastIndex;
+            const isGameOver = wasLast && (g.current_round >= g.holes || g.end_after_round);
+
+            if (!isGameOver) {
+              g.current_player_index = wasLast ? 0 : pIdx + 1;
+              if (wasLast) g.current_round += 1;
+            } else {
+              // Game is over, don't change round or player. Server will send final state.
+            }
+          } else if (g.phase === 'playoff'){
+            const pIdx = g.current_player_index;
+            const player = g.playoff_group[pIdx]; // This is an ID
+            g.playoff_round_scores = g.playoff_round_scores || {};
+            g.playoff_round_scores[player] = val;
+            // Only advance the index if it's not the last player in the group.
+            const isLastPlayerOfRound = (pIdx === g.playoff_group.length - 1);
+            if (isLastPlayerOfRound) {
+              // Round is over. Server will resolve it. Optimistically reset for next round.
+              g.playoff_round_scores = {};
+              g.playoff_group = []; // The server will send the new, smaller group.
+              g.current_player_index = 0;
+            } else {
+              g.current_player_index = pIdx + 1;
+            }
+          }
+          window.__gameCache = g;
+          saveLocal(g);
+          renderGame(g);
+          triggerDeltaAnimation(playerToAnimate, val, isPlayoff);
+        }
+
+        const data = await apiFetch('{{ url_for("api_score") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({score:val}) });
+        if (!data.ok){ if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Could not save score - server rejected', 'error'); return; }
+
+        // If the server responds that the game is over, reload to show the final standings page.
+        if (data.game.phase === 'final_ranking') {
+          // Trigger the stat delta animations before reloading
+          location.reload();
+          return;
+        }
+        const force = (data.game.phase !== 'playing' || window.__gameCache.phase !== 'playing');
+        scheduleApplyFromServer(data.game, opId, force);
+      }catch(e){
+        if (__opCounter === opId && snapshot){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; }
+        if (e.isRateLimit) {
+          showToast('Rate limit reached - slow down!', 'warning', 3000);
+        } else {
+          showToast('Could not save score - offline?', 'error');
+        }
+        console.error('Score sync failed', e);
+      }
+    }
+
+    async function undo(){
+      const g0 = window.__gameCache;
+      if (!g0 || g0.phase !== 'playing'){ showToast('Undo not available now', 'warning', 1400); return; }
+      if (!g0.undo_history || !g0.undo_history.length){ showToast('Nothing to undo', 'warning', 1400); return; }
+
+      const snapshot = JSON.parse(JSON.stringify(g0));
+      const opId = ++__opCounter;
+
+      try{
+        const g = JSON.parse(JSON.stringify(g0));
+        const n = g.players.length;
+
+        const last_move = g.undo_history.pop();
+        const prev_idx = (g.current_player_index - 1 + n) % n;
+        g.current_player_index = prev_idx;
+
+        if (prev_idx === n - 1){
+          g.current_round = Math.max(1, g.current_round - 1);
+        }
+
+        const playerId_to_undo = g.players[prev_idx];
+        const current_round_index = g.current_round - 1;
+        g.scores[playerId_to_undo] = (g.scores[playerId_to_undo] || 0) - (last_move.score_change || 0);
+        g.round_history[current_round_index] = g.round_history[current_round_index] || {};
+        delete g.round_history[current_round_index][playerId_to_undo];
+
+        window.__gameCache = g;
+        saveLocal(g);
+        renderGame(g);
+
+        const data = await apiFetch('{{ url_for("api_undo") }}', { method:'POST' });
+        if (!data.ok){ if (__opCounter === opId){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; } showToast('Undo failed — server rejected', 'error'); return; }
+
+        const force = (data.game.phase !== 'playing' || window.__gameCache.phase !== 'playing');
+        scheduleApplyFromServer(data.game, opId, force);
+      }catch(e){
+        if (__opCounter === opId){ window.__gameCache = snapshot; renderGame(snapshot); __lastCommittedOp = opId; }
+        showToast('Undo failed — offline?', 'error');
+        console.error('Undo sync failed', e);
+      }
+    }
+
+    async function toggleEnd(){
+      if (!END_ACTIVE) {
+        const ok = await window.showConfirmModal({ title: 'End', message: 'The game will end after ALL players finish THIS round. Continue?', okText: 'End', cancelText: 'Cancel' });
+        if (!ok) return;
+      } else {
+        const ok = await window.showConfirmModal({ title: 'Cancel End', message: 'The game will continue normally after this round. Continue?', okText: 'Cancel End', cancelText: 'Keep Ending' });
+        if (!ok) return;
+      }
+      const data = await apiFetch('{{ url_for("api_end_after_round") }}', {method:'POST'});
+      if(!data.ok) return;
+      window.__gameCache = data.game;
+      saveLocal(data.game);
+      renderGame(data.game);
+    }
+
+    function renderGame(g){
+      keepAwake(g.phase==='playing' || g.phase==='playoff');
+
+      if(g.phase==='playing'){ renderPlaying(g); var u=qs('#undoBtn'); if(u) u.removeAttribute('disabled'); }
+      else if(g.phase==='playoff'){ renderPlayoff(g); var u2=qs('#undoBtn'); if(u2) u2.setAttribute('disabled','disabled'); }
+
+      END_ACTIVE = !!g.end_after_round;
+      updateEndButtonLabel(END_ACTIVE);
+    }
+
+    // Function to trigger the delta animation on a specific cell
+    function triggerDeltaAnimation(scoredPlayerName, scoreValue, isPlayoff) {
+      let targetCell;
+      const game = window.__gameCache; // Get current game state
+
+      if (isPlayoff) {
+        const headerThs = document.querySelectorAll('#scoreboard thead th:not(:first-child)');
+        const colIndex = Array.from(headerThs).findIndex(th => th.dataset.playerId === scoredPlayerName); // scoredPlayerName is now an ID
+
+        if (colIndex !== -1) {
+          targetCell = document.querySelector(`#scoreboard .current-row td:nth-child(${colIndex + 2})`);
+          if (targetCell) {
+            // The cell was rendered empty. Now we fill it and animate it.
+            const v = scoreValue;
+            const signedV = (v > 0 ? '+' : '') + v;
+            const deltaClass = v > 0 ? 'pos' : (v < 0 ? 'neg' : 'zero');
+
+            // 1. Populate the cell's inner HTML with the score and delta elements.
+            targetCell.innerHTML = `
+              <div class="cell">
+                <span class="total-pill">${signedV}</span>
+                <span class="delta-corner ${deltaClass}">${signedV}</span>
+              </div>
+            `;
+
+            // 2. Find the newly created delta corner and trigger its animation.
+            const deltaCorner = targetCell.querySelector('.delta-corner');
+            if (deltaCorner) {
+              deltaCorner.classList.add('delta-animate-trigger');
+              deltaCorner.addEventListener('animationend', () => deltaCorner.classList.remove('delta-animate-trigger'), { once: true });
+            }
+          }
+        }
+      } else {
+        // Main game logic remains the same, as it works correctly.
+        const roundRow = document.querySelector(`#scoreboard tbody tr:nth-child(2)`);
+        targetCell = roundRow?.querySelectorAll('td')[game.current_player_index - 1];
+        const deltaCorner = targetCell?.querySelector('.delta-corner');
+        if (deltaCorner) {
+          deltaCorner.classList.add('delta-animate-trigger');
+          deltaCorner.addEventListener('animationend', () => deltaCorner.classList.remove('delta-animate-trigger'), { once: true });
+        }
+      }
+    }
+
+    function animateStatDeltas(deltas) {
+      const host = document.getElementById('statDeltaHost');
+      if (!host) return;
+
+      Object.entries(deltas).forEach(([playerName, playerDeltas]) => {
+        const deltaEl = document.createElement('div');
+        deltaEl.className = 'stat-delta-item';
+        
+        let html = `<div class="player-name">${escapeHtml(playerName)}</div>`;
+        if (playerDeltas.wins > 0) {
+          html += `<div class="delta-line good">🏆 Win! <span>+1</span></div>`;
+        }
+        if (playerDeltas.total_birdies > 0) {
+          html += `<div class="delta-line good">🕊️ Birdies <span>+${playerDeltas.total_birdies}</span></div>`;
+        }
+        if (playerDeltas.total_bogeys > 0) {
+          html += `<div class="delta-line bad">💔 Bogeys <span>+${playerDeltas.total_bogeys}</span></div>`;
+        }
+
+        deltaEl.innerHTML = html;
+        host.appendChild(deltaEl);
+
+        // Animate in
+        requestAnimationFrame(() => {
+          deltaEl.style.opacity = '1';
+          deltaEl.style.transform = 'translateY(0) scale(1)';
+        });
+
+        // Animate out and remove
+        setTimeout(() => {
+          deltaEl.style.opacity = '0';
+          deltaEl.style.transform = 'translateY(-20px) scale(0.95)';
+          deltaEl.addEventListener('transitionend', () => deltaEl.remove());
+        }, 1800); // Start fading out before the full reload
+      });
+    }
+
+    function sign(v){ return v>0?'+':''; }
+
+// Refactored function to update the info bar elements
+    function updateInfoBar(g) {
+      const infoBar = qs('#info-bar');
+      if (!infoBar) return;
+
+      const roundCountDiv = infoBar.querySelector('.round-count');
+      const oldDigitSpan = roundCountDiv.querySelector('.old-digit');
+      const newDigitSpan = roundCountDiv.querySelector('.new-digit');
+      const roundLabelSpan = roundCountDiv.querySelector('.round-label');
+      const roundTotalSpan = roundCountDiv.querySelector('.round-total');
+      const turnInfoDiv = infoBar.querySelector('.turn-info');
+
+      // Determine current round number and label based on phase
+      let currentRoundValue;
+      let roundLabelText;
+      let roundTotalText = '';
+      let turnInfoText = '';
+
+      if (g.phase === 'playing') {
+        currentRoundValue = g.current_round;
+        roundLabelText = 'ROUND';
+        roundTotalText = `/ ${g.holes}`;
+        const currentPlayerId = g.players[g.current_player_index];
+        const currentName = g.player_map[currentPlayerId].name;
+        turnInfoText = g.end_after_round ? 'FINAL ROUND' : `${currentName}'s Turn`;
+      } else if (g.phase === 'playoff') {
+        currentRoundValue = g.playoff_round;
+        roundLabelText = 'TIE-BREAKER';
+        roundTotalText = ''; // No total rounds in playoff
+        if (g.playoff_group && g.playoff_group.length > 0) {
+          const currentPlayerId = g.playoff_group[g.current_player_index];
+          turnInfoText = `${g.player_map[currentPlayerId].name}'s Turn`;
+        } else {
+          turnInfoText = 'Resolving...'; // Show a generic message while waiting for the server
+        }
+      } else {
+        return; // Not in a phase that uses this info bar
+      }
+
+      // Update Round Label
+      roundLabelSpan.textContent = roundLabelText;
+
+      // Update Round Number with animation
+      const oldRoundNumberText = oldDigitSpan.textContent;
+      const newRoundNumberText = String(currentRoundValue).padStart(2,'0');
+
+      if (oldRoundNumberText !== newRoundNumberText) {
+        // Set the new value to the new digit element
+        newDigitSpan.textContent = newRoundNumberText;
+
+        // Immediately reset newDigitSpan's position without transition to prepare for animation
+        newDigitSpan.style.transition = 'none';
+        newDigitSpan.style.transform = 'translateY(100%)'; // Start below
+        newDigitSpan.style.opacity = '0';
+
+        // Force reflow to apply the immediate reset before starting the actual animation
+        void newDigitSpan.offsetWidth;
+
+        // Enable transitions for the animation
+        oldDigitSpan.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
+        newDigitSpan.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
+
+        // Start the animation
+        oldDigitSpan.style.transform = 'translateY(-100%)';
+        oldDigitSpan.style.opacity = '0';
+        newDigitSpan.style.transform = 'translateY(0)';
+        newDigitSpan.style.opacity = '1';
+
+        // Update oldDigitSpan's text content immediately for logical state,
+        // but visually it will still be the old number animating out.
+        // This prevents re-triggering if updateInfoBar is called again before transitionend.
+        oldDigitSpan.textContent = newRoundNumberText;
+
+        // Clean up after animation completes
+        newDigitSpan.addEventListener('transitionend', function handler() {
+          newDigitSpan.removeEventListener('transitionend', handler); // Remove listener
+
+          // Reset oldDigitSpan to its final visible state (it already has the correct text)
+          oldDigitSpan.style.transform = 'translateY(0)';
+          oldDigitSpan.style.opacity = '1';
+          oldDigitSpan.style.transition = 'none'; // Disable transition for the reset
+
+          // Reset newDigitSpan to its hidden, empty state
+          newDigitSpan.textContent = ''; // Clear content
+          newDigitSpan.style.transform = 'translateY(100%)';
+          newDigitSpan.style.opacity = '0';
+          newDigitSpan.style.transition = 'none'; // Disable transition for immediate reset
+        }, { once: true });
+      } else {
+        // If no change, ensure old digit is visible and new digit is hidden/empty
+        oldDigitSpan.textContent = newRoundNumberText;
+        oldDigitSpan.style.transform = 'translateY(0)';
+        oldDigitSpan.style.opacity = '1';
+        oldDigitSpan.style.transition = 'none'; // Ensure no lingering transitions
+
+        newDigitSpan.textContent = ''; // Ensure new digit is empty
+        newDigitSpan.style.transform = 'translateY(100%)';
+        newDigitSpan.style.opacity = '0';
+        newDigitSpan.style.transition = 'none'; // Ensure no lingering transitions
+      }
+      if (g.phase === 'playing') {
+        roundTotalSpan.textContent = roundTotalText;
+        roundTotalSpan.style.display = '';
+      } else {
+        roundTotalSpan.style.display = 'none';
+      }
+
+      // 3. Update Turn Info
+      turnInfoDiv.textContent = turnInfoText;
+
+      // 4. Update the info bar's appearance based on the 'ending' state
+      if (g.end_after_round) {
+        infoBar.classList.add('ending');
+      } else {
+        infoBar.classList.remove('ending');
+      }
+    }
+
+    function renderPlaying(g){
+      updateInfoBar(g); // Update the info bar elements
+
+      var useInitials = g.player_names.length > 4;
+      var headers = g.player_names.map(function(p, i) {
+        var displayName = useInitials
+          ? p.split(' ').map(function(w) { return w[0] || ''; }).join('').toUpperCase()
+          : p;
+        var isCurrent = (g.players[i] === g.players[g.current_player_index]);
+        return '<th class="'+(isCurrent ? 'current-player-header' : '')+'">'+displayName+'</th>';
+      }).join('');
+      var thead = '<thead><tr><th>&nbsp;</th>' + headers + '</tr></thead>';
+
+      var totals = g.players.map(function(pid){
+        var s = g.scores[pid] || 0;
+        return '<td>'+sign(s)+s+'</td>';
+      }).join('');
+
+      var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
+
+      var curIdx = g.current_round - 1;
+      var curRow = g.round_history[curIdx] || {};
+      var currentCells = g.players.map(function(pid, pIdx){
+        var v = curRow[pid]; // Score for this player in this round
+        var isCurrentPlayerForCell = (pIdx === g.current_player_index && typeof v === 'undefined');
+        if (typeof v === 'undefined') {
+          // This is an empty cell, apply highlight if it's the current player's turn
+          return '<td class="' + (isCurrentPlayerForCell ? 'current-player-cell' : '') + '">' +
+                 '<div class="cell"><span class="total-pill">0</span><span class="delta-corner hidden">0</span></div>' +
+                 '</td>';
+        }
+        // This cell has a score, render it normally
+        var running = g.round_history.slice(0, g.current_round).reduce(function(sum, rh){ return sum + (rh[pid]||0); }, 0);
+        return '<td><div class="cell"><span class="total-pill">'+(running>0?'+':'')+running+'</span><span class="delta-corner '+(v>0?'pos':(v<0?'neg':'zero'))+'">'+(v>0?'+':'')+v+'</span></div></td>';
+      }).join('');
+      tbody += '<tr class="current-row"><th>'+String(g.current_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
+
+      for(var i=g.current_round-2;i>=0;i--){
+        var row = g.round_history[i] || {}; // This is a past round, no highlight needed.
+        var cells = g.players.map(function(pid) {
+          var v = row[pid];
+          if (typeof v === 'undefined') return '<td></td>';
+          var running = g.round_history.slice(0, i + 1).reduce(function(sum, rh) { return sum + (rh[pid] || 0); }, 0);
+          return '<td><div class="cell"><span class="total-pill">' + (running > 0 ? '+' : '') + running + '</span><span class="delta-corner ' + (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'zero')) + '">' + (v > 0 ? '+' : '') + v + '</span></div></td>';
+        }).join('');
+        tbody += '<tr><th>'+String(i+1).padStart(2,'0')+'</th>'+cells+'</tr>';
+      }
+
+      tbody += '</tbody>';
+      qs('#scoreboard').innerHTML = thead+tbody;
+    }
+
+    function renderPlayoff(g){
+        updateInfoBar(g); // Update the info bar elements
+        // ---- Build a stable header list (all players who ever appeared in this tie) ----
+        var headerPlayerIds = g.playoff_pool || []; // Use the stable pool of IDs
+        var curScores = g.playoff_round_scores || {};
+
+        // THEAD with current shooter highlight when applicable
+        var useInitials = headerPlayerIds.length > 4;
+        var thead = '<thead><tr><th>&nbsp;</th>'+headerPlayerIds.map(function(pid) {
+          var isCur = (g.playoff_group && pid === g.playoff_group[g.current_player_index]);
+          var name = g.player_map[pid].name;
+          var displayName = useInitials
+            ? name.split(' ').map(function(w) { return w[0] || ''; }).join('').toUpperCase()
+            : name;
+          return '<th class="'+(isCur ? 'current-player-header' : '')+'" data-player-id="'+pid+'" data-player-name="'+name+'">' + displayName + '</th>';
+        }).join('')+'</tr></thead>';
+
+        // TB totals (base score only)
+        var totals = headerPlayerIds.map(function(){ var s = g.playoff_base_score || 0; return '<td>'+(s>0?'+':'')+s+'</td>'; }).join('');
+        var tbody = '<tbody><tr class="total-row"><th>Total</th>'+totals+'</tr>';
+
+        // ✅ Current TB round row (stable columns)
+        var currentCells = headerPlayerIds.map(function(pid) {
+          var v = curScores[pid];
+          // Determine if this cell belongs to the current player whose turn it is
+          var isCurrentPlayerForCell = (g.playoff_group && pid === g.playoff_group[g.current_player_index]);
+          // For the player who just scored, render an empty cell. The animation function will fill it.
+          // For all other players, render as normal.
+          if (typeof v === 'undefined') {
+            // Render an empty cell with the highlight if it's the current player's turn
+            return '<td class="'+(isCurrentPlayerForCell ? 'current-player-cell' : '')+'"><div class="cell"><span class="total-pill"></span><span class="delta-corner hidden"></span></div></td>';
+          }
+          return '<td><div class="cell"><span class="total-pill">' + (v > 0 ? '+' : '') + v + '</span><span class="delta-corner ' + (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'zero')) + '">' + (v > 0 ? '+' : '') + v + '</span></div></td>';
+        }).join('');
+        tbody += '<tr class="current-row"><th>TB '+String(g.playoff_round).padStart(2,'0')+'</th>'+currentCells+'</tr>';
+
+      // 🔁 Past completed TB rounds (latest first)
+      for (var idx = g.playoff_history.length - 1; idx >= 0; idx--) {
+        var round_scores = g.playoff_history[idx] || {};
+        var tbNum = idx + 1;
+        var cells = headerPlayerIds.map(function(pid){ // Use stable headerPlayerIds list
+          var v = round_scores[pid];
+          if (typeof v === 'undefined') return '<td></td>';
+          return (
+            '<td>' +
+              '<div class="cell">' +
+                '<span class="total-pill">' + (v>0?'+':'') + v + '</span>' +
+                '<span class="delta-corner ' + (v>0?'pos':(v<0?'neg':'zero')) + '">' + (v>0?'+':'') + v + '</span>' +
+              '</div>' +
+            '</td>'
+          );
+        }).join('');
+        tbody += '<tr><th>TB ' + String(tbNum).padStart(2,'0') + '</th>' + cells + '</tr>';
+      }
+
+        tbody += '</tbody>';
+        qs('#scoreboard').innerHTML = thead + tbody;
+      }
+
+    function hit(val, el){
+      if (el) { // Only animate and position bubble if an element is provided
+        popButton(el);
+        showBubbleFor(val, el);
+      } else {
+        // For keyboard input, show bubble from the bottom of the screen
+        showBubbleFor(val, null);
+      }
+      sendScore(val);
+    }
+    function showBubbleFor(val, el){
+      // Skip bubbles if animations are disabled
+      if (localStorage.getItem('animationsEnabled') === 'false') {
+        return;
+      }
+
+      // 1. Get the label text for the bubble
+      const scoreLabels = window.__gameCache?.score_labels || {};
+      var key = String(val), label = (typeof scoreLabels[key] !== 'undefined') ? scoreLabels[key] : (val>0?('+'+val):String(val));
+      var cls = val > 0 ? 'pos' : (val < 0 ? 'neg' : 'zero');
+
+      // 2. Create the bubble and add it to the DOM to measure it
+      const bubble = document.createElement('div');
+      bubble.className = `score-bubble ${cls}`;
+      bubble.textContent = label;
+      document.body.appendChild(bubble);
+
+      // 3. Calculate its position, keeping it on-screen
+      const rect = el?.getBoundingClientRect();
+      const bubbleWidth = bubble.offsetWidth;
+      const margin = 8; // 8px margin from screen edge
+
+      // Default to center of button, or center of screen for keyboard input
+      let x = rect ? rect.left + (rect.width / 2) : window.innerWidth / 2;
+      let y = rect ? rect.top - 6 : window.innerHeight - 80;
+
+      // Adjust x to prevent overflow
+      x = Math.max(x, (bubbleWidth / 2) + margin); // Keep left edge on screen
+      x = Math.min(x, window.innerWidth - (bubbleWidth / 2) - margin); // Keep right edge on screen
+
+      bubble.style.left = `${x}px`; // The CSS transform will handle the centering
+      bubble.style.top = `${y}px`;
+      bubble.addEventListener('animationend', () => bubble.remove());
+    }
+
+    // --- Init on load ---
+    document.addEventListener('DOMContentLoaded', () => {
+      keepAwake(true);
+      updateEndButtonLabel(END_ACTIVE);
+    });
+  </script>
+  {% elif game.phase == 'setup' and not show_stats %}
+  <!-- =========================================================
+       SCRIPT: SETUP PAGE — Pills with Pointer Events drag
+       ========================================================= -->
+  <script>
+    const chipList         = document.getElementById('chipList');           // recent chips (if any)
+    const selectedWrap     = document.getElementById('selectedWrap'); // container for selected chips
+    const selectedChipList = document.getElementById('selectedChipList');
+    const playersHidden    = document.getElementById('playersInput');       // hidden CSV posted to /start
+    const nameField        = document.getElementById('nameField');
+    const addNameBtn       = document.getElementById('addNameBtn');
+    const startForm        = document.getElementById('startForm');
+
+    const SETUP_PLAYERS_KEY = 'darts-golf-setup-players';
+    let selected = [];
+    try {
+      const saved = sessionStorage.getItem(SETUP_PLAYERS_KEY);
+      if (saved) {
+        selected = JSON.parse(saved);
+      }
+    } catch(e) {
+      console.warn('Could not load setup players from session storage.');
+      selected = [];
+    }
+
+    let allRecentNames = {{ (game.recent_names or []) | tojson | safe }};
+    
+    // ---------- Rendering ----------
+    function renderSelected(){
+      if (selected.length) {
+        selectedChipList.innerHTML = selected.map((p, i) => (
+          `<div class="chip draggable" data-name="${escapeHtml(p.name)}" data-id="${p.id}" title="Drag to reorder">
+             <span class="chip-index">${i+1}</span>
+             <span class="chip-name">${escapeHtml(p.name)}</span>
+             <button type="button" class="chip-remove" aria-label="Remove ${escapeHtml(p.name)}" title="Remove">✕</button>
+           </div>`
+        )).join('');
+      } else {
+        selectedChipList.innerHTML = '<div class="empty-list-text">empty</div>';
+      }
+      bindSelectedEvents();
+      writeHidden();
+      renderRecent(); // Re-render recents to show/hide selected names
+    }
+
+    function renderRecent(){
+      if (!chipList) return;
+      const availableRecents = allRecentNames.filter(name => !selected.some(p => p.name.toLowerCase() === name.toLowerCase()));
+
+      if (availableRecents.length > 0) {
+        chipList.innerHTML = availableRecents.map(n =>
+          `<div class="chip" data-name="${escapeHtml(n)}"><span class="chip-index" style="visibility:hidden;">0</span><span class="chip-name">${escapeHtml(n)}</span><button type="button" class="chip-remove" style="visibility:hidden;">✕</button></div>`
+        ).join('');
+      } else {
+        chipList.innerHTML = '<div class="empty-list-text">empty</div>';
+      }
+
+      chipList.querySelectorAll('.chip[data-name]').forEach(el=>{
+        el.addEventListener('click', ()=>{
+          const name = el.getAttribute('data-name');
+          addPlayer(name, true); // Pass true to indicate it's from the recent list
+        });
+      });
+    }
+
+    function writeHidden(){
+      // Correctly map the array of player objects to a string of IDs.
+      playersHidden.value = selected.map(p => p.id).join(',');
+      // Also save the current selection to session storage
+      try {
+        sessionStorage.setItem(SETUP_PLAYERS_KEY, JSON.stringify(selected));
+      } catch(e) { console.warn('Could not save setup players to session storage.'); }
+    }
+
+    // ---------- Add / Remove Logic ----------
+    async function addPlayer(raw, isFromRecent = false){
+      const name = norm(raw);
+      if (!name) return;
+      if (name.length > 14) {
+        showToast('Name cannot be longer than 14 characters.', 'warning', 3000);
+        return;
+      }
+      if (selected.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+        showToast(`${name} is already in the game.`, 'warning');
+        return;
+      }
+
+      try {
+        const data = await apiFetch(`/api/resolve-player/${encodeURIComponent(name)}`);
+
+        if (!data.ok) throw new Error(data.error || 'Server error');
+
+        // If the user clicked a recent player, or if there's a single exact match, add it directly.
+        if (data.exact_match && (isFromRecent || data.suggestions.length === 0)) {
+          commitAddPlayer(data.exact_match);
+        }
+        // If there are suggestions but no exact match, show the resolution prompt.
+        else if (data.suggestions.length > 0) {
+          openPlayerResolution(name, data.suggestions);
+        }
+        // Otherwise, no matches were found, so create a new player.
+        else {
+          const createData = await apiFetch('/api/create-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name }) });
+          if (!createData.ok) throw new Error(createData.error || 'Failed to create player');
+          commitAddPlayer(createData.player);
+        }
+
+      } catch (e) {
+        showToast(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    function commitAddPlayer(player) {
+      if (!player || !player.id || !player.name) return;
+      // Final check for duplicates before adding
+      if (selected.some(p => p.id === player.id)) {
+        showToast(`${player.name} is already in the game.`, 'warning');
+        return;
+      }
+      selected.push(player);
+      renderSelected();
+      nameField.value = ''; // Clear input field
+      nameField.focus();
+      haptic('light');
+      closePlayerResolution(); // Ensure resolution modal is closed
+    }
+
+    function removePlayer(name){
+      const i = selected.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
+      if (i >= 0){
+        selected.splice(i,1);
+        renderSelected(); // re-number pills
+      }
+    }
+
+    function removePlayerById(id){
+      const i = selected.findIndex(p => p.id === id);
+      if (i >= 0){
+        selected.splice(i,1);
+        renderSelected(); // re-number pills
+      }
+    }
+
+    // Delegated click for ✕ remove
+    selectedChipList.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.chip-remove');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const chip = btn.closest('.draggable');
+      if (chip) removePlayerById(chip.getAttribute('data-id'));
+    });
+
+    // ---------- Helpers ----------
+    // `idxOfName` is no longer needed as we use `findIndex` on objects.
+    // ---------- Desktop HTML5 DnD fallback (only if no Pointer Events) ----------
+    function bindSelectedEvents(){
+      const hasPointer = 'PointerEvent' in window;
+      selectedChipList.querySelectorAll('.draggable').forEach(chip=>{
+        if (!hasPointer){
+          chip.setAttribute('draggable','true');
+          chip.addEventListener('dragstart', (e)=>{ chip.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
+          chip.addEventListener('dragend',   ()=> chip.classList.remove('dragging'));
+        } else {
+          chip.removeAttribute('draggable'); // prevent native DnD when using Pointer Events
+        }
+      });
+
+      if (!hasPointer) {
+        selectedChipList.addEventListener('dragover', (e)=>{
+          e.preventDefault();
+          const after = getAfter(selectedChipList, e.clientY);
+          const dragging = selectedChipList.querySelector('.dragging');
+          if (!dragging) return;
+          if (!after) selectedChipList.appendChild(dragging);
+          else selectedChipList.insertBefore(dragging, after);
+        });
+        selectedChipList.addEventListener('drop', ()=>{
+          commitOrderFromDom(); // re-render to update numbering
+        });
+      }
+    }
+
+    function getDropTarget(container, y){
+      const els = [...container.querySelectorAll('.draggable:not(.dragging)')];
+      return els.reduce((closest, child)=>{
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height/2;
+        return (offset < 0 && offset > closest.offset) ? {offset, element: child} : closest;
+      }, {offset: Number.NEGATIVE_INFINITY, element: null}).element;
+    }
+
+    // ---------- Pointer Events drag (modern browsers) ----------
+    ;(function(){
+      if (!('PointerEvent' in window)) return;
+      if (!document.getElementById('selectedChipList')) return;
+
+      let active = null;        // element being dragged (original)
+      let ghost = null;         // floating clone
+      let placeholder = null;   // insertion marker
+      let startX=0, startY=0;   // pointer down pos
+      let offX=0, offY=0;       // offset within chip
+      let dragging = false;
+      let pointerId=null;
+
+      const TOUCH_SLOP_SQ = 25; // 5px^2 threshold for touch
+      function setBodyCursor(grabbing){ document.body.style.cursor = grabbing ? 'grabbing' : ''; }
+
+      function createGhost(fromEl){
+        const r = fromEl.getBoundingClientRect();
+        const g = fromEl.cloneNode(true);
+        g.style.position = 'fixed';
+        g.style.left = r.left + 'px';
+        g.style.top  = r.top  + 'px';
+        g.style.width = r.width + 'px';
+        g.style.height = r.height + 'px';
+        g.style.pointerEvents = 'none';
+        g.style.opacity = '0.85';
+        g.style.boxSizing = 'border-box';
+        g.classList.add('dragging');
+        document.body.appendChild(g);
+        return g;
+      }
+      function makePlaceholder(fromEl){
+        const p = document.createElement('div');
+        p.className = 'chip placeholder';
+        p.style.width  = fromEl.offsetWidth + 'px';
+        p.style.height = fromEl.offsetHeight + 'px';
+        return p;
+      }
+      function indexFromPoint(x, y){
+        const children = Array.from(selectedChipList.children).filter(el => el !== placeholder);
+        if (!children.length) return 0;
+        let bestIdx = children.length;
+        let bestDist = Infinity;
+        children.forEach((el, idx)=>{
+          const r = el.getBoundingClientRect();
+          const cx = r.left + r.width/2;
+          const cy = r.top + r.height/2;
+          const dx = cx - x, dy = cy - y;
+          const d  = dx*dx + dy*dy;
+          if (d < bestDist){ bestDist = d; bestIdx = idx; }
+        });
+        const near = children[bestIdx];
+        if (!near) return children.length;
+        const r = near.getBoundingClientRect();
+        const before =
+          (Math.abs(y - (r.top + r.height/2)) > Math.abs(x - (r.left + r.width/2)))
+            ? (y < r.top + r.height/2)
+            : (x < r.left + r.width/2);
+        return before ? bestIdx : bestIdx + 1;
+      }
+      function commitOrderFromDom(){
+        selected = Array
+          .from(selectedChipList.querySelectorAll('.draggable'))
+          .map(el => ({ id: el.dataset.id, name: el.dataset.name }));
+        writeHidden();
+        renderSelected(); // re-number after reorder
+      }
+
+      function startDrag(){
+        if (!active || dragging) return;
+        ghost = createGhost(active);
+        placeholder = makePlaceholder(active);
+        selectedChipList.insertBefore(placeholder, active);
+        active.style.visibility = 'hidden'; // keep layout size; avoids jump
+        dragging = true;
+        setBodyCursor(true);
+      }
+
+      function onPointerDown(e){
+        e.preventDefault();
+        const rmBtn = e.target.closest('.chip-remove');
+        if (rmBtn) return;
+
+        const chip = e.target.closest('.draggable');
+        if (!chip) return;
+
+        active = chip;
+        pointerId = e.pointerId;
+        try { active.setPointerCapture(pointerId); } catch(_){ }
+
+        const r = chip.getBoundingClientRect();
+        startX = e.clientX; startY = e.clientY;
+        offX = startX - r.left; offY = startY - r.top;
+        dragging = false;
+
+        if (e.pointerType === 'mouse') {
+          startDrag();
+        }
+      }
+
+      function onPointerMove(e){
+        if (!active) return;
+
+        if (!dragging){
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          const dist2 = dx*dx + dy*dy;
+          if (e.pointerType !== 'mouse' && dist2 <= TOUCH_SLOP_SQ) return;
+          startDrag();
+        }
+
+        e.preventDefault();
+        const x = e.clientX - offX, y = e.clientY - offY;
+        if (ghost){
+          ghost.style.left = x + 'px';
+          ghost.style.top  = y + 'px';
+        }
+
+        const idx = indexFromPoint(e.clientX, e.clientY);
+        const target = document.getElementById('selectedChipList').children[idx];
+        if (!target) selectedChipList.appendChild(placeholder);
+        else selectedChipList.insertBefore(placeholder, target);
+      }
+
+      function onPointerUp(e){
+        if (!active) return;
+
+        if (dragging){
+          if (placeholder && placeholder.parentNode){
+            selectedChipList.insertBefore(active, placeholder);
+          }
+          active.style.visibility = '';
+          placeholder?.remove(); placeholder = null;
+          ghost?.remove(); ghost = null;
+          commitOrderFromDom();
+        }
+
+        try { active.releasePointerCapture(pointerId); } catch(_){ }
+        active = null;
+        dragging = false;
+        pointerId = null;
+        setBodyCursor(false);
+      }
+
+      document.getElementById('selectedChipList').addEventListener('pointerdown', onPointerDown, { passive:false });
+      window.addEventListener('pointermove', onPointerMove, { passive:false });
+      window.addEventListener('pointerup', onPointerUp, { passive:false });
+      window.addEventListener('pointercancel', onPointerUp, { passive:false });
+      window.addEventListener('blur', onPointerUp, { passive:false });
+    })();
+
+    // ---------- Form UX ----------
+    addNameBtn.addEventListener('click', ()=> addPlayer(nameField.value));
+    nameField.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter'){
+        e.preventDefault();
+        e.stopPropagation(); // Stop the event from bubbling up to the form
+        addPlayer(nameField.value);
+      }
+    });
+    
+    startForm.addEventListener('submit', (e)=>{
+      if (!selected.length){
+        e.preventDefault();
+        showToast('Add at least one player', 'warning', 1600);
+        nameField.focus();
+        return;
+      }
+      // Clear the saved players from session storage on successful submission
+      sessionStorage.removeItem(SETUP_PLAYERS_KEY);
+      // The `writeHidden()` function is called on every render, so this is no longer needed.
+    });
+
+    // ---------- Init ----------
+    renderRecent();
+    renderSelected();
+
+    // --- Player Resolution Modal Logic ---
+    const resolutionOverlay = document.getElementById('playerResolutionOverlay');
+    const resolutionList = document.getElementById('playerResolutionList');
+    const createNewBtn = document.getElementById('createNewPlayerBtn');
+    let originalNameForCreation = '';
+
+    function openPlayerResolution(originalName, suggestedPlayers) {
+      originalNameForCreation = originalName;
+      createNewBtn.textContent = `Create New Player: "${escapeHtml(originalName)}"`; // Update button text
+      resolutionList.innerHTML = suggestedPlayers.map(p => 
+        `<li data-player-id="${p.id}" data-player-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</li>`
+      ).join('');
+      resolutionOverlay.classList.add('show');
+    }
+
+    function closePlayerResolution() {
+      resolutionOverlay.classList.remove('show');
+      createNewBtn.textContent = 'Create New Player'; // Reset button text
+      originalNameForCreation = '';
+    }
+
+    resolutionList.addEventListener('click', (e) => {
+      const li = e.target.closest('li');
+      if (!li) return;
+      const player = { id: li.dataset.playerId, name: li.dataset.playerName };
+      commitAddPlayer(player);
+    });
+
+    createNewBtn.addEventListener('click', async () => {
+      if (!originalNameForCreation) return;
+      const createData = await apiFetch('/api/create-player', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: originalNameForCreation }) });
+      if (!createData.ok) { showToast(createData.error || 'Failed to create player', 'error'); return; }
+      commitAddPlayer(createData.player);
+    });
+  </script>
+  {% endif %}
+
+  {% if game.phase == 'final_ranking' and not show_stats %}
+  <!-- =========================================================
+       SCRIPT: CONFETTI ON WINNER
+       ========================================================= -->
+  <script>
+    // On the final ranking page, trigger background stat calculation.
+    document.addEventListener('DOMContentLoaded', () => {
+      // Trigger the winner confetti on page load (respects user preference)
+      if (typeof window.initWinnerConfetti === 'function') {
+        const animationsEnabledPref = localStorage.getItem('animationsEnabled') !== 'false';
+        if (animationsEnabledPref) {
+          window.initWinnerConfetti();
+        }
+      }
+      const statsBtnLink = document.querySelector('a[href="{{ url_for("stats") }}"]');
+      if (statsBtnLink) {
+        statsBtnLink.addEventListener('click', async (e) => {
+          e.preventDefault(); // Stop immediate navigation
+          const loadingOverlay = document.getElementById('loadingOverlay');
+          
+          // Function to check if stats are ready
+          const checkStats = async () => {
+            try {
+              const res = await apiFetch('{{ url_for("api_game_stats_status") }}');
+              return res.ready;
+            } catch {
+              return false;
+            }
+          };
+
+          let isReady = await checkStats();
+          if (!isReady) {
+            if (loadingOverlay) loadingOverlay.classList.add('show');
+            // First, trigger the calculation
+            await apiFetch('{{ url_for("api_calculate_game_stats") }}', { method: 'POST' });
+
+            // Now, poll until ready
+            while (!isReady) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+              isReady = await checkStats();
+            }
+            if (loadingOverlay) loadingOverlay.classList.remove('show');
+          }
+          window.location.href = statsBtnLink.href; // Navigate now that stats are ready
+        });
+      }
+    });
+  </script>
+  {% endif %}
+
+  <!-- =========================================================
+       SCRIPT: GLOBAL SCROLL GUARD FOR iOS
+       (blocks page rubber-band; only .container scrolls)
+       ========================================================= -->
+  <script>
+    // Helper to check if any modal is active
+    function isModalActive() {
+      return !!document.querySelector('.modal-overlay.show');
+    }
+  </script>
+  <script>
+    (function(){
+      const scrollArea = document.querySelector('.container'); // only scrollable region
+      let startY = 0;
+      let insideScrollable = false;
+
+      function isInsideScrollable(el) {
+        let n = el;
+        while (n && n !== document.body) {
+          if (n === scrollArea) return true;
+          n = n.parentElement;
+        }
+        return false;
+      }
+
+      document.addEventListener('touchstart', (e) => {
+        insideScrollable = isInsideScrollable(e.target);
+        startY = (e.touches && e.touches.length) ? e.touches[0].clientY : 0;
+      }, { passive: true });
+
+      document.addEventListener('touchmove', (e) => {
+        // If a modal is open, do not interfere with scrolling.
+        if (isModalActive()) return;
+
+        if (!scrollArea) { e.preventDefault(); return; }
+
+        // If touch is outside the scroll area, block it outright.
+        if (!insideScrollable) { e.preventDefault(); return; }
+
+        // Inside scroll area: block rubber-band when at edges and trying to go past
+        const y = (e.touches && e.touches.length) ? e.touches[0].clientY : startY;
+        const dy = y - startY;
+
+        const atTop = scrollArea.scrollTop <= 0;
+        const atBottom = scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 1;
+
+        if ((atTop && dy > 0) || (atBottom && dy < 0)) {
+          e.preventDefault(); // stop bounce from reaching <body>
+        }
+      }, { passive: false });
+
+      // Block wheel/trackpad page scroll (iPadOS / desktop Safari)
+      document.addEventListener('wheel', (e) => {
+        // If a modal is open, or if the event is inside the main scrollable area, do not interfere.
+        if (isModalActive() || isInsideScrollable(e.target)) {
+          return;
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      // Also hard-lock explicitly marked regions (e.g., bottom controls)
+      document.querySelectorAll('[data-lock-scroll]').forEach(el=>{
+        el.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+        el.addEventListener('wheel',     e => e.preventDefault(), { passive:false });
+      });
+    })();
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: RAISE CONTROLS FOR IPHONE + SET CONTAINER BOTTOM INSET
+       (fixed controls; only compute height; no extra spacer)
+       ========================================================= -->
+<script>
+  (function(){
+    const root = document.documentElement;
+    const controls = document.querySelector('.controls');
+    function setH(){ if (controls) root.style.setProperty('--controls-h', controls.getBoundingClientRect().height + 'px'); }
+    window.addEventListener('load', setH, {once:true});
+    window.addEventListener('resize', setH);
+    window.addEventListener('orientationchange', setH);
+    // iOS visual viewport changes
+    if (window.visualViewport){
+      visualViewport.addEventListener('resize', setH);
+      visualViewport.addEventListener('scroll', setH);
+    }
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setH(); });
+  })();
+</script>
+
+  <!-- =========================================================
+       CONTROLS (BOTTOM BAR)
+       ========================================================= -->
+  {% if show_stats or show_leaderboard %}
+    <div class="controls no-overscroll" data-lock-scroll>
+      {% if show_leaderboard %}
+        <div class="button-grid two" data-lock-scroll>
+          <a href="{{ url_for('index') }}" onclick="popButton(this.querySelector('button'));" style="grid-column: 1;">
+            <button type="button" class="export-btn main-action-btn">Back</button>
+          </a>
+          <button type="button" id="compareBtn" class="main-action-btn" onclick="popButton(this); toggleCompareMode();" style="background-color: #555; color: #fff;">Compare</button>
+        </div>
+      {% else %} {# This is for the show_stats page #}
+        <div class="button-grid two" data-lock-scroll>
+          <a href="{{ url_for('index') }}" onclick="popButton(this.querySelector('button'));"><button type="button" class="export-btn main-action-btn">Back</button></a>
+          <form id="restartForm" action="{{ url_for('restart') }}" method="post">
+            <button type="button" id="restartBtn" class="restart-btn main-action-btn">New Game</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  {% elif game.phase == 'setup' %}
+    <!-- Bottom controls for SETUP — unified button-grid two -->
+    <div class="controls no-overscroll" data-lock-scroll>
+      <div class="button-grid setup-controls" data-lock-scroll>
+        <button type="button" class="main-action-btn settings-icon-btn" aria-label="Settings" title="Settings" onclick="popButton(this); openSettings();">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19.43,12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49,1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46,2.18,14.25,2,14,2h-4c-.25,0-.46.18-.49.42l-.38,2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49,0-.61.22l-2,3.46c-.13.22-.07.49.12.64l2.11,1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11,1.65c-.19.15-.24.42-.12.64l2,3.46c.12.22.39.3.61.22l2.49-1c.52.4,1.08.73,1.69.98l.38,2.65c.03.24.24.42.49.42h4c.25,0,.46-.18.49-.42l.38-2.65c.61-.25,1.17-.59,1.69-.98l2.49,1c.23.09.49,0,.61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12,15.5c-1.93,0-3.5-1.57-3.5-3.5s1.57-3.5,3.5-3.5,3.5,1.57,3.5,3.5-1.57,3.5-3.5,3.5z"/></svg>
+        </button>
+        <a href="{{ url_for('leaderboard') }}" onclick="popButton(this.querySelector('button'));"><button type="button" class="settings-btn main-action-btn">Stats</button></a>
+        <button type="submit" class="restart-btn main-action-btn" form="startForm" onclick="popButton(this);">Start Game</button>
+      </div>
+    </div>
+  {% elif game.phase in ['playing','playoff'] %}
+    <div class="controls no-overscroll" data-lock-scroll>
+      <div class="button-grid" data-lock-scroll>
+        <button type="button" class="score-btn minus" onclick="hit(-3, this)">-3</button>
+        <button type="button" class="score-btn minus" onclick="hit(-2, this)">-2</button>
+        <button type="button" class="score-btn minus" onclick="hit(-1, this)">-1</button>
+        <button type="button" class="score-btn zero"  onclick="hit(0,  this)">0</button>
+        <button type="button" class="score-btn plus"  onclick="hit(1,  this)">+1</button>
+        <button type="button" class="score-btn plus"  onclick="hit(2,  this)">+2</button>
+      </div>
+      <div class="button-grid two playing" data-lock-scroll>
+        <button type="button" id="undoBtn" class="undo-btn" onclick="popButton(this); undo();" {{ 'disabled' if game.phase == 'playoff' else '' }}>Undo</button>
+        <button type="button" id="endBtn" class="end-btn" onclick="popButton(this); toggleEnd();">{{ 'Cancel' if game.end_after_round else 'End' }}</button>
+      </div>
+    </div>
+  {% elif game.phase == 'final_ranking' %}
+    <div class="controls no-overscroll" data-lock-scroll>
+      <div class="button-grid final-controls" data-lock-scroll>
+        <a href="{{ url_for('stats') }}" onclick="popButton(this.querySelector('button'));"><button type="button" class="export-btn main-action-btn">Stats</button></a>
+        <button type="button" id="confettiBtn" class="confetti-btn" onclick="popButton(this); window.triggerConfetti();">🎉</button>
+        <form id="restartForm" action="{{ url_for('restart') }}" method="post">
+          <button type="button" id="restartBtn" class="restart-btn main-action-btn">New Game</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Attach confirm to Start New Game -->
+  <script>
+    (function(){
+      var btn = document.getElementById('restartBtn');
+      var form = document.getElementById('restartForm');
+      if (btn && form) {
+        btn.addEventListener('click', async function(){
+          popButton(this);
+          const ok = await window.showConfirmModal({
+            title: 'Start New Game',
+            message: 'This will clear the current game and return to setup. Continue?',
+            okText: 'Start New Game',
+            cancelText: 'Cancel'
+          });
+          if (ok) form.submit();
+        });
+      }
+    })();
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: SETTINGS MODAL LOGIC
+       ========================================================= -->
+  <script>
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    const hapticsToggle   = document.getElementById('hapticsToggle');
+    const holesInput      = document.getElementById('holesInput');
+    const holesRow        = document.getElementById('holesSettingsRow');
+    const rudenessSlider  = document.getElementById('rudenessSlider');
+    const rudenessLabel   = document.getElementById('rudenessLabel');
+    const settingsSummary = document.getElementById('settingsSummary');
+    const clearRecentsBtn = document.getElementById('clearRecentsBtn');
+    const sidDisplay      = document.getElementById('sidDisplay');
+    const uptimeDisplay   = document.getElementById('uptimeDisplay');
+    const animationsToggle = document.getElementById('animationsToggle');
+
+    // --- Animations Toggle Logic ---
+    let animationsEnabled = localStorage.getItem('animationsEnabled') !== 'false'; // Default true
+    if (animationsToggle) {
+      animationsToggle.checked = animationsEnabled;
+    } else {
+      console.warn('animationsToggle element not found');
+    }
+
+    function updateAnimationsState() {
+      const confettiBtn = document.getElementById('confettiBtn');
+      const finalControlsGrid = document.querySelector('.button-grid.final-controls');
+
+      // Apply or remove the no-animations class on body
+      if (animationsEnabled) {
+        document.body.classList.remove('no-animations');
+      } else {
+        document.body.classList.add('no-animations');
+      }
+
+      // Show/hide confetti button based on animations state
+      if (confettiBtn) {
+        confettiBtn.style.display = animationsEnabled ? 'inline-block' : 'none';
+      }
+
+      // Adjust grid layout when confetti button is hidden
+      if (finalControlsGrid) {
+        if (animationsEnabled) {
+          finalControlsGrid.style.gridTemplateColumns = '1fr auto 1fr'; // Stats | Confetti | New Game
+        } else {
+          finalControlsGrid.style.gridTemplateColumns = '1fr 1fr'; // Stats | New Game (equal space)
+        }
+      }
+    }
+
+    // Toggle function for the button
+    window.toggleAnimations = function() {
+      animationsEnabled = !animationsEnabled;
+      localStorage.setItem('animationsEnabled', animationsEnabled);
+      if (animationsToggle) {
+        animationsToggle.checked = animationsEnabled;
+      }
+      updateAnimationsState();
+    };
+
+    if (animationsToggle) {
+      animationsToggle.addEventListener('change', function() {
+        animationsEnabled = this.checked;
+        localStorage.setItem('animationsEnabled', animationsEnabled);
+        updateAnimationsState();
+      });
+    }
+
+    // Initialize on page load
+    updateAnimationsState();
+
+    // --- Custom Rudeness Slider Logic ---
+    const RUDENESS_MAP = ['Serious', 'Medium', 'Rude'];
+    const rudenessThumb = rudenessSlider.querySelector('.slider-thumb');
+    let rudenessLevel = 0; // Internal state for the slider's value
+
+    function setRudenessSlider(level, animate = false) {
+      rudenessLevel = Math.max(0, Math.min(level, RUDENESS_MAP.length - 1));
+      rudenessLabel.textContent = RUDENESS_MAP[rudenessLevel];
+      // Position is 0% for level 0, 50% for level 1, 100% for level 2
+      const percent = (rudenessLevel / (RUDENESS_MAP.length - 1)) * 100;
+      if (!animate) rudenessThumb.classList.add('dragging'); // Prevent animation on initial set
+      rudenessThumb.style.left = `${percent}%`;
+      if (!animate) {
+        // Force reflow and then remove the class to re-enable animation for future interactions
+        rudenessThumb.offsetHeight; 
+        rudenessThumb.classList.remove('dragging');
+      }
+    }
+
+    function handleSliderMove(clientX) {
+      const rect = rudenessSlider.getBoundingClientRect();
+      const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      
+      // Update thumb position visually while dragging
+      rudenessThumb.style.left = `${percent * 100}%`;
+
+      // Update the label in real-time
+      const level = Math.round(percent * (RUDENESS_MAP.length - 1));
+      rudenessLabel.textContent = RUDENESS_MAP[level];
+    }
+
+    function handleSliderEnd(clientX) {
+      const rect = rudenessSlider.getBoundingClientRect();
+      const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const finalLevel = Math.round(percent * (RUDENESS_MAP.length - 1));
+      setRudenessSlider(finalLevel, true); // Snap with animation
+    }
+
+    let isDragging = false;
+    rudenessSlider.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      rudenessThumb.classList.add('dragging');
+      rudenessSlider.setPointerCapture(e.pointerId);
+      handleSliderMove(e.clientX);
+    });
+    rudenessSlider.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      handleSliderMove(e.clientX);
+    });
+    rudenessSlider.addEventListener('pointerup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      rudenessThumb.classList.remove('dragging');
+      rudenessSlider.releasePointerCapture(e.pointerId);
+      handleSliderEnd(e.clientX);
+    });
+    // Also handle clicks on the track
+    rudenessSlider.addEventListener('click', (e) => {
+      // Prevent click from firing during a drag sequence
+      if (e.target === rudenessThumb) return;
+      handleSliderEnd(e.clientX);
+    });
+
+    // --- Uptime Clock Logic ---
+    let uptimeInterval = null;
+    function startUptimeClock(startTimeSeconds) {
+      if (uptimeInterval) clearInterval(uptimeInterval);
+      if (!startTimeSeconds) {
+        uptimeDisplay.textContent = '';
+        return;
+      }
+
+      const startTimeMs = startTimeSeconds * 1000;
+
+      function update() {
+        const now = Date.now();
+        let totalSeconds = Math.floor((now - startTimeMs) / 1000);
+
+        const days = Math.floor(totalSeconds / 86400);
+        totalSeconds %= 86400;
+        const hours = Math.floor(totalSeconds / 3600);
+        totalSeconds %= 3600;
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+
+        let parts = [];
+        if (days > 0) parts.push(`${days}d`);
+        if (hours > 0) parts.push(`${hours}h`);
+        if (minutes > 0) parts.push(`${minutes}m`);
+        parts.push(`${seconds}s`);
+
+        uptimeDisplay.innerHTML = `Uptime: <span style="color:#fff;">${parts.join(' ')}</span>`;
+      }
+
+      update(); // Initial call
+      uptimeInterval = setInterval(update, 1000);
+    }
+
+
+    function openSettings(){
+      const g = window.__gameCache;
+      holesInput.value = g.holes || 20;
+      setRudenessSlider(g.rudeness_level || 0);
+
+      sidDisplay.innerHTML = `SID: <span style="color:#fff;">${g.sid || '...'}</span>`;
+      startUptimeClock({{ app_start_time }});
+      // Only show the holes/rounds setting during the setup phase
+      if (g.phase === 'setup') {
+        holesRow.style.display = 'grid';
+        holesInput.disabled = false;
+      } else {
+        holesRow.style.display = 'none';
+        holesInput.disabled = true;
+      }
+
+      updateSettingsSummary();
+      if (typeof window.updateInstallVisibility === 'function') {
+        window.updateInstallVisibility();
+      }
+      settingsOverlay.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+    function updateSettingsSummary() {
+      const g = window.__gameCache;
+      const rudeness = RUDENESS_MAP[g.rudeness_level || 0];
+      let summary = `${rudeness}`;
+      if (g.phase === 'setup') {
+        summary += `, ${holesInput.value} rounds`;
+      } else {
+        summary += `, ${g.holes} rounds`;
+      }
+      settingsSummary.textContent = summary;
+    }
+    function closeSettings(){
+
+      if (uptimeInterval) clearInterval(uptimeInterval);
+      settingsOverlay.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+    async function saveSettings(){
+      const payload = {};
+
+      payload.rudeness_level = rudenessLevel;
+      const g = window.__gameCache;
+      if (g.phase === 'setup') {
+        const newHoles = parseInt(holesInput.value, 10);
+        if (newHoles && newHoles !== g.holes) {
+          payload.holes = newHoles;
+        }
+      }
+
+      try {
+        const data = await apiFetch('{{ url_for("api_settings") }}', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+        if (data.ok && data.game) {
+          window.__gameCache = data.game;
+          if (typeof saveLocal === 'function') saveLocal(data.game);
+          if (data.app_start_time) startUptimeClock(data.app_start_time);
+          updateSettingsSummary();
+        }
+        showToast('Settings saved', 'success');
+      } catch(e) { showToast('Could not save settings', 'error'); }
+    }
+
+    clearRecentsBtn.addEventListener('click', async () => {
+      const ok = await window.showConfirmModal({
+        title: 'Clear Recent Players',
+        message: 'Are you sure you want to remove all recent player names? This cannot be undone.',
+        okText: 'Clear',
+        cancelText: 'Cancel'
+      });
+      if (!ok) return;
+
+      try {
+        const data = await apiFetch('{{ url_for("api_clear_recents") }}', { method: 'POST' });
+        if (data.ok && data.game) {
+          window.__gameCache = data.game;
+          // Update the correct local variable before re-rendering
+          allRecentNames = data.game.recent_names || [];
+          if (typeof saveLocal === 'function') saveLocal(data.game);
+          showToast('Recent players cleared', 'success');
+          // Re-render the recent players list on the setup screen if it exists
+          if (typeof renderRecent === 'function') {
+            renderRecent();
+          }
+        }
+      } catch (e) { showToast('Could not clear recent players', 'error'); }
+    });
+
+    // --- Clear Cache & Refresh Logic ---
+    const clearCacheBtn = document.getElementById('clearCacheBtn');
+    clearCacheBtn.addEventListener('click', async () => {
+      const ok = await window.showConfirmModal({
+        title: 'Clear Cache & Refresh',
+        message: 'This will log you out of the current game, unregister the service worker, and force a full refresh. Are you sure?',
+        okText: 'Clear & Refresh',
+        cancelText: 'Cancel'
+      });
+      if (!ok) return;
+
+      try {
+        // 1. Unregister service workers
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) { await registration.unregister(); }
+        // 2. Clear all Cache Storage
+        const keys = await caches.keys();
+        await Promise.all(keys.map(key => caches.delete(key)));
+        // 3. Clear local storage backup and navigate to the logout route to clear the session
+        localStorage.clear();
+        window.location.href = '{{ url_for("logout") }}';
+      } catch (e) { showToast('Failed to clear cache.', 'error'); console.error(e); }
+    });
+  </script>
+  
+  <!-- New script for Player Stats Modal -->
+  <script>
+    const playerStatsOverlay = document.getElementById('playerStatsOverlay');
+    const playerStatsTitle = document.getElementById('playerStatsTitle');
+    const playerStatsContent = document.getElementById('playerStatsContent');
+    const playerStatsIdDisplay = document.getElementById('playerStatsIdDisplay');
+    const renamePlayerBtn = document.getElementById('renamePlayerBtn');
+    const deletePlayerBtn = document.getElementById('deletePlayerBtn');
+    const allPlayersModalContent = document.getElementById('allPlayersContent'); // Assuming this will be added
+
+    async function openPlayerStats(playerName, playerId, showDeltas = false) {
+      playerStatsTitle.textContent = `${playerName}'s Stats`; // Use the name from the game that was played
+      // Show skeleton loading placeholders
+      playerStatsContent.innerHTML = `
+        <div class="stat-block skeleton-stat">
+          <div class="skeleton skeleton-text" style="width: 40%; height: 14px; margin-bottom: 8px;"></div>
+          <div class="skeleton skeleton-text" style="width: 60%; height: 24px;"></div>
+        </div>
+        <div class="stat-block skeleton-stat">
+          <div class="skeleton skeleton-text" style="width: 50%; height: 14px; margin-bottom: 8px;"></div>
+          <div class="skeleton skeleton-text" style="width: 70%; height: 24px;"></div>
+        </div>
+        <div class="stat-block skeleton-stat">
+          <div class="skeleton skeleton-text" style="width: 45%; height: 14px; margin-bottom: 8px;"></div>
+          <div class="skeleton skeleton-text" style="width: 55%; height: 24px;"></div>
+        </div>
+        <div class="stat-block skeleton-stat">
+          <div class="skeleton skeleton-text" style="width: 35%; height: 14px; margin-bottom: 8px;"></div>
+          <div class="skeleton skeleton-text" style="width: 65%; height: 24px;"></div>
+        </div>
+      `;
+      playerStatsIdDisplay.innerHTML = `pid: <span style="color:#fff;">${playerId}</span>`;
+      playerStatsOverlay.classList.add('show');
+      renamePlayerBtn.dataset.playerName = playerName;
+      renamePlayerBtn.dataset.playerId = playerId;
+      deletePlayerBtn.dataset.playerName = playerName;
+      deletePlayerBtn.dataset.playerId = playerId;
+      deletePlayerBtn.title = `Delete ${playerName}'s Stats`;
+      deletePlayerBtn.setAttribute('aria-label', `Delete ${playerName}'s Stats`);
+
+      // Hide the rename button if we are viewing stats from a completed game (showDeltas is true)
+      if (showDeltas) {
+        renamePlayerBtn.style.display = 'none';
+        deletePlayerBtn.style.display = 'none';
+      } else {
+        // Also hide if there's no player ID (shouldn't happen in normal flow)
+        renamePlayerBtn.style.display = playerId ? 'block' : 'none';
+        deletePlayerBtn.style.display = playerId ? 'block' : 'none';
+      }
+      document.body.style.overflow = 'hidden';
+      
+      try {
+        // Fetch stats using the stable player ID
+        const data = await apiFetch(`/api/player/${encodeURIComponent(playerName)}?id=${encodeURIComponent(playerId)}`);
+        if (!data.ok) throw new Error(data.error || 'Could not load stats');
+
+        const stats = data.stats;
+        const deltas = stats.last_game_deltas || {};
+
+        function getDeltaHtml(deltaValue) {
+          if (deltaValue === undefined || deltaValue === null || !showDeltas) return '';
+          if (deltaValue === 0) {
+            return `<div class="stat-delta neutral">
+              − ${deltaValue}
+            </div>`;
+          }
+          const isGood = deltaValue > 0;
+          return `<div class="stat-delta ${isGood ? 'good' : 'bad'}">
+            ${isGood ? '▲' : '▼'} ${deltaValue}
+          </div>`;
+        }
+
+        // For average score, lower is better
+        function getAvgDeltaHtml(deltaValue) {
+          if (deltaValue === undefined || deltaValue === null || !showDeltas) return '';
+          if (deltaValue === 0) {
+            return `<div class="stat-delta neutral">
+              − ${(0).toFixed(2)}
+            </div>`;
+          }
+          const isGood = deltaValue < 0;
+          return `<div class="stat-delta ${isGood ? 'good' : 'bad'}">
+            ${isGood ? '▼' : '▲'} ${deltaValue.toFixed(2)}
+          </div>`;
+        }
+
+        function getPercDeltaHtml(deltaValue) {
+          if (deltaValue === undefined || deltaValue === null || !showDeltas) return '';
+          if (deltaValue === 0) {
+            return `<div class="stat-delta neutral">
+              − 0%
+            </div>`;
+          }
+          const isGood = deltaValue > 0;
+          return `<div class="stat-delta ${isGood ? 'good' : 'bad'}">
+            ${isGood ? '▲' : '▼'} ${Math.round(deltaValue)}%
+          </div>`;
+        }
+
+        // For best/worst score, lower is better
+        function getGameScoreDeltaHtml(deltaValue) {
+          if (deltaValue === undefined || deltaValue === null || !showDeltas) return '';
+          if (deltaValue === 0) {
+            return `<div class="stat-delta neutral">
+              − 0
+            </div>`;
+          }
+          const isGood = deltaValue < 0; // A new best score is a negative delta
+          return `<div class="stat-delta ${isGood ? 'good' : 'bad'}">
+            ${isGood ? '▼' : '▲'} ${deltaValue}
+          </div>`;
+        }
+
+        function formatScoreWithSign(score) {
+            if (score > 0) return `+${score}`;
+            return String(score || 0);
+        }
+
+        playerStatsContent.innerHTML = `
+          <div class="stat-block">
+            <ol>
+              <li><div class="stat-left"><span class="stat-player">🎲 Games Played</span></div><div class="stat-right"><span>${stats.games_played || 0}</span> ${getDeltaHtml(deltas.games_played)}</div></li>
+              <li><div class="stat-left"><span class="stat-player">🏆 Wins</span></div><div class="stat-right"><span>${stats.wins || 0}</span> ${getDeltaHtml(deltas.wins)}</div></li>
+              <li><div class="stat-left"><span class="stat-player">📈 Win Rate</span></div><div class="stat-right"><span>${Math.round(stats.win_percentage)}%</span> ${getPercDeltaHtml(deltas.win_percentage_delta)}</div></li>
+              <li><div class="stat-left"><span class="stat-player">📊 Average Score</span></div><div class="stat-right"><span>${stats.average_score.toFixed(2)}</span> ${getAvgDeltaHtml(deltas.average_score_delta)}</div></li>
+              <li><div class="stat-left"><span class="stat-player">🎯 On Target %</span></div><div class="stat-right"><span>${Math.round(stats.on_target_percentage)}%</span> ${getPercDeltaHtml(deltas.on_target_percentage_delta)}</div></li>
+              <li><div class="stat-left"><span class="stat-player">⭐ Best Score</span></div><div class="stat-right"><span>${formatScoreWithSign(stats.best_game_score)}</span> ${getGameScoreDeltaHtml(deltas.best_game_score_delta)}</div></li>
+              <li><div class="stat-left"><span class="stat-player">💀 Worst Score</span></div><div class="stat-right"><span>${formatScoreWithSign(stats.worst_game_score)}</span> ${getGameScoreDeltaHtml(deltas.worst_game_score_delta)}</div></li>
+              <li><div class="stat-left"><span class="stat-player">🕊️ Total Birdies</span></div><div class="stat-right"><span>${stats.total_birdies || 0}</span> ${getDeltaHtml(deltas.total_birdies)}</div></li>
+              <li style="border-bottom: none;"><div class="stat-left"><span class="stat-player">💔 Total Bogeys</span></div><div class="stat-right"><span>${stats.total_bogeys || 0}</span> ${getDeltaHtml(deltas.total_bogeys)}</div></li>
+            </ol>
+          </div>
+        `;
+      } catch (e) {
+        playerStatsContent.innerHTML = `<div class="stat-block" style="grid-column: 1 / -1; text-align: center; color: #ffcccc;">${e.message}</div>`;
+      }
+    }
+
+    function closePlayerStats() {
+      playerStatsOverlay.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+  </script>
+  <!-- New script for Player Comparison Modal -->
+  <script>
+    const compareOverlay = document.getElementById('playerCompareOverlay');
+    const compareSelect1 = document.getElementById('comparePlayer1');
+    const compareSelect2 = document.getElementById('comparePlayer2');
+    const comparisonResult = document.getElementById('comparisonResult');
+    const compareBtn = document.getElementById('compareBtn');
+    let isCompareModeActive = false;
+    let comparisonSelection = [];
+
+    function closePlayerCompareModal() {
+      // Exit compare mode (which handles clearing highlights) after a delay.
+      setTimeout(exitCompareMode, 100);
+      compareOverlay.classList.remove('show');
+    }
+
+    function enterCompareMode() { 
+      isCompareModeActive = true;
+      compareBtn.textContent = 'Cancel';
+      compareBtn.style.backgroundColor = '#E3292E'; // Red for cancel
+      showToast('Select two players from the list to compare.', 'info', 3000);
+    }
+
+    function exitCompareMode() {
+      isCompareModeActive = false;
+      compareBtn.textContent = 'Compare';
+      compareBtn.style.backgroundColor = '#555';
+      comparisonSelection = [];
+      document.querySelectorAll('#leaderboardList li.selected-for-compare').forEach(el => el.classList.remove('selected-for-compare'));
+    }
+
+    function toggleCompareMode() {
+      if (isCompareModeActive) {
+        exitCompareMode();
+      } else {
+        enterCompareMode();
+      }
+    }
+
+    async function showComparisonFor(player1, player2) {
+      if (!player1 || !player2) {
+        return;
+      }
+      compareOverlay.classList.add('show');
+      // Show skeleton loading for comparison table
+      comparisonResult.innerHTML = `
+        <div style="text-align: center;">
+          <div class="skeleton skeleton-text" style="width: 80%; height: 20px; margin: 12px auto;"></div>
+          <div class="skeleton skeleton-text" style="width: 90%; height: 16px; margin: 8px auto;"></div>
+          <div class="skeleton skeleton-text" style="width: 85%; height: 16px; margin: 8px auto;"></div>
+          <div class="skeleton skeleton-text" style="width: 88%; height: 16px; margin: 8px auto;"></div>
+          <div class="skeleton skeleton-text" style="width: 82%; height: 16px; margin: 8px auto;"></div>
+        </div>
+      `;
+
+      try {
+        const [data1, data2] = await Promise.all([
+          apiFetch(`/api/player/${encodeURIComponent(player1.name)}?id=${encodeURIComponent(player1.id)}`),
+          apiFetch(`/api/player/${encodeURIComponent(player2.name)}?id=${encodeURIComponent(player2.id)}`)
+        ]);
+
+        if (!data1.ok || !data2.ok) throw new Error('Could not load stats for one or more players.');
+
+        renderComparison(data1.stats, data2.stats, player1.name, player2.name);
+      } catch (e) {
+        comparisonResult.innerHTML = `<div style="color: #ffcccc;">${e.message}</div>`;
+      }
+    }
+
+    function renderComparison(stats1, stats2, name1, name2) {
+      const statsToCompare = [
+        { name: 'Games Played', key: 'games_played', format: v => v || 0 },
+        { name: 'Wins', key: 'wins', format: v => v || 0 },
+        { name: 'Win Rate', key: 'win_percentage', format: v => `${Math.round(v)}%`, rawValue: v => v || 0 },
+        { name: 'Average Score', key: 'average_score', format: v => v.toFixed(2), lowerIsBetter: true },
+        { name: 'On Target %', key: 'on_target_percentage', format: v => `${Math.round(v)}%`, rawValue: v => v || 0 },
+        { name: 'Best Score', key: 'best_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
+        { name: 'Worst Score', key: 'worst_game_score', format: v => (v > 0 ? `+${v}` : String(v || 0)), lowerIsBetter: true },
+        { name: 'Total Birdies', key: 'total_birdies', format: v => v || 0 },
+        { name: 'Total Bogeys', key: 'total_bogeys', format: v => v || 0, lowerIsBetter: true },
+      ];
+
+      let player1Wins = 0;
+      let player2Wins = 0;
+
+      const rowsHtml = statsToCompare.map(stat => {
+        const val1 = stats1[stat.key] || 0;
+        const val2 = stats2[stat.key] || 0;
+        const rawVal1 = stat.rawValue ? stat.rawValue(val1) : val1;
+        const rawVal2 = stat.rawValue ? stat.rawValue(val2) : val2;
+
+        // Calculate who wins this stat
+        let p1Wins = false, p2Wins = false, isTie = false;
+        if (rawVal1 === rawVal2) {
+          isTie = true;
+        } else if (stat.lowerIsBetter) {
+          p1Wins = rawVal1 < rawVal2;
+          p2Wins = rawVal2 < rawVal1;
+        } else {
+          p1Wins = rawVal1 > rawVal2;
+          p2Wins = rawVal2 > rawVal1;
+        }
+
+        if (p1Wins) player1Wins++;
+        if (p2Wins) player2Wins++;
+
+        // Calculate bar percentages (each side shows relative proportion)
+        const total = Math.abs(rawVal1) + Math.abs(rawVal2);
+        let p1Pct = 50, p2Pct = 50;
+        if (total > 0) {
+          p1Pct = (Math.abs(rawVal1) / total) * 100;
+          p2Pct = (Math.abs(rawVal2) / total) * 100;
+        }
+
+        const p1Class = isTie ? 'tie' : (p1Wins ? 'winner' : '');
+        const p2Class = isTie ? 'tie' : (p2Wins ? 'winner' : '');
+
+        return `
+          <div class="h2h-stat-row">
+            <div class="h2h-stat-label">${stat.name}</div>
+            <div class="h2h-bar-container">
+              <div class="h2h-value player1 ${p1Class}">${stat.format(val1)}</div>
+              <div class="h2h-bar-wrapper">
+                <div class="h2h-bar player1 ${p1Class}" data-width="${p1Pct}%"></div>
+                <div class="h2h-bar player2 ${p2Class}" data-width="${p2Pct}%"></div>
+              </div>
+              <div class="h2h-value player2 ${p2Class}">${stat.format(val2)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      comparisonResult.innerHTML = `
+        <div class="h2h-comparison">
+          <div class="h2h-header">
+            <div class="h2h-player-name player1">${escapeHtml(name1)}</div>
+            <div class="h2h-player-name player2">${escapeHtml(name2)}</div>
+          </div>
+          ${rowsHtml}
+          <div class="h2h-summary">
+            <div class="h2h-summary-title">STATS WON</div>
+            <div class="h2h-summary-score">
+              <span class="player1">${player1Wins}</span>
+              <span class="vs">-</span>
+              <span class="player2">${player2Wins}</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Animate bars after render
+      requestAnimationFrame(() => {
+        const bars = comparisonResult.querySelectorAll('.h2h-bar');
+        bars.forEach((bar, index) => {
+          const targetWidth = bar.getAttribute('data-width');
+          setTimeout(() => {
+            bar.style.width = targetWidth;
+          }, Math.floor(index / 2) * 100); // Stagger each row by 100ms
+        });
+      });
+    }
+
+    // Delegated click listener for leaderboard and stats pages
+    document.querySelector('.container').addEventListener('click', (e) => {
+      // Check if we're clicking on a leaderboard list item or stats element
+      const listItem = e.target.closest('#leaderboardList li');
+      const statElement = e.target.closest('.stat-left');
+
+      // Get player data from either source
+      let playerId, playerName;
+      if (listItem && listItem.dataset.playerId) {
+        // Clicking anywhere on the leaderboard row
+        playerId = listItem.dataset.playerId;
+        playerName = listItem.querySelector('[data-player-name]')?.dataset.playerName;
+      } else if (statElement) {
+        // Clicking on stats element (for stats page)
+        playerId = statElement.dataset.playerId;
+        playerName = statElement.dataset.playerName;
+      } else {
+        return;
+      }
+
+      if (!playerId || !playerName) return;
+
+      // Prevent default link behavior if it was a link that was clicked
+      if (e.target.closest('a')) {
+        e.preventDefault();
+      }
+
+      const row = listItem || statElement.closest('li');
+
+      if (isCompareModeActive) {
+        const isSelected = row && row.classList.contains('selected-for-compare');
+        if (isSelected) {
+          // Deselect
+          row.classList.remove('selected-for-compare');
+          comparisonSelection = comparisonSelection.filter(p => p !== playerName);
+        } else {
+          // Select
+          if (comparisonSelection.length < 2) {
+            if (row) row.classList.add('selected-for-compare');
+            comparisonSelection.push({ id: playerId, name: playerName });
+          }
+        }
+
+        if (comparisonSelection.length === 2) {
+          showComparisonFor(comparisonSelection[0], comparisonSelection[1]);
+        }
+      } else {
+        // Default behavior: open player stats
+        const showDeltas = !!statElement?.closest('.stats-view-container');
+        openPlayerStats(playerName, playerId, showDeltas);
+      }
+    });
+  </script>
+
+  {% if show_stats %}
+  <!-- =========================================================
+       SCRIPT: STATS BAR CHART ANIMATION
+       ========================================================= -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const observer = new IntersectionObserver((entries, obs) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const bar = entry.target;
+            const targetWidth = bar.getAttribute('data-width');
+            bar.style.setProperty('--target-width', targetWidth || '0px');
+            bar.offsetWidth; // Force reflow to ensure initial width:0 is rendered
+            bar.classList.add('visible');
+            obs.unobserve(bar); // Animate only once
+          }
+        });
+      }, { threshold: 0.1 }); // Trigger when 10% of the bar is visible
+
+      const statBars = document.querySelectorAll('.stat-bar');
+      if (statBars.length > 0) {
+        statBars.forEach(bar => observer.observe(bar));
+      }
+    });
+  </script>
+  {% elif show_leaderboard %}
+  <!-- =========================================================
+       SCRIPT: LEADERBOARD SEARCH
+       ========================================================= -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const searchInput = document.getElementById('leaderboardSearch');
+      const leaderboardList = document.getElementById('leaderboardList');
+      if (!searchInput || !leaderboardList) return;
+
+      searchInput.addEventListener('input', () => {
+        const searchTerm = searchInput.value.toLowerCase();
+        const players = leaderboardList.querySelectorAll('li');
+        players.forEach(player => {
+          const name = player.dataset.leaderboardName || '';
+          if (name.includes(searchTerm)) {
+            player.style.display = '';
+          } else {
+            player.style.display = 'none';
+          }
+        });
+      });
+    });
+  </script>
+  <script>
+    // --- New dynamic leaderboard sorting logic ---
+    document.addEventListener('DOMContentLoaded', async () => {
+      const sortContainer = document.querySelector('.sort-controls');
+      if (!sortContainer) return;
+
+      // Refresh leaderboard on page load to ensure it shows the latest stats
+      try {
+        const activeBtn = sortContainer.querySelector('.sort-btn.active');
+        const sortBy = activeBtn ? activeBtn.dataset.sort : 'games_played';
+        const data = await apiFetch(`{{ url_for('api_leaderboard') }}?sort_by=${sortBy}`);
+        if (data.ok) {
+          renderLeaderboard(data.leaderboard, sortBy);
+        }
+      } catch (error) {
+        // Silently fail - leaderboard can remain as server-rendered
+      }
+
+      sortContainer.addEventListener('click', async (e) => {
+        const button = e.target.closest('.sort-btn');
+        if (!button || button.classList.contains('active')) return;
+
+        const sortBy = button.dataset.sort;
+        const leaderboardList = document.getElementById('leaderboardList');
+        const sortTitleElement = document.getElementById('leaderboardSortTitle');
+
+        // 1. Update button active states
+        sortContainer.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+
+        try {
+          // 2. Fetch new sorted data
+          const data = await apiFetch(`{{ url_for('api_leaderboard') }}?sort_by=${sortBy}`);
+          if (!data.ok) throw new Error('Failed to load sorted data.');
+
+          // 3. Render new list and title immediately (no fade animation)
+          renderLeaderboard(data.leaderboard, sortBy);
+
+        } catch (error) {
+          showToast(error.message, 'error');
+        }
+      });
+    });
+
+    function renderLeaderboard(players, sortBy) {
+      const leaderboardList = document.getElementById('leaderboardList');
+      if (!leaderboardList) return;
+
+      const getStatDisplay = (p) => {
+        if (sortBy === 'win_rate') return `${p.win_rate.toFixed(1)}%`;
+        if (sortBy === 'on_target') return `${p.on_target_percentage.toFixed(1)}%`;
+        return `${p.games_played} Game${p.games_played !== 1 ? 's' : ''}`;
+      };
+
+      const sortTitles = {
+        'games_played': 'Number of Games',
+        'win_rate': 'Win Rate',
+        'on_target': '% on Target'
+      };
+      const sortTitleElement = document.getElementById('leaderboardSortTitle');
+      if (sortTitleElement) {
+        sortTitleElement.textContent = sortTitles[sortBy] || 'Number of Games';
+      }
+
+      leaderboardList.innerHTML = players.map((p, index) => `
+        <li data-leaderboard-name="${p.name.toLowerCase()}" style="align-items: center;" data-player-id="${p.id}">
+          <div class="stat-left" style="min-width: 0;" data-player-name="${escapeHtml(p.name)}" data-player-id="${p.id}">
+            <div class="chip" style="cursor: pointer;"><span class="chip-index">${index + 1}</span><span class="chip-name">${escapeHtml(p.name)}</span></div>
+          </div>
+          <div class="stat-right"><span>${getStatDisplay(p)}</span></div>
+        </li>
+      `).join('');
+    }
+  </script>
+  <script>
+    async function deletePlayerStats(playerId, playerName, buttonElement) {
+      const ok = await window.showConfirmModal({
+        title: 'Delete Player Stats',
+        message: `Are you sure you want to permanently delete all stats for "${playerName}"? This cannot be undone.`,
+        okText: 'Delete',
+        cancelText: 'Cancel'
+      });
+      
+      if (!ok) return;
+
+      try {
+        const data = await apiFetch(`/api/player/${encodeURIComponent(playerName)}?id=${encodeURIComponent(playerId)}`, { method: 'DELETE' });
+        if (data.ok) {
+          showToast(`Stats for "${playerName}" have been deleted.`, 'success');
+          // If the button is in the modal, we need to find the corresponding `li` in the background and remove it.
+          const liToRemove = document.querySelector(`#leaderboardList li[data-player-id="${playerId}"]`);
+          if (liToRemove) {
+            liToRemove.remove();
+          }
+          // Close the modal after successful deletion
+          closePlayerStats();
+        } else {
+          throw new Error(data.error || 'Server rejected the request.');
+        }
+      } catch (e) {
+        showToast(`Error: ${e.message}`, 'error');
+      }
+    }
+  </script>
+  <script>
+    async function renamePlayer(playerId, oldName) {
+      const newName = await window.showPromptModal({
+        title: `Rename ${oldName}`,
+        message: 'Enter a new name:',
+        value: oldName
+      });
+      if (!newName || newName.trim() === '' || newName.trim() === oldName) {
+        return; // User cancelled or entered the same name
+      }
+
+      const trimmedNewName = newName.trim();
+      if (trimmedNewName.length > 14) {
+        showToast('Name cannot be longer than 14 characters.', 'warning');
+        return;
+      }
+
+      try {
+        const data = await apiFetch(`/api/player-stats/${encodeURIComponent(playerId)}/rename`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ new_name: trimmedNewName, id: playerId })
+        });
+
+        if (data.ok) {
+          showToast(`Renamed "${oldName}" to "${data.player.name}".`, 'success');
+          // Update the modal content in-place without closing/reopening
+          playerStatsTitle.textContent = `${data.player.name}'s Stats`;
+          renamePlayerBtn.dataset.playerName = data.player.name;
+          updateLeaderboardEntry(oldName, trimmedNewName);
+          updateSetupPlayerName(playerId, data.player.name); // Update setup page if active
+
+          // Reload the player stats with the new name to ensure everything is updated
+          await openPlayerStats(data.player.name, playerId);
+        } else {
+          throw new Error(data.error || 'Server rejected the request.');
+        }
+      } catch (e) {
+        showToast(`Error: ${e.message}`, 'error');
+      }
+    }
+  </script>
+  <script>
+    function updateLeaderboardEntry(oldName, newName) {
+      const leaderboardList = document.getElementById('leaderboardList');
+      if (!leaderboardList) return;
+    
+      const playerLi = leaderboardList.querySelector(`li[data-leaderboard-name="${oldName.toLowerCase()}"]`);
+      if (!playerLi) return;
+    
+      // 1. Update the main data attribute for searching
+      playerLi.dataset.leaderboardName = newName.toLowerCase();
+    
+      // 2. Update the visible player name
+      const nameSpan = playerLi.querySelector('.chip-name');
+      if (nameSpan) nameSpan.textContent = newName;
+    
+      // 3. Update the data-player-name attribute used by the stats link
+      const statLeftDiv = playerLi.querySelector('.stat-left');
+      if (statLeftDiv) statLeftDiv.dataset.playerName = newName; // The ID remains the same
+    }
+  </script>
+  <script>
+    // New function specifically for updating a player's name on the setup screen
+    function updateSetupPlayerName(playerId, newName) {
+      // Check if the 'selected' array and 'renderSelected' function exist in the current scope
+      if (typeof selected !== 'undefined' && typeof renderSelected === 'function') {
+        const playerIndex = selected.findIndex(p => p.id === playerId);
+        if (playerIndex > -1) {
+          selected[playerIndex].name = newName;
+          renderSelected(); // Re-render the selected players list to show the new name
+        }
+      }
+    }
+  </script>
+  {% endif %}
+
+  <!-- =========================================================
+       SCRIPT: HELP MODAL
+       ========================================================= -->
+  <script>
+    const helpOverlay = document.getElementById('helpOverlay');
+    function openHelpModal() {
+      if (helpOverlay) helpOverlay.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeHelpModal() {
+      if (helpOverlay) helpOverlay.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: AUTO-HIDE FLASH MESSAGES (RUNS LAST)
+       ========================================================= -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const flashMessages = document.querySelectorAll('.flash');
+      flashMessages.forEach(flash => {
+        setTimeout(() => {
+          flash.classList.add('hiding');
+          // After the animation, remove the element from the DOM
+          flash.addEventListener('transitionend', () => flash.remove(), { once: true });
+        }, 3000); // 3 seconds
+      });
+    });
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: SCORE TIMELINE CHART
+       ========================================================= -->
+  <script>
+    let scoreTimelineChart = null;
+    let chartDataCache = null;
+
+    async function initializeScoreTimelineChart() {
+      const container = document.getElementById('scoreTimelineContainer');
+      const canvas = document.getElementById('scoreTimelineChart');
+
+      if (!container || !canvas) {
+        console.error('Score timeline: Container or canvas not found');
+        return;
+      }
+
+      try {
+        // Fetch timeline data from backend
+        const response = await fetch('/api/score-timeline');
+        if (!response.ok) {
+          console.error('Score timeline: Failed to fetch data -', response.status, response.statusText);
+          return;
+        }
+
+        const timelineData = await response.json();
+        chartDataCache = timelineData;
+
+        // Prepare data for Chart.js
+        const datasets = [];
+        const colors = [
+          '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
+          '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
+          '#F8B4D9', '#A8E6CF', '#FFD3B6', '#FFAAA5'
+        ];
+
+        const playerNames = Object.keys(timelineData).sort();
+
+        if (playerNames.length === 0) {
+          console.warn('Score timeline: No player data available');
+          return;
+        }
+
+        playerNames.forEach((playerName, index) => {
+          const playerData = timelineData[playerName];
+          if (playerData && playerData.scores && playerData.scores.length > 0) {
+            datasets.push({
+              label: playerName,
+              data: playerData.scores,
+              borderColor: colors[index % colors.length],
+              backgroundColor: colors[index % colors.length] + '20',
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 4,
+              pointBackgroundColor: colors[index % colors.length],
+              pointBorderColor: '#fff',
+              pointBorderWidth: 1.5,
+              pointHoverRadius: 6,
+              spanGaps: true,
+            });
+          }
+        });
+
+        if (datasets.length === 0) {
+          console.warn('Score timeline: No valid datasets created');
+          return;
+        }
+
+        const allScores = Object.values(timelineData)
+          .flatMap(p => p.scores || [])
+          .filter(s => typeof s === 'number');
+
+        const maxScore = Math.max(...allScores);
+        const minScore = Math.min(...allScores);
+        const padding = Math.abs(maxScore - minScore) * 0.1 || 5;
+
+        const ctx = canvas.getContext('2d');
+        scoreTimelineChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: Array.from({ length: Math.max(...datasets.map(d => d.data.length)) }, (_, i) => `Round ${i + 1}`),
+            datasets: datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: 'index',
+              intersect: false,
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  padding: 15,
+                  font: { size: 12 },
+                  generateLabels: (chart) => {
+                    return chart.data.datasets.map((dataset, i) => ({
+                      text: dataset.label,
+                      fillStyle: dataset.borderColor,
+                      strokeStyle: dataset.borderColor,
+                      lineWidth: 2,
+                      hidden: false,
+                      index: i
+                    }));
+                  }
+                },
+                onClick: (e, legendItem, legend) => {
+                  const datasetIndex = legendItem.index;
+                  const chart = legend.chart;
+                  chart.getDatasetMeta(datasetIndex).hidden = !chart.getDatasetMeta(datasetIndex).hidden;
+                  chart.update();
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                padding: 12,
+                titleColor: '#fff',
+                bodyColor: '#fff',
+                borderColor: 'rgba(255, 255, 255, 0.3)',
+                borderWidth: 1,
+                callbacks: {
+                  label: function(context) {
+                    return context.dataset.label + ': ' + context.parsed.y;
+                  }
+                }
+              },
+              filler: {
+                propagate: true
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  font: { size: 11 }
+                },
+                grid: {
+                  color: 'rgba(255, 255, 255, 0.1)',
+                  drawBorder: false
+                },
+                min: Math.floor(minScore - padding),
+                max: Math.ceil(maxScore + padding)
+              },
+              x: {
+                ticks: {
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  font: { size: 11 }
+                },
+                grid: {
+                  color: 'rgba(255, 255, 255, 0.05)',
+                  drawBorder: false
+                }
+              }
+            },
+            animation: {
+              duration: 1000,
+              easing: 'easeInOutQuart'
+            }
+          }
+        });
+
+        // Enable touch interactions for mobile
+        enableChartTouchInteractions(canvas);
+
+        // Make the container visible
+        container.style.display = 'block';
+      } catch (error) {
+        console.error('Score timeline: Error initializing -', error);
+      }
+    }
+
+    function enableChartTouchInteractions(canvas) {
+      let lastX = 0;
+      let lastDistance = 0;
+      let isPanning = false;
+
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          lastX = e.touches[0].clientX;
+          isPanning = true;
+        } else if (e.touches.length === 2) {
+          isPanning = false;
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          lastDistance = Math.sqrt(dx * dx + dy * dy);
+        }
+      }, false);
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1 && isPanning && scoreTimelineChart) {
+          const deltaX = e.touches[0].clientX - lastX;
+          lastX = e.touches[0].clientX;
+
+          // Horizontal pan simulation via zoom
+          const scale = scoreTimelineChart.scales.x;
+          const range = scale.max - scale.min;
+          const panAmount = (range * deltaX) / canvas.width * -0.05;
+
+          if (Math.abs(panAmount) > 0) {
+            scale.min += panAmount;
+            scale.max += panAmount;
+            scoreTimelineChart.update('none');
+          }
+        } else if (e.touches.length === 2 && scoreTimelineChart) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (lastDistance > 0) {
+            const zoomFactor = distance / lastDistance;
+            if (Math.abs(zoomFactor - 1) > 0.01) {
+              const scale = scoreTimelineChart.scales.y;
+              const center = (scale.max + scale.min) / 2;
+              const range = scale.max - scale.min;
+              const newRange = range / zoomFactor;
+              scale.min = center - newRange / 2;
+              scale.max = center + newRange / 2;
+              scoreTimelineChart.update('none');
+            }
+          }
+          lastDistance = distance;
+        }
+      }, false);
+
+      canvas.addEventListener('touchend', () => {
+        isPanning = false;
+      }, false);
+
+      // Double-tap to reset zoom
+      let lastTap = 0;
+      canvas.addEventListener('touchend', (e) => {
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTap;
+        if (tapLength < 300 && tapLength > 0 && scoreTimelineChart) {
+          // Reset scales
+          scoreTimelineChart.resetScale();
+          scoreTimelineChart.update();
+        }
+        lastTap = currentTime;
+      });
+    }
+
+    // Initialize chart when stats view is shown
+    function tryInitializeChart() {
+      if (typeof Chart === 'undefined') {
+        // Chart.js not loaded yet, try again in a moment
+        setTimeout(tryInitializeChart, 100);
+        return;
+      }
+
+      const statsContainer = document.querySelector('.stats-view-container');
+      if (statsContainer) {
+        initializeScoreTimelineChart();
+      }
+    }
+
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', tryInitializeChart);
+    } else {
+      tryInitializeChart();
+    }
+  </script>
+
+  <!-- =========================================================
+       SCRIPT: INITIAL PRELOADER
+       ========================================================= -->
+  <script>
+    // Define a global cache for all players
+    window.__allPlayersCache = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const loadingOverlay = document.getElementById('initialLoadingOverlay');
+
+      const hideLoader = () => {
+        if (loadingOverlay) {
+          loadingOverlay.classList.add('hidden');
+          loadingOverlay.addEventListener('transitionend', () => loadingOverlay.remove(), { once: true });
+        }
+      };
+
+      try {
+        // Preload all player data
+        const data = await apiFetch('{{ url_for("get_all_players") }}');
+        if (data.ok && data.players) {
+          window.__allPlayersCache = data.players;
+        } else {
+          throw new Error('Failed to preload player data.');
+        }
+      } catch (error) {
+        console.error('Preloading failed:', error);
+      } finally {
+        // Always hide the loader, even if preloading fails
+        hideLoader();
+      }
+    });
+  </script>
+  <!-- =========================================================
+       SCRIPT: PRELOADED CONFETTI LOGIC
+       ========================================================= -->
+  <script>
+    (function(){
+      const canvas = document.getElementById('confettiCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let W, H, raf = null;
+      let pieces = [];
+
+      function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+      window.addEventListener('resize', resize);
+      resize(); // Initial size
+
+      function spawn(n){
+        for(let i=0;i<n;i++){
+          pieces.push({
+            x: Math.random() * W, y: -20 - Math.random() * 20,
+            vx: (Math.random()-0.5)*1, vy: 2+Math.random()*3,
+            size: 5+Math.random()*8, rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.2,
+            shape: Math.random()<0.5?'rect':'tri',
+            life: 2.0,
+            fade: 0.002 + Math.random() * 0.005
+          });
+        }
+      }
+
+      function step(){
+        ctx.clearRect(0,0,W,H);
+        let i = pieces.length;
+        while (i--) {
+          const p = pieces[i];
+          p.life -= p.fade;
+          if (p.life <= 0) { pieces.splice(i, 1); continue; }
+          p.vy += 0.02; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+          ctx.save();
+          ctx.globalAlpha = p.life;
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot);
+          ctx.fillStyle = ['#E3292E','#309F6A','#F9DFBC','#ffffff','#ffd54f'][Math.floor(Math.random()*5)];
+          if (p.shape==='rect'){ ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.6); }
+          else { ctx.beginPath(); ctx.moveTo(0,-p.size/2); ctx.lineTo(p.size/2,p.size/2); ctx.lineTo(-p.size/2,p.size/2); ctx.closePath(); ctx.fill(); }
+          ctx.restore();
+        }
+        if (pieces.length > 0) { raf = requestAnimationFrame(step); }
+        else { ctx.clearRect(0,0,W,H); cancelAnimationFrame(raf); raf = null; }
+      }
+
+      window.initWinnerConfetti = () => {
+        const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (prefersReduced) return;
+        spawn(300);
+        if (!raf) raf = requestAnimationFrame(step);
+      };
+
+      window.triggerConfetti = () => {
+        // Add another burst of confetti to the screen
+        spawn(150);
+        if (!raf) raf = requestAnimationFrame(step);
+      };
+    })();
+  </script>
+</body>
+</html>
