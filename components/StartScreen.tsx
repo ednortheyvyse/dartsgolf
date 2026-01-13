@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Reorder, AnimatePresence, motion } from 'framer-motion';
-import { Plus, GripVertical, X, Play, Trophy, Download, Share, SquarePlus } from 'lucide-react';
+import { Plus, GripVertical, X, Play, Trophy, Download, Share, PlusSquare } from 'lucide-react';
 import { Button } from './ui/Button';
 import { PLAYER_COLORS } from '../types';
 
@@ -189,7 +189,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
                   <span>1. Tap the <strong>Share</strong> button in the toolbar.</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <SquarePlus className="w-6 h-6 text-neutral-400" />
+                  <PlusSquare className="w-6 h-6 text-neutral-400" />
                   <span>2. Scroll down and tap <strong>Add to Home Screen</strong>.</span>
                 </div>
               </div>
