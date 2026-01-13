@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Reorder, AnimatePresence } from 'framer-motion';
-import { Plus, GripVertical, X, Play, Trophy } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Reorder, AnimatePresence, motion } from 'framer-motion';
+import { Plus, GripVertical, X, Play, Trophy, Download, Share, SquarePlus } from 'lucide-react';
 import { Button } from './ui/Button';
 import { PLAYER_COLORS } from '../types';
 
@@ -11,6 +11,32 @@ interface StartScreenProps {
 export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
   const [names, setNames] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showIOSInstructions, setShowIOSInstructions] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const ios = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    
+    setIsMobile(mobile);
+    setIsIOS(ios);
+    
+    const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    setIsStandalone(checkStandalone);
+
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
 
   const addPlayer = () => {
     if (inputValue.trim()) {
@@ -28,6 +54,21 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
       addPlayer();
     }
   };
+
+  const handleInstallClick = () => {
+    if (isIOS) {
+      setShowIOSInstructions(true);
+    } else if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          setDeferredPrompt(null);
+        }
+      });
+    }
+  };
+
+  const showInstallButton = isMobile && !isStandalone && (isIOS || deferredPrompt);
 
   return (
     <div className="flex flex-col h-full max-w-md mx-auto p-6 w-full bg-black">
@@ -105,6 +146,57 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
         <Play className="w-6 h-6 fill-current" />
         START GAME
       </Button>
+
+      {showInstallButton && (
+        <Button
+          onClick={handleInstallClick}
+          variant="outline"
+          size="lg"
+          className="w-full border-neutral-800 text-neutral-400 mt-4 shrink-0"
+        >
+          <Download className="w-5 h-5 mr-2" />
+          Install App
+        </Button>
+      )}
+
+      <AnimatePresence>
+        {showIOSInstructions && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+            onClick={() => setShowIOSInstructions(false)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              className="bg-neutral-900 w-full max-w-sm rounded-2xl border border-neutral-800 p-6 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-xl font-bold text-white">Install App</h3>
+                <button onClick={() => setShowIOSInstructions(false)} className="text-neutral-400 hover:text-white">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="space-y-4 text-neutral-300">
+                <p>Install this app on your iPhone for the best experience:</p>
+                <div className="flex items-center gap-3">
+                  <Share className="w-6 h-6 text-blue-500" />
+                  <span>1. Tap the <strong>Share</strong> button in the toolbar.</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <SquarePlus className="w-6 h-6 text-neutral-400" />
+                  <span>2. Scroll down and tap <strong>Add to Home Screen</strong>.</span>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
