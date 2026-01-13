@@ -161,7 +161,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
             <div className="absolute top-0 left-0 right-0 text-neutral-500 text-sm mb-1 uppercase tracking-widest font-bold">
                 {isTiebreaker ? 'Tiebreaker Throw' : 'Current Throw'}
             </div>
-            <AnimatePresence mode="popLayout" custom={direction} initial={false}>
+            <AnimatePresence mode="popLayout" custom={direction}>
                 <motion.div 
                     key={currentPlayer.id}
                     custom={direction}
@@ -169,7 +169,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                     initial="enter"
                     animate="center"
                     exit="exit"
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
                     className="flex items-center justify-center gap-3 absolute top-6 left-0 right-0"
                 >
                     <div 
