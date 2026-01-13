@@ -261,7 +261,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-black text-slate-50 font-sans selection:bg-amber-500/30">
+    <div className="h-full w-full bg-black text-slate-50 font-sans selection:bg-amber-500/30 overflow-hidden">
       {gameState.status === 'SETUP' && (
         <StartScreen onStartGame={handleStartGame} />
       )}
