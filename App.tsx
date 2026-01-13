@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { StartScreen } from './components/StartScreen';
 import { GameScreen } from './components/GameScreen';
 import { ResultsScreen } from './components/ResultsScreen';
-import { GameState, Player, ScoreValue, TiebreakerState, PLAYER_COLORS } from './types';
+import { GameState, Player, ScoreValue, PLAYER_COLORS } from './types';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 

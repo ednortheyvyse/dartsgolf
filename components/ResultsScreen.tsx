@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, RefreshCw, Medal, Target, TrendingUp, TrendingDown, Table, Activity, Minus } from 'lucide-react';
+import { Trophy, RefreshCw, Target, TrendingUp, TrendingDown, Table, Activity, Minus } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Button } from './ui/Button';
 import { Player } from '../types';
@@ -26,7 +26,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
   const chartData = Array.from({ length: totalRounds }).map((_, i) => {
     const point: any = { round: i + 1 };
     players.forEach(p => {
-      const cumScore = p.scores.slice(0, i + 1).reduce((sum, s) => sum + s, 0);
+      const cumScore = p.scores.slice(0, i + 1).reduce<number>((sum, s) => sum + s, 0);
       point[p.name] = cumScore;
     });
     return point;
@@ -204,8 +204,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                                 <td className="py-2 pl-4 text-neutral-500 font-mono text-xs sticky left-0 bg-black/90 border-r border-neutral-800 z-10">{i + 1}</td>
                                 {players.map(p => {
                                     // Calculate cumulative score up to round i
-                                    const score = p.scores[i];
-                                    const cumScore = p.scores.slice(0, i + 1).reduce((sum, s) => sum + s, 0);
+                                    const cumScore = p.scores.slice(0, i + 1).reduce<number>((sum, s) => sum + s, 0);
                                     let color = 'text-neutral-500';
                                     if (cumScore < 0) color = 'text-green-500 font-bold';
                                     if (cumScore > 0) color = 'text-red-400';

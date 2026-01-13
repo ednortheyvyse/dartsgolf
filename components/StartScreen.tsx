@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Reorder, AnimatePresence, motion } from 'framer-motion';
+import { Reorder, AnimatePresence } from 'framer-motion';
 import { Plus, GripVertical, X, Play, Trophy } from 'lucide-react';
 import { Button } from './ui/Button';
 import { PLAYER_COLORS } from '../types';

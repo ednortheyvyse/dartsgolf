@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Undo2, Flag, ChevronRight, Activity, X, Swords } from 'lucide-react';
+import { Undo2, Flag, Activity, X, Swords } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Player, ScoreValue, TiebreakerState } from '../types';
 
@@ -265,7 +265,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                                             const hasPlayedRound = roundScore !== undefined;
 
                                             const cumulativeScore = hasPlayedRound 
-                                                ? p.scores.slice(0, i + 1).reduce((sum, s) => sum + s, 0)
+                                                ? p.scores.slice(0, i + 1).reduce<number>((sum, s) => sum + s, 0)
                                                 : null;
 
                                             let color = 'text-neutral-400';
