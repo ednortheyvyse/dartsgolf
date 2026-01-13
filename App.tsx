@@ -36,6 +36,38 @@ export default function App() {
     localStorage.setItem('darts-golf-history', JSON.stringify(history));
   }, [history]);
 
+  useEffect(() => {
+    let wakeLock: any = null;
+
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator && (gameState.status === 'PLAYING' || gameState.status === 'TIEBREAKER')) {
+        try {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        } catch (err) {
+          // Wake lock request failed - usually due to battery saver or unsupported browser
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    if (gameState.status === 'PLAYING' || gameState.status === 'TIEBREAKER') {
+      requestWakeLock();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [gameState.status]);
+
   const handleStartGame = (playerNames: string[]) => {
     const newPlayers: Player[] = playerNames.map((name, index) => ({
       id: generateId(),

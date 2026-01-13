@@ -21,6 +21,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
   
   const winner = sortedPlayers[0];
   const totalRounds = players[0]?.scores.length || 0;
+  const maxTiebreakerRounds = Math.max(0, ...players.map(p => p.tiebreakerScores.length));
 
   // Prepare data for chart
   const chartData = Array.from({ length: totalRounds }).map((_, i) => {
@@ -212,6 +213,26 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                                     return (
                                         <td key={p.id} className={`py-2 px-2 text-center text-sm ${color}`}>
                                             {cumScore > 0 ? `+${cumScore}` : cumScore}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                        {Array.from({ length: maxTiebreakerRounds }).map((_, i) => (
+                            <tr key={`t-${i}`} className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition-colors bg-amber-900/10">
+                                <td className="py-2 pl-4 text-amber-600 font-mono text-xs sticky left-0 bg-black/90 border-r border-neutral-800 z-10">T{i + 1}</td>
+                                {players.map(p => {
+                                    const score = p.tiebreakerScores[i];
+                                    if (score === undefined) {
+                                        return <td key={p.id} className="py-2 px-2 text-center text-sm text-neutral-800">-</td>;
+                                    }
+                                    let color = 'text-neutral-400';
+                                    if (score < 0) color = 'text-green-400 font-bold';
+                                    if (score > 0) color = 'text-red-400';
+                                    
+                                    return (
+                                        <td key={p.id} className={`py-2 px-2 text-center text-sm ${color}`}>
+                                            {score > 0 ? `+${score}` : score}
                                         </td>
                                     );
                                 })}

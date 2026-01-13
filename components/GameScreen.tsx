@@ -17,7 +17,7 @@ interface GameScreenProps {
   direction: number;
 }
 
-const scores: ScoreValue[] = [-3, -2, -1, 0, 1, 2];
+const scores: ScoreValue[] = [-3, 0, -2, 1, -1, 2];
 
 const variants = {
   enter: (direction: number) => ({
@@ -193,7 +193,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                     onClick={() => onScore(score)}
                     variant={score < 0 ? 'success' : score > 0 ? 'danger' : 'secondary'}
                     size="xl"
-                    className="h-20 text-3xl shadow-xl border-neutral-900"
+                    className={`h-20 text-3xl shadow-xl border-neutral-900 ${score === 0 ? 'text-black' : ''}`}
+                    style={score === 0 ? { backgroundColor: '#F9DFBC' } : undefined}
                 >
                     {score > 0 ? `+${score}` : score}
                 </Button>
