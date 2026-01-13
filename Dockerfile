@@ -1,30 +1,26 @@
-# --- Build Stage ---
-FROM python:3.11-slim as builder
+# Stage 1: Build the application
+FROM node:20-alpine AS builder
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Install build dependencies
-RUN pip install --upgrade pip
+# Copy package files and install dependencies
+COPY package.json package-lock.json* ./
+RUN npm ci
 
-# Copy and install Python requirements
-COPY requirements.txt .
-RUN pip wheel --no-cache-dir --wheel-dir /usr/src/app/wheels -r requirements.txt
-
-
-# --- Final Stage ---
-FROM python:3.11-slim
-
-WORKDIR /usr/src/app
-
-# Copy pre-built wheels and application code
-COPY --from=builder /usr/src/app/wheels /wheels
+# Copy source code and build
 COPY . .
+RUN npm run build
 
-# Install Python dependencies from wheels
-RUN pip install --no-index --find-links=/wheels -r requirements.txt
+# Stage 2: Serve the application with Nginx
+FROM nginx:alpine
 
-# Expose the port Gunicorn will run on
-EXPOSE 8000
+# Copy the built assets from the builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Run the app with Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "app:app"]
+# Copy custom Nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 80
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
