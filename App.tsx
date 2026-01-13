@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StartScreen } from './components/StartScreen';
 import { GameScreen } from './components/GameScreen';
 import { ResultsScreen } from './components/ResultsScreen';
@@ -16,11 +16,25 @@ const INITIAL_STATE: GameState = {
 };
 
 export default function App() {
-  const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
+  const [gameState, setGameState] = useState<GameState>(() => {
+    const saved = localStorage.getItem('darts-golf-state');
+    return saved ? JSON.parse(saved) : INITIAL_STATE;
+  });
   const [direction, setDirection] = useState(1); // 1 for forward (score), -1 for backward (undo)
   
   // History for Undo functionality
-  const [history, setHistory] = useState<GameState[]>([]);
+  const [history, setHistory] = useState<GameState[]>(() => {
+    const saved = localStorage.getItem('darts-golf-history');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('darts-golf-state', JSON.stringify(gameState));
+  }, [gameState]);
+
+  useEffect(() => {
+    localStorage.setItem('darts-golf-history', JSON.stringify(history));
+  }, [history]);
 
   const handleStartGame = (playerNames: string[]) => {
     const newPlayers: Player[] = playerNames.map((name, index) => ({
