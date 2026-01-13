@@ -20,6 +20,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy custom Nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
+# Run as non-root user (nginx) to match the expected owner of temp files
+USER 101
+
 # Expose port 80
 EXPOSE 8080
 
