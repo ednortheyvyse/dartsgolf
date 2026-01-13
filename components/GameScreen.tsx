@@ -21,7 +21,7 @@ const scores: ScoreValue[] = [-3, 0, -2, 1, -1, 2];
 
 const variants = {
   enter: (direction: number) => ({
-    x: direction > 0 ? 100 : -100,
+    x: direction > 0 ? '100%' : '-100%',
     opacity: 0
   }),
   center: {
@@ -31,7 +31,7 @@ const variants = {
   },
   exit: (direction: number) => ({
     zIndex: 0,
-    x: direction < 0 ? 100 : -100,
+    x: direction < 0 ? '100%' : '-100%',
     opacity: 0
   })
 };
