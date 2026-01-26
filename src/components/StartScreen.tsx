@@ -8,10 +8,19 @@ interface StartScreenProps {
   onStartGame: (players: string[]) => void;
 }
 
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: ReadonlyArray<string>;
+  readonly userChoice: Promise<{
+    outcome: 'accepted' | 'dismissed';
+    platform: string;
+  }>;
+  prompt(): Promise<void>;
+}
+
 export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
   const [names, setNames] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
@@ -28,14 +37,14 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
     const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     setIsStandalone(checkStandalone);
 
-    const handler = (e: any) => {
+    const handler = (e: BeforeInstallPromptEvent) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
 
-    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('beforeinstallprompt', handler as any);
 
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler as any);
   }, []);
 
   const addPlayer = () => {
@@ -60,7 +69,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
       setShowIOSInstructions(true);
     } else if (deferredPrompt) {
       deferredPrompt.prompt();
-      deferredPrompt.userChoice.then((choiceResult: any) => {
+      deferredPrompt.userChoice.then((choiceResult) => {
         if (choiceResult.outcome === 'accepted') {
           setDeferredPrompt(null);
         }
@@ -86,7 +95,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
         <input
           type="text"
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Enter player name"
           className="flex-1 bg-neutral-900 border-2 border-neutral-800 rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:border-amber-400 focus:outline-none transition-colors"
@@ -99,7 +108,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
       <div className="flex-1 overflow-y-auto min-h-0 mb-6 pr-2">
         <Reorder.Group axis="y" values={names} onReorder={setNames} className="space-y-3">
           <AnimatePresence>
-            {names.map((name, index) => (
+            {names.map((name: string, index: number) => (
               <Reorder.Item
                 key={name}
                 value={name}
@@ -173,7 +182,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               className="bg-neutral-900 w-full max-w-sm rounded-2xl border border-neutral-800 p-6 shadow-2xl"
-              onClick={e => e.stopPropagation()}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
               <div className="flex justify-between items-start mb-4">
                 <h3 className="text-xl font-bold text-white">Install App</h3>

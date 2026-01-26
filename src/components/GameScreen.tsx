@@ -17,7 +17,7 @@ interface GameScreenProps {
   direction: number;
 }
 
-const scores: ScoreValue[] = [-3, 0, -2, 1, -1, 2];
+const scores: ScoreValue[] = [-1, 0, -2, 1, -3, 2];
 
 const variants = {
   enter: (direction: number) => ({

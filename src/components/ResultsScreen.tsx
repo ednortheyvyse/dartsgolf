@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Trophy, RefreshCw, Target, TrendingUp, TrendingDown, Table, Activity, Minus } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Button } from './ui/Button';
-import { Player } from '../types';
+import { Player, ScoreValue } from '../types';
 
 interface ResultsScreenProps {
   players: Player[];
@@ -12,7 +12,7 @@ interface ResultsScreenProps {
 
 export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart }) => {
   // Sort players by finalRank if available, otherwise total score
-  const sortedPlayers = [...players].sort((a, b) => {
+  const sortedPlayers = [...players].sort((a: Player, b: Player) => {
       if (a.finalRank !== undefined && b.finalRank !== undefined) {
           return a.finalRank - b.finalRank;
       }
@@ -21,13 +21,13 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
   
   const winner = sortedPlayers[0];
   const totalRounds = players[0]?.scores.length || 0;
-  const maxTiebreakerRounds = Math.max(0, ...players.map(p => p.tiebreakerScores.length));
+  const maxTiebreakerRounds = Math.max(0, ...players.map((p: Player) => p.tiebreakerScores.length));
 
   // Prepare data for chart
   const chartData = Array.from({ length: totalRounds }).map((_, i) => {
-    const point: any = { round: i + 1 };
-    players.forEach(p => {
-      const cumScore = p.scores.slice(0, i + 1).reduce<number>((sum, s) => sum + s, 0);
+    const point: { [key: string]: number } = { round: i + 1 };
+    players.forEach((p: Player) => {
+      const cumScore = p.scores.slice(0, i + 1).reduce((sum: number, s: ScoreValue) => sum + s, 0);
       point[p.name] = cumScore;
     });
     return point;
@@ -77,7 +77,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
         
         {/* Detailed Standings & Stats */}
         <div className="space-y-3">
-            {sortedPlayers.map((p, idx) => {
+            {sortedPlayers.map((p: Player, idx) => {
                 const stats = getPlayerStats(p);
                 return (
                     <motion.div 
@@ -163,7 +163,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                             itemStyle={{ color: '#fff' }}
                         />
                         <Legend />
-                        {players.map((p) => (
+                        {players.map((p: Player) => (
                             <Line 
                                 key={p.id}
                                 type="monotone" 
@@ -189,7 +189,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                     <thead>
                         <tr className="bg-neutral-950 text-neutral-500 border-b border-neutral-800">
                             <th className="py-3 pl-4 font-mono text-xs w-12 sticky left-0 bg-neutral-950 z-10 border-r border-neutral-800">#</th>
-                            {players.map(p => (
+                            {players.map((p: Player) => (
                                 <th key={p.id} className="py-3 px-2 text-center text-xs font-bold uppercase min-w-[60px]">
                                     <div className="flex flex-col items-center gap-1">
                                         <div className="w-2 h-2 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
@@ -203,9 +203,9 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                         {Array.from({ length: totalRounds }).map((_, i) => (
                             <tr key={i} className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition-colors">
                                 <td className="py-2 pl-4 text-neutral-500 font-mono text-xs sticky left-0 bg-black/90 border-r border-neutral-800 z-10">{i + 1}</td>
-                                {players.map(p => {
+                                {players.map((p: Player) => {
                                     // Calculate cumulative score up to round i
-                                    const cumScore = p.scores.slice(0, i + 1).reduce<number>((sum, s) => sum + s, 0);
+                                    const cumScore = p.scores.slice(0, i + 1).reduce((sum: number, s: ScoreValue) => sum + s, 0);
                                     let color = 'text-neutral-500';
                                     if (cumScore < 0) color = 'text-green-500 font-bold';
                                     if (cumScore > 0) color = 'text-red-400';
@@ -221,7 +221,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                         {Array.from({ length: maxTiebreakerRounds }).map((_, i) => (
                             <tr key={`t-${i}`} className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition-colors bg-amber-900/10">
                                 <td className="py-2 pl-4 text-amber-600 font-mono text-xs sticky left-0 bg-black/90 border-r border-neutral-800 z-10">T{i + 1}</td>
-                                {players.map(p => {
+                                {players.map((p: Player) => {
                                     const score = p.tiebreakerScores[i];
                                     if (score === undefined) {
                                         return <td key={p.id} className="py-2 px-2 text-center text-sm text-neutral-800">-</td>;
