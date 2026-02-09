@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Undo2, Flag, Activity, X, Swords, Trophy } from 'lucide-react';
 import { Button } from './ui/Button';
@@ -36,22 +36,12 @@ const variants = {
   })
 };
 
-const LeaderDisplay = ({ players }: { players: Player[] }) => {
-    if (players.length < 2) return null;
-
-    const allScores = players.map(p => p.totalScore);
-    const uniqueScores = [...new Set(allScores)];
-
-    if (uniqueScores.length <= 1) {
-        return null;
-    }
-
-    const minScore = Math.min(...allScores);
-    const leaders = players.filter(p => p.totalScore === minScore);
+const LeaderDisplay = ({ leaders }: { leaders: Player[] }) => {
+    if (leaders.length === 0) return null;
 
     return (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-            <div className="text-green-400 font-bold uppercase text-xs tracking-widest mb-1 flex items-center gap-1.5">
+            <div className="text-amber-400 font-bold uppercase text-xs tracking-widest mb-1 flex items-center gap-1.5">
                 <Trophy className="w-3.5 h-3.5" />
                 Leader
             </div>
@@ -96,6 +86,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({
 
   const isTiebreaker = !!tiebreaker;
 
+  const leaders = useMemo(() => {
+    if (isTiebreaker || players.length < 2) return [];
+
+    const allScores = players.map(p => p.totalScore);
+    const uniqueScores = [...new Set(allScores)];
+
+    if (uniqueScores.length <= 1) {
+        return [];
+    }
+
+    const minScore = Math.min(...allScores);
+    return players.filter(p => p.totalScore === minScore);
+  }, [players, isTiebreaker]);
+
+  const leaderIds = useMemo(() => new Set(leaders.map(l => l.id)), [leaders]);
+
+
   return (
     <div className="flex flex-col h-full bg-black relative overflow-hidden">
       {/* Header Info */}
@@ -125,7 +132,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                 </div>
              </div>
         ) : (
-            <LeaderDisplay players={players} />
+            <LeaderDisplay leaders={leaders} />
         )}
         
         {/* Warning Badge (Absolute near center-ish or right) */}
@@ -157,6 +164,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
             const isActive = idx === currentPlayerIndex;
             const isInTiebreaker = tiebreaker?.activePlayerIds.includes(p.id);
             const isRelevant = !isTiebreaker || isInTiebreaker;
+            const isLeader = leaderIds.has(p.id);
             
             return (
                 <div
@@ -178,6 +186,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                         {p.name.substring(0, 1).toUpperCase()}
                     </div>
                     <span className={`text-sm font-bold truncate max-w-full ${isActive ? 'text-white' : 'text-neutral-400'}`}>
+                        {isLeader && <Trophy className="w-3.5 h-3.5 inline-block mr-1.5 text-amber-400" />}
                         {p.name}
                     </span>
                     <span className={`text-2xl font-black ${p.totalScore < 0 ? 'text-green-400' : p.totalScore > 0 ? 'text-red-400' : 'text-neutral-200'}`}>
