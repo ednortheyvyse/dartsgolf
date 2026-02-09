@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Undo2, Flag, Activity, X, Swords } from 'lucide-react';
+import { Undo2, Flag, Activity, X, Swords, Trophy } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Player, ScoreValue, TiebreakerState } from '../types';
 
@@ -34,6 +34,37 @@ const variants = {
     x: direction < 0 ? '100%' : '-100%',
     opacity: 0
   })
+};
+
+const LeaderDisplay = ({ players }: { players: Player[] }) => {
+    if (players.length < 2) return null;
+
+    const allScores = players.map(p => p.totalScore);
+    const uniqueScores = [...new Set(allScores)];
+
+    if (uniqueScores.length <= 1) {
+        return null;
+    }
+
+    const minScore = Math.min(...allScores);
+    const leaders = players.filter(p => p.totalScore === minScore);
+
+    return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+            <div className="text-green-400 font-bold uppercase text-xs tracking-widest mb-1 flex items-center gap-1.5">
+                <Trophy className="w-3.5 h-3.5" />
+                Leader
+            </div>
+            <div className="flex items-center gap-2">
+                {leaders.map(leader => (
+                    <div key={leader.id} className="flex items-center gap-1.5 bg-green-900/50 border border-green-700/60 px-2 py-0.5 rounded-full text-sm font-medium text-white">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: leader.color }} />
+                        <span>{leader.name}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 };
 
 export const GameScreen: React.FC<GameScreenProps> = ({
@@ -80,8 +111,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({
             </div>
         </div>
 
-        {/* Center: Tiebreaker Status */}
-        {isTiebreaker && (
+        {/* Center: Tiebreaker Status or Leader */}
+        {isTiebreaker ? (
              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
                 <div className="text-amber-300 font-bold uppercase text-xs tracking-widest mb-0.5">
                     Fighting for Rank
@@ -93,6 +124,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                     <Swords className="w-3 h-3" /> Sudden Death
                 </div>
              </div>
+        ) : (
+            <LeaderDisplay players={players} />
         )}
         
         {/* Warning Badge (Absolute near center-ish or right) */}
