@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Reorder, AnimatePresence, motion } from 'framer-motion';
+import { Reorder, AnimatePresence, motion, useDragControls } from 'framer-motion';
 import { Plus, GripVertical, X, Play, Trophy, Download, Share, PlusSquare } from 'lucide-react';
 import { Button } from './ui/Button';
 import { PLAYER_COLORS } from '../types';
@@ -16,6 +16,42 @@ interface BeforeInstallPromptEvent extends Event {
   }>;
   prompt(): Promise<void>;
 }
+
+const PlayerItem = ({ name, index, removePlayer }: { name: string, index: number, removePlayer: (index: number) => void }) => {
+    const dragControls = useDragControls();
+
+    return (
+        <Reorder.Item
+            key={name}
+            value={name}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            dragListener={false}
+            dragControls={dragControls}
+            className="bg-neutral-900 rounded-xl p-3 pl-4 flex items-center justify-between group shadow-md border border-neutral-800 select-none"
+        >
+            <div className="flex items-center gap-3">
+                <div onPointerDown={(e) => dragControls.start(e)} className="touch-none cursor-grab active:cursor-grabbing">
+                    <GripVertical className="text-neutral-600 w-6 h-6 shrink-0" />
+                </div>
+                <div 
+                    className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-black text-black shadow-inner"
+                    style={{ backgroundColor: PLAYER_COLORS[index % PLAYER_COLORS.length] }}
+                >
+                    {name.substring(0, 1).toUpperCase()}
+                </div>
+                <span className="font-bold text-lg text-white truncate">{name}</span>
+            </div>
+            <button 
+                onClick={() => removePlayer(index)}
+                className="p-2 text-neutral-500 hover:text-red-400 transition-colors shrink-0"
+            >
+                <X className="w-5 h-5" />
+            </button>
+        </Reorder.Item>
+    );
+};
 
 export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
   const [names, setNames] = useState<string[]>([]);
@@ -109,31 +145,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
         <Reorder.Group axis="y" values={names} onReorder={setNames} className="space-y-3">
           <AnimatePresence>
             {names.map((name: string, index: number) => (
-              <Reorder.Item
-                key={name}
-                value={name}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="bg-neutral-900 rounded-xl p-3 pl-4 flex items-center justify-between group shadow-md border border-neutral-800 select-none touch-none"
-              >
-                <div className="flex items-center gap-3">
-                  <GripVertical className="text-neutral-600 cursor-grab active:cursor-grabbing w-6 h-6 shrink-0" />
-                  <div 
-                      className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-black text-black shadow-inner"
-                      style={{ backgroundColor: PLAYER_COLORS[index % PLAYER_COLORS.length] }}
-                  >
-                      {name.substring(0, 1).toUpperCase()}
-                  </div>
-                  <span className="font-bold text-lg text-white truncate">{name}</span>
-                </div>
-                <button 
-                    onClick={() => removePlayer(names.indexOf(name))}
-                    className="p-2 text-neutral-500 hover:text-red-400 transition-colors shrink-0"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </Reorder.Item>
+                <PlayerItem key={name} name={name} index={index} removePlayer={removePlayer} />
             ))}
           </AnimatePresence>
         </Reorder.Group>
