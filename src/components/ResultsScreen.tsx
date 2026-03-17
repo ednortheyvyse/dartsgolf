@@ -157,7 +157,13 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                 <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
                         <XAxis dataKey="round" stroke="#525252" tick={{fill: '#a3a3a3'}} />
-                        <YAxis stroke="#525252" tick={{fill: '#a3a3a3'}} />
+                        <YAxis 
+                            stroke="#525252" 
+                            tick={{fill: '#a3a3a3'}} 
+                            reversed={true} 
+                            allowDataOverflow={true}
+                            domain={['dataMin', 'dataMax']}
+                        />
                         <Tooltip 
                             contentStyle={{ backgroundColor: '#171717', border: '1px solid #404040', borderRadius: '8px' }} 
                             itemStyle={{ color: '#fff' }}
