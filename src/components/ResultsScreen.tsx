@@ -19,6 +19,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
       return a.totalScore - b.totalScore;
   });
   
+  const leadingPlayers = sortedPlayers.filter(p => p.finalRank ? p.finalRank === 1 : p.totalScore === sortedPlayers[0].totalScore);
   const winner = sortedPlayers[0];
   const totalRounds = players[0]?.scores.length || 0;
   const maxTiebreakerRounds = Math.max(0, ...players.map((p: Player) => p.tiebreakerScores.length));
@@ -66,8 +67,8 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
             <Trophy className="w-12 h-12 text-black" />
         </motion.div>
         
-        <div className="text-xl font-bold text-amber-500 uppercase tracking-widest mb-1">Winner</div>
-        <div className="text-5xl font-black text-white mb-2">{winner.name}</div>
+        <div className="text-xl font-bold text-amber-500 uppercase tracking-widest mb-1">{leadingPlayers.length > 1 ? "Contested" : "Winner"}</div>
+        <div className="text-5xl font-black text-white mb-2">{leadingPlayers.length === 1 && winner.name}</div>
         <div className="text-2xl text-neutral-400 font-bold">
             Score: <span className={winner.totalScore < 0 ? 'text-green-400' : 'text-white'}>{winner.totalScore > 0 ? '+' : ''}{winner.totalScore}</span>
         </div>
@@ -79,6 +80,10 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
         <div className="space-y-3">
             {sortedPlayers.map((p: Player, idx) => {
                 const stats = getPlayerStats(p);
+                const rank = p.finalRank ?? idx + 1;
+                const isWinner = rank === 1;
+                const isSecond = rank === 2;
+                const isThird = rank === 3;
                 return (
                     <motion.div 
                         key={p.id}
@@ -89,8 +94,8 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                     >
                         <div className="flex items-center justify-between p-4 bg-neutral-900 border-b border-neutral-800/50">
                             <div className="flex items-center gap-4">
-                                <span className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-full font-bold text-sm ${idx === 0 ? 'bg-amber-400 text-black' : idx === 1 ? 'bg-neutral-400 text-black' : idx === 2 ? 'bg-amber-700 text-amber-100' : 'bg-neutral-800 text-neutral-500 border border-neutral-700'}`}>
-                                    {p.finalRank ?? idx + 1}
+                                <span className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-full font-bold text-sm ${isWinner ? 'bg-amber-400 text-black' : isSecond ? 'bg-neutral-400 text-black' : isThird ? 'bg-amber-700 text-amber-100' : 'bg-neutral-800 text-neutral-500 border border-neutral-700'}`}>
+                                    {rank}
                                 </span>
                                 <div className="flex items-center gap-2">
                                     <div 

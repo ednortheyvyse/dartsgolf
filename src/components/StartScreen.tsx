@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Reorder, AnimatePresence, motion, useDragControls } from 'framer-motion';
-import { Plus, GripVertical, X, Play, Trophy, Download, Share, PlusSquare } from 'lucide-react';
+import { Plus, GripVertical, X, Play, Trophy, Download, Share, PlusSquare, Palette } from 'lucide-react';
 import { Button } from './ui/Button';
 import { PLAYER_COLORS } from '../types';
+import { ColorSwatch } from './ui/ColorSwatch';
+
+interface Player {
+  name: string;
+  color: string;
+}
 
 interface StartScreenProps {
-  onStartGame: (players: string[]) => void;
+  onStartGame: (players: Player[]) => void;
 }
 
 interface BeforeInstallPromptEvent extends Event {
@@ -17,13 +23,19 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-const PlayerItem = ({ name, index, removePlayer }: { name: string, index: number, removePlayer: (index: number) => void }) => {
+const PlayerItem = ({ player, index, removePlayer, onColorChange }: { player: Player, index: number, removePlayer: (index: number) => void, onColorChange: (index: number, color: string) => void }) => {
     const dragControls = useDragControls();
+    const [showColorSwatch, setShowColorSwatch] = useState(false);
+
+    const handleColorSelect = (color: string) => {
+      onColorChange(index, color);
+      setShowColorSwatch(false);
+    };
 
     return (
         <Reorder.Item
-            key={name}
-            value={name}
+            key={player.name}
+            value={player}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9 }}
@@ -36,25 +48,56 @@ const PlayerItem = ({ name, index, removePlayer }: { name: string, index: number
                     <GripVertical className="text-neutral-600 w-6 h-6 shrink-0" />
                 </div>
                 <div 
-                    className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-black text-black shadow-inner"
-                    style={{ backgroundColor: PLAYER_COLORS[index % PLAYER_COLORS.length] }}
+                    className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-black text-black shadow-inner cursor-pointer"
+                    style={{ backgroundColor: player.color }}
+                    onClick={() => setShowColorSwatch(true)}
                 >
-                    {name.substring(0, 1).toUpperCase()}
+                    {player.name.substring(0, 1).toUpperCase()}
                 </div>
-                <span className="font-bold text-lg text-white truncate">{name}</span>
+                <span className="font-bold text-lg text-white truncate">{player.name}</span>
             </div>
-            <button 
-                onClick={() => removePlayer(index)}
-                className="p-2 text-neutral-500 hover:text-red-400 transition-colors shrink-0"
-            >
-                <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center">
+              <button 
+                  onClick={() => setShowColorSwatch(true)}
+                  className="p-2 text-neutral-500 hover:text-blue-400 transition-colors shrink-0"
+              >
+                  <Palette className="w-5 h-5" />
+              </button>
+              <button 
+                  onClick={() => removePlayer(index)}
+                  className="p-2 text-neutral-500 hover:text-red-400 transition-colors shrink-0"
+              >
+                  <X className="w-5 h-5" />
+              </button>
+            </div>
+            <AnimatePresence>
+              {showColorSwatch && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+                  onClick={() => setShowColorSwatch(false)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.9 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0.9 }}
+                    className="bg-neutral-900 w-full max-w-xs rounded-2xl border border-neutral-800 p-4 shadow-2xl"
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  >
+                    <h3 className="text-lg font-bold text-white text-center mb-4">Choose Color</h3>
+                    <ColorSwatch selectedColor={player.color} onSelect={handleColorSelect} />
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
         </Reorder.Item>
     );
 };
 
 export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
-  const [names, setNames] = useState<string[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIOS, setIsIOS] = useState(false);
@@ -85,13 +128,25 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
 
   const addPlayer = () => {
     if (inputValue.trim()) {
-      setNames([...names, inputValue.trim()]);
+      const existingColors = new Set(players.map(p => p.color));
+      const nextColor = PLAYER_COLORS.find(c => !existingColors.has(c)) || PLAYER_COLORS[players.length % PLAYER_COLORS.length];
+      const newPlayer: Player = {
+        name: inputValue.trim(),
+        color: nextColor
+      };
+      setPlayers([...players, newPlayer]);
       setInputValue('');
     }
   };
 
   const removePlayer = (index: number) => {
-    setNames(names.filter((_, i) => i !== index));
+    setPlayers(players.filter((_, i) => i !== index));
+  };
+
+  const handleColorChange = (index: number, color: string) => {
+    const newPlayers = [...players];
+    newPlayers[index].color = color;
+    setPlayers(newPlayers);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -142,15 +197,15 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 mb-6 pr-2">
-        <Reorder.Group axis="y" values={names} onReorder={setNames} className="space-y-3">
+        <Reorder.Group axis="y" values={players} onReorder={setPlayers} className="space-y-3">
           <AnimatePresence>
-            {names.map((name: string, index: number) => (
-                <PlayerItem key={name} name={name} index={index} removePlayer={removePlayer} />
+            {players.map((player: Player, index: number) => (
+                <PlayerItem key={player.name} player={player} index={index} removePlayer={removePlayer} onColorChange={handleColorChange} />
             ))}
           </AnimatePresence>
         </Reorder.Group>
         
-        {names.length === 0 && (
+        {players.length === 0 && (
             <div className="text-center py-10 text-neutral-600 italic">
                 Add players to begin...
             </div>
@@ -158,8 +213,8 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
       </div>
 
       <Button
-        onClick={() => onStartGame(names)}
-        disabled={names.length === 0}
+        onClick={() => onStartGame(players)}
+        disabled={players.length === 0}
         size="xl"
         variant="primary"
         className="w-full border-neutral-800 shrink-0"

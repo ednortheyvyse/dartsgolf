@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { StartScreen } from './components/StartScreen';
 import { GameScreen } from './components/GameScreen';
 import { ResultsScreen } from './components/ResultsScreen';
-import { GameState, Player, ScoreValue, PLAYER_COLORS } from './types';
+import { GameState, Player, ScoreValue } from './types';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -14,6 +14,11 @@ const INITIAL_STATE: GameState = {
   isEndingPrematurely: false,
   maxRounds: 20,
 };
+
+interface StartPlayer {
+  name: string;
+  color: string;
+}
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>(() => {
@@ -68,11 +73,11 @@ export default function App() {
     };
   }, [gameState.status]);
 
-  const handleStartGame = (playerNames: string[]) => {
-    const newPlayers: Player[] = playerNames.map((name, index) => ({
+  const handleStartGame = (startPlayers: StartPlayer[]) => {
+    const newPlayers: Player[] = startPlayers.map((p) => ({
       id: generateId(),
-      name,
-      color: PLAYER_COLORS[index % PLAYER_COLORS.length],
+      name: p.name,
+      color: p.color,
       scores: [],
       totalScore: 0,
       tiebreakerScores: []
