@@ -129,7 +129,11 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
   const addPlayer = () => {
     if (inputValue.trim()) {
       const existingColors = new Set(players.map(p => p.color));
-      const nextColor = PLAYER_COLORS.find(c => !existingColors.has(c)) || PLAYER_COLORS[players.length % PLAYER_COLORS.length];
+      const availableColors = PLAYER_COLORS.filter(c => !existingColors.has(c));
+      const nextColor = availableColors.length > 0 
+        ? availableColors[Math.floor(Math.random() * availableColors.length)] 
+        : PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)];
+      
       const newPlayer: Player = {
         name: inputValue.trim(),
         color: nextColor

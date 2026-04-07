@@ -33,13 +33,23 @@ export interface GameState {
 
 export const PLAYER_COLORS = [
   '#ef4444', // Red
-  '#22c55e', // Green
-  '#3b82f6', // Blue
-  '#eab308', // Yellow
-  '#a855f7', // Purple
-  '#ec4899', // Pink
   '#f97316', // Orange
+  '#d97706', // Gold
+  '#4d7c0f', // Olive
+  '#06b6d4', // Cyan
+  '#f59e0b', // Amber
+  '#eab308', // Yellow
+  '#22c55e', // Green
+  '#0ea5e9', // Sky
+  '#64748b', // Slate
+  '#84cc16', // Lime
+  '#10b981', // Emerald
+  '#3b82f6', // Blue
+  '#8b5cf6', // Violet
+  '#d946ef', // Fuchsia
   '#14b8a6', // Teal
   '#6366f1', // Indigo
-  '#84cc16', // Lime
+  '#a855f7', // Purple
+  '#ec4899', // Pink
+  '#f43f5e', // Rose
 ];

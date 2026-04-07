@@ -160,7 +160,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
             </div>
             <div className="flex-1 w-full p-4 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                    <LineChart data={chartData} margin={{ top: 10, right: 25, bottom: 0, left: -15 }}>
                         <XAxis dataKey="round" stroke="#525252" tick={{fill: '#a3a3a3'}} />
                         <YAxis 
                             stroke="#525252" 
@@ -168,6 +168,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                             reversed={true} 
                             allowDataOverflow={true}
                             domain={['dataMin', 'dataMax']}
+                            width={40}
                         />
                         <Tooltip 
                             contentStyle={{ backgroundColor: '#171717', border: '1px solid #404040', borderRadius: '8px' }} 
@@ -182,6 +183,23 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                                 stroke={p.color} 
                                 strokeWidth={3}
                                 dot={false}
+                                label={(props: any) => {
+                                    const { x, y, index } = props;
+                                    if (index === chartData.length - 1) {
+                                        const rank = p.finalRank ?? sortedPlayers.findIndex(sp => sp.id === p.id) + 1;
+                                        // Find all players with the same score to offset their labels
+                                        const playersWithSameScore = sortedPlayers.filter(sp => sp.totalScore === p.totalScore);
+                                        const groupIndex = playersWithSameScore.findIndex(sp => sp.id === p.id);
+                                        const yOffset = (groupIndex - (playersWithSameScore.length - 1) / 2) * 14;
+                                        
+                                        return (
+                                            <text x={x + 5} y={y + 4 + yOffset} fill={p.color} fontSize={14} fontWeight="bold">
+                                                #{rank}
+                                            </text>
+                                        );
+                                    }
+                                    return null;
+                                }}
                             />
                         ))}
                     </LineChart>
