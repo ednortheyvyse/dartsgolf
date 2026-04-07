@@ -4,6 +4,7 @@ export interface Player {
   id: string;
   name: string;
   color: string; // Hex color code
+  icon: string; // Icon name
   scores: ScoreValue[]; // Index corresponds to round - 1
   totalScore: number;
   // Tiebreaker specific
@@ -30,6 +31,13 @@ export interface GameState {
   maxRounds: number;
   tiebreaker?: TiebreakerState;
 }
+
+export const PLAYER_ICONS = [
+  'mdiCat', 'mdiDog', 'mdiGhost', 'mdiSkull', 'mdiStar',
+  'mdiLightningBolt', 'mdiFire', 'mdiRocketLaunch', 'mdiTarget', 'mdiGamepadVariant',
+  'mdiHeart', 'mdiMusicNote', 'mdiWhiteBalanceSunny', 'mdiWeatherNight', 'mdiCloud',
+  'mdiCrown', 'mdiDiamond', 'mdiDice6', 'mdiTrophy', 'mdiSword'
+];
 
 export const PLAYER_COLORS = [
   '#ef4444', // Red

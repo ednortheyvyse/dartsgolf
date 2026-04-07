@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Undo2, Flag, Activity, X, Swords, Trophy } from 'lucide-react';
+import { Undo2, Flag, Activity, X, Swords, Trophy, Pencil } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Player, ScoreValue, TiebreakerState } from '../types';
+import { PlayerIcon } from './ui/PlayerIcon';
+import { PlayerEditModal } from './ui/PlayerEditModal';
 
 interface GameScreenProps {
   players: Player[];
@@ -14,6 +16,7 @@ interface GameScreenProps {
   onScore: (score: ScoreValue) => void;
   onUndo: () => void;
   onRequestEndGame: () => void;
+  onUpdatePlayer: (id: string, updates: Partial<Player>) => void;
   direction: number;
 }
 
@@ -67,10 +70,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   onScore,
   onUndo,
   onRequestEndGame,
+  onUpdatePlayer,
   direction,
 }) => {
   const [showScoreboard, setShowScoreboard] = useState(false);
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  
   const currentPlayer = players[currentPlayerIndex];
+  const editingPlayer = players.find(p => p.id === editingPlayerId);
 
   // Scroll current player into view in the mini-list
   const playerListRef = useRef<HTMLDivElement>(null);
@@ -171,7 +178,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                     key={p.id}
                     data-active={isActive}
                     className={`
-                        snap-center shrink-0 min-w-[120px] p-3 rounded-xl border-2 transition-all duration-300 flex flex-col items-center gap-2
+                        snap-center shrink-0 min-w-[120px] p-3 rounded-xl border-2 transition-all duration-300 flex flex-col items-center gap-2 relative
                         ${isActive 
                             ? 'bg-neutral-800 border-amber-400 scale-105 shadow-lg shadow-amber-900/10' 
                             : 'bg-neutral-900 border-neutral-800'
@@ -180,10 +187,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                     `}
                 >
                     <div 
-                        className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-black text-black shadow-inner"
+                        className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center shadow-inner"
                         style={{ backgroundColor: p.color }}
                     >
-                        {p.name.substring(0, 1).toUpperCase()}
+                        <PlayerIcon name={p.icon} color="#000" size={1} />
                     </div>
                     <span className={`text-sm font-bold truncate max-w-full ${isActive ? 'text-white' : 'text-neutral-400'}`}>
                         {isLeader && <Trophy className="w-3.5 h-3.5 inline-block mr-1.5 text-amber-400" />}
@@ -199,6 +206,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({
 
       {/* Main Action Area */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 relative z-0 overflow-y-auto overflow-x-hidden">
+        {/* Target Indicator */}
+        <div className="absolute top-4 right-4 flex flex-col items-center justify-center pointer-events-none opacity-50">
+            <div className="w-16 h-16 rounded-full border-4 border-red-600 flex items-center justify-center bg-neutral-900 shadow-xl">
+                <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center bg-black">
+                    <span className="text-xl font-black text-white">{isTiebreaker ? 'BULL' : currentRound}</span>
+                </div>
+            </div>
+            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Target</span>
+        </div>
+
         <div className="text-center mb-8 shrink-0 w-full relative h-20">
             <div className="absolute top-0 left-0 right-0 text-neutral-500 text-sm mb-1 uppercase tracking-widest font-bold">
                 {isTiebreaker ? 'Tiebreaker Throw' : 'Current Throw'}
@@ -215,12 +232,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                     className="flex items-center justify-center gap-3 absolute top-6 left-0 right-0"
                 >
                     <div 
-                        className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-lg font-black text-black shadow-lg"
+                        className="w-14 h-14 shrink-0 rounded-full flex items-center justify-center shadow-lg"
                         style={{ backgroundColor: currentPlayer.color }}
                     >
-                        {currentPlayer.name.substring(0, 1).toUpperCase()}
+                        <PlayerIcon name={currentPlayer.icon} color="#000" size={1.5} />
                     </div>
-                    <div className="text-5xl font-black text-white truncate max-w-[250px]">
+                    <div 
+                      className="text-5xl font-black text-white truncate max-w-[250px]"
+                    >
                         {currentPlayer.name}
                     </div>
                 </motion.div>
@@ -285,11 +304,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                                 <th className="py-2 pl-2">Rd</th>
                                 {players.map(p => (
                                     <th key={p.id} className="py-2 px-2 text-center text-xs font-bold uppercase truncate max-w-[80px]">
-                                        <div className="flex flex-col items-center gap-1">
+                                        <div 
+                                            className="flex flex-col items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
+                                            onClick={() => setEditingPlayerId(p.id)}
+                                            title="Edit Player"
+                                        >
                                             <div 
-                                                className="w-4 h-4 rounded-full"
+                                                className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center shadow-inner"
                                                 style={{ backgroundColor: p.color }}
-                                            />
+                                            >
+                                                <PlayerIcon name={p.icon} color="#000" size={0.6} />
+                                            </div>
                                             {p.name}
                                         </div>
                                     </th>
@@ -358,6 +383,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({
             </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Edit Player Modal */}
+      {editingPlayer && (
+        <PlayerEditModal
+          isOpen={!!editingPlayerId}
+          initialName={editingPlayer.name}
+          initialColor={editingPlayer.color}
+          initialIcon={editingPlayer.icon}
+          onSave={(name, color, icon) => {
+            if (editingPlayerId) {
+              onUpdatePlayer(editingPlayerId, { name, color, icon });
+            }
+            setEditingPlayerId(null);
+          }}
+          onClose={() => setEditingPlayerId(null)}
+        />
+      )}
     </div>
   );
 };

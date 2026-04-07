@@ -4,6 +4,7 @@ import { Trophy, RefreshCw, Target, TrendingUp, TrendingDown, Table, Activity, M
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Button } from './ui/Button';
 import { Player, ScoreValue } from '../types';
+import { PlayerIcon } from './ui/PlayerIcon';
 
 interface ResultsScreenProps {
   players: Player[];
@@ -99,10 +100,10 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                                 </span>
                                 <div className="flex items-center gap-2">
                                     <div 
-                                        className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-black"
+                                        className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center shadow-inner"
                                         style={{ backgroundColor: p.color }}
                                     >
-                                        {p.name.substring(0, 1).toUpperCase()}
+                                        <PlayerIcon name={p.icon} color="#000" size={0.8} />
                                     </div>
                                     <span className="font-bold text-lg text-white">{p.name}</span>
                                 </div>
@@ -198,7 +199,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ players, onRestart
                                             </text>
                                         );
                                     }
-                                    return null;
+                                    return <g />;
                                 }}
                             />
                         ))}

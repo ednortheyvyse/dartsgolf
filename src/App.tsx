@@ -18,6 +18,7 @@ const INITIAL_STATE: GameState = {
 interface StartPlayer {
   name: string;
   color: string;
+  icon: string;
 }
 
 export default function App() {
@@ -32,6 +33,20 @@ export default function App() {
     const saved = localStorage.getItem('darts-golf-history');
     return saved ? JSON.parse(saved) : [];
   });
+
+  const handleUpdatePlayer = (id: string, updates: Partial<Player>) => {
+    setGameState(prev => {
+      const newState = {
+        ...prev,
+        players: prev.players.map(p => p.id === id ? { ...p, ...updates } : p)
+      };
+      return newState;
+    });
+    setHistory(prevHistory => prevHistory.map(h => ({
+      ...h,
+      players: h.players.map(p => p.id === id ? { ...p, ...updates } : p)
+    })));
+  };
 
   useEffect(() => {
     localStorage.setItem('darts-golf-state', JSON.stringify(gameState));
@@ -78,6 +93,7 @@ export default function App() {
       id: generateId(),
       name: p.name,
       color: p.color,
+      icon: p.icon,
       scores: [],
       totalScore: 0,
       tiebreakerScores: []
@@ -326,6 +342,7 @@ export default function App() {
           onScore={handleScore}
           onUndo={handleUndo}
           onRequestEndGame={handleRequestEndGame}
+          onUpdatePlayer={handleUpdatePlayer}
           tiebreaker={gameState.tiebreaker}
           direction={direction}
         />
