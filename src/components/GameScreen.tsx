@@ -206,15 +206,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
 
       {/* Main Action Area */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 relative z-0 overflow-y-auto overflow-x-hidden">
-        {/* Target Indicator */}
-        <div className="absolute top-4 right-4 flex flex-col items-center justify-center pointer-events-none opacity-50">
-            <div className="w-16 h-16 rounded-full border-4 border-red-600 flex items-center justify-center bg-neutral-900 shadow-xl">
-                <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center bg-black">
-                    <span className="text-xl font-black text-white">{isTiebreaker ? 'BULL' : currentRound}</span>
-                </div>
-            </div>
-            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Target</span>
-        </div>
+
 
         <div className="text-center mb-8 shrink-0 w-full relative h-20">
             <div className="absolute top-0 left-0 right-0 text-neutral-500 text-sm mb-1 uppercase tracking-widest font-bold">
